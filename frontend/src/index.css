@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 /* EnvPilot 深色主题配置（TailwindCSS v4 @theme 语法） */
 @theme {
