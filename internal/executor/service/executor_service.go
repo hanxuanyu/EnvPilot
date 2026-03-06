@@ -11,9 +11,9 @@ import (
 	execModel "EnvPilot/internal/executor/model"
 	"EnvPilot/internal/executor/repository"
 	sshpkg "EnvPilot/internal/executor/ssh"
+	"EnvPilot/pkg/event"
 	"EnvPilot/pkg/logger"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 	gossh "golang.org/x/crypto/ssh"
 )
@@ -57,8 +57,10 @@ type ExecuteResult struct {
 // Execute 在目标资产上异步执行命令
 //
 // 立即返回 Execution 记录（status=running），实际执行在后台 goroutine 中进行。
-// 输出通过 Wails 事件 executor:output:{id} 实时推送，完成时触发 executor:done:{id}。
-func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResult, error) {
+// 输出通过 emitter 实时推送事件：
+//   - executor:output:{id}  → 命令输出流（chunk string）
+//   - executor:done:{id}    → 执行完成（map 含 exit_code/status/output）
+func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest, emitter event.Emitter) (*ExecuteResult, error) {
 	if !req.Force && sshpkg.IsDangerous(req.Command) {
 		return &ExecuteResult{Dangerous: true}, nil
 	}
@@ -76,7 +78,7 @@ func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (*Exe
 	exec := &execModel.Execution{
 		AssetID:   req.AssetID,
 		AssetName: asset.Name,
-		AssetHost: asset.Host,
+		AssetHost: asset.ExtConfig.GetString("host"),
 		Command:   req.Command,
 		Status:    execModel.ExecutionStatusRunning,
 		Operator:  operator,
@@ -86,7 +88,7 @@ func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (*Exe
 		return nil, fmt.Errorf("创建执行记录失败: %w", err)
 	}
 
-	go s.runCommand(ctx, exec, req.Command)
+	go s.runCommand(emitter, exec, req.Command)
 
 	return &ExecuteResult{Execution: exec}, nil
 }
@@ -100,7 +102,7 @@ type BatchExecuteRequest struct {
 }
 
 // BatchExecute 在多个资产上并发执行同一命令
-func (s *ExecutorService) BatchExecute(ctx context.Context, req BatchExecuteRequest) ([]*ExecuteResult, error) {
+func (s *ExecutorService) BatchExecute(ctx context.Context, req BatchExecuteRequest, emitter event.Emitter) ([]*ExecuteResult, error) {
 	if !req.Force && sshpkg.IsDangerous(req.Command) {
 		return []*ExecuteResult{{Dangerous: true}}, nil
 	}
@@ -112,7 +114,7 @@ func (s *ExecutorService) BatchExecute(ctx context.Context, req BatchExecuteRequ
 			Command:  req.Command,
 			Operator: req.Operator,
 			Force:    true, // 已在上层检查
-		})
+		}, emitter)
 		if err != nil {
 			s.log.Warn("批量执行单项失败", zap.Uint("assetID", assetID), zap.Error(err))
 			results = append(results, &ExecuteResult{
@@ -141,7 +143,7 @@ func (s *ExecutorService) ListExecutions(q repository.ExecutionQuery) ([]execMod
 }
 
 // runCommand 在后台 goroutine 中执行 SSH 命令并流式推送输出
-func (s *ExecutorService) runCommand(ctx context.Context, exec *execModel.Execution, command string) {
+func (s *ExecutorService) runCommand(emitter event.Emitter, exec *execModel.Execution, command string) {
 	execID := exec.ID
 	eventOutput := fmt.Sprintf("executor:output:%d", execID)
 	eventDone := fmt.Sprintf("executor:done:%d", execID)
@@ -155,7 +157,7 @@ func (s *ExecutorService) runCommand(ctx context.Context, exec *execModel.Execut
 	client, err := s.pool.GetClient(exec.AssetID)
 	if err != nil {
 		s.finishWithError(execID, err.Error())
-		runtime.EventsEmit(ctx, eventDone, map[string]interface{}{
+		emitter.Emit(eventDone, map[string]interface{}{
 			"exec_id": execID, "exit_code": -1,
 			"status": execModel.ExecutionStatusFailed, "message": err.Error(),
 		})
@@ -169,7 +171,7 @@ func (s *ExecutorService) runCommand(ctx context.Context, exec *execModel.Execut
 		client, err = s.pool.GetClient(exec.AssetID)
 		if err != nil {
 			s.finishWithError(execID, err.Error())
-			runtime.EventsEmit(ctx, eventDone, map[string]interface{}{
+			emitter.Emit(eventDone, map[string]interface{}{
 				"exec_id": execID, "exit_code": -1,
 				"status": execModel.ExecutionStatusFailed,
 			})
@@ -184,13 +186,16 @@ func (s *ExecutorService) runCommand(ctx context.Context, exec *execModel.Execut
 	defer session.Close()
 
 	var buf bytes.Buffer
-	sw := &streamWriter{buf: &buf, ctx: ctx, event: eventOutput}
+	sw := &streamWriter{buf: &buf, emitter: emitter, event: eventOutput}
 	session.Stdout = sw
 	session.Stderr = sw
 
+	// 使用登录 Shell 执行，确保 PATH 等环境变量正确加载
+	shellCmd := fmt.Sprintf("bash -lc %q", command)
+
 	exitCode := 0
 	status := execModel.ExecutionStatusSuccess
-	if runErr := session.Run(command); runErr != nil {
+	if runErr := session.Run(shellCmd); runErr != nil {
 		exitCode = 1
 		if exitErr, ok := runErr.(*gossh.ExitError); ok {
 			exitCode = exitErr.ExitStatus()
@@ -203,7 +208,7 @@ func (s *ExecutorService) runCommand(ctx context.Context, exec *execModel.Execut
 		s.log.Error("更新执行记录失败", zap.Uint("execID", execID), zap.Error(err))
 	}
 
-	runtime.EventsEmit(ctx, eventDone, map[string]interface{}{
+	emitter.Emit(eventDone, map[string]interface{}{
 		"exec_id":   execID,
 		"exit_code": exitCode,
 		"status":    status,
@@ -224,17 +229,17 @@ func (s *ExecutorService) finishWithError(execID uint, message string) {
 	}
 }
 
-// streamWriter 实时流式写入器：同时写入 buffer 并向前端推送事件
+// streamWriter 实时流式写入器：同时写入 buffer 并通过 Emitter 推送事件
 type streamWriter struct {
-	buf   *bytes.Buffer
-	ctx   context.Context
-	event string
+	buf     *bytes.Buffer
+	emitter event.Emitter
+	event   string
 }
 
 func (w *streamWriter) Write(p []byte) (n int, err error) {
 	n, err = w.buf.Write(p)
 	if n > 0 {
-		runtime.EventsEmit(w.ctx, w.event, string(p[:n]))
+		w.emitter.Emit(w.event, string(p[:n]))
 	}
 	return
 }

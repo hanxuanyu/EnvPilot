@@ -3,13 +3,13 @@ export namespace assetapi {
 	export class CreateAssetReq {
 	    environment_id: number;
 	    group_id?: number;
-	    type: string;
+	    category: string;
+	    plugin_type: string;
 	    name: string;
-	    host: string;
-	    port: number;
 	    description: string;
 	    tags: string[];
 	    credential_id?: number;
+	    ext_config: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateAssetReq(source);
@@ -19,13 +19,13 @@ export namespace assetapi {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.environment_id = source["environment_id"];
 	        this.group_id = source["group_id"];
-	        this.type = source["type"];
+	        this.category = source["category"];
+	        this.plugin_type = source["plugin_type"];
 	        this.name = source["name"];
-	        this.host = source["host"];
-	        this.port = source["port"];
 	        this.description = source["description"];
 	        this.tags = source["tags"];
 	        this.credential_id = source["credential_id"];
+	        this.ext_config = source["ext_config"];
 	    }
 	}
 	export class CreateCredentialReq {
@@ -81,7 +81,8 @@ export namespace assetapi {
 	export class ListAssetsReq {
 	    environment_id: number;
 	    group_id: number;
-	    type: string;
+	    category: string;
+	    plugin_type: string;
 	    keyword: string;
 	
 	    static createFrom(source: any = {}) {
@@ -92,14 +93,15 @@ export namespace assetapi {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.environment_id = source["environment_id"];
 	        this.group_id = source["group_id"];
-	        this.type = source["type"];
+	        this.category = source["category"];
+	        this.plugin_type = source["plugin_type"];
 	        this.keyword = source["keyword"];
 	    }
 	}
 	export class Result__EnvPilot_internal_asset_model_Asset_ {
-	    ok: boolean;
+	    success: boolean;
 	    data?: model.Asset;
-	    message: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result__EnvPilot_internal_asset_model_Asset_(source);
@@ -107,7 +109,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Asset);
 	        this.message = source["message"];
 	    }
@@ -131,9 +133,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result__EnvPilot_internal_asset_model_Credential_ {
-	    ok: boolean;
+	    success: boolean;
 	    data?: model.Credential;
-	    message: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result__EnvPilot_internal_asset_model_Credential_(source);
@@ -141,7 +143,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Credential);
 	        this.message = source["message"];
 	    }
@@ -165,9 +167,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result__EnvPilot_internal_asset_model_Environment_ {
-	    ok: boolean;
+	    success: boolean;
 	    data?: model.Environment;
-	    message: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result__EnvPilot_internal_asset_model_Environment_(source);
@@ -175,7 +177,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Environment);
 	        this.message = source["message"];
 	    }
@@ -199,9 +201,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result__EnvPilot_internal_asset_model_Group_ {
-	    ok: boolean;
+	    success: boolean;
 	    data?: model.Group;
-	    message: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result__EnvPilot_internal_asset_model_Group_(source);
@@ -209,7 +211,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Group);
 	        this.message = source["message"];
 	    }
@@ -232,10 +234,78 @@ export namespace assetapi {
 		    return a;
 		}
 	}
+	export class Result__EnvPilot_internal_plugin_PluginDef_ {
+	    success: boolean;
+	    data?: plugin.PluginDef;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_plugin_PluginDef_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], plugin.PluginDef);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result____EnvPilot_internal_plugin_PluginDef_ {
+	    success: boolean;
+	    data?: plugin.PluginDef[];
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result____EnvPilot_internal_plugin_PluginDef_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], plugin.PluginDef);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result___EnvPilot_internal_asset_model_Asset_ {
-	    ok: boolean;
-	    data: model.Asset[];
-	    message: string;
+	    success: boolean;
+	    data?: model.Asset[];
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result___EnvPilot_internal_asset_model_Asset_(source);
@@ -243,7 +313,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Asset);
 	        this.message = source["message"];
 	    }
@@ -267,9 +337,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result___EnvPilot_internal_asset_model_Credential_ {
-	    ok: boolean;
-	    data: model.Credential[];
-	    message: string;
+	    success: boolean;
+	    data?: model.Credential[];
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result___EnvPilot_internal_asset_model_Credential_(source);
@@ -277,7 +347,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Credential);
 	        this.message = source["message"];
 	    }
@@ -301,9 +371,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result___EnvPilot_internal_asset_model_Environment_ {
-	    ok: boolean;
-	    data: model.Environment[];
-	    message: string;
+	    success: boolean;
+	    data?: model.Environment[];
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result___EnvPilot_internal_asset_model_Environment_(source);
@@ -311,7 +381,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Environment);
 	        this.message = source["message"];
 	    }
@@ -335,9 +405,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result___EnvPilot_internal_asset_model_Group_ {
-	    ok: boolean;
-	    data: model.Group[];
-	    message: string;
+	    success: boolean;
+	    data?: model.Group[];
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result___EnvPilot_internal_asset_model_Group_(source);
@@ -345,7 +415,7 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Group);
 	        this.message = source["message"];
 	    }
@@ -369,9 +439,9 @@ export namespace assetapi {
 		}
 	}
 	export class Result_bool_ {
-	    ok: boolean;
-	    data: boolean;
-	    message: string;
+	    success: boolean;
+	    data?: boolean;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_bool_(source);
@@ -379,7 +449,23 @@ export namespace assetapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Result_string_ {
+	    success: boolean;
+	    data?: string;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
 	        this.data = source["data"];
 	        this.message = source["message"];
 	    }
@@ -388,11 +474,10 @@ export namespace assetapi {
 	    id: number;
 	    group_id?: number;
 	    name: string;
-	    host: string;
-	    port: number;
 	    description: string;
 	    tags: string[];
 	    credential_id?: number;
+	    ext_config: Record<string, any>;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateAssetReq(source);
@@ -403,11 +488,10 @@ export namespace assetapi {
 	        this.id = source["id"];
 	        this.group_id = source["group_id"];
 	        this.name = source["name"];
-	        this.host = source["host"];
-	        this.port = source["port"];
 	        this.description = source["description"];
 	        this.tags = source["tags"];
 	        this.credential_id = source["credential_id"];
+	        this.ext_config = source["ext_config"];
 	    }
 	}
 	export class UpdateCredentialReq {
@@ -619,9 +703,9 @@ export namespace executorapi {
 	    }
 	}
 	export class Result__EnvPilot_internal_executor_model_Execution_ {
-	    ok: boolean;
+	    success: boolean;
 	    data?: model.Execution;
-	    message: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result__EnvPilot_internal_executor_model_Execution_(source);
@@ -629,7 +713,7 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], model.Execution);
 	        this.message = source["message"];
 	    }
@@ -653,9 +737,9 @@ export namespace executorapi {
 		}
 	}
 	export class Result_EnvPilot_internal_executor_api_BatchExecuteResult_ {
-	    ok: boolean;
-	    data: BatchExecuteResult;
-	    message: string;
+	    success: boolean;
+	    data?: BatchExecuteResult;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_EnvPilot_internal_executor_api_BatchExecuteResult_(source);
@@ -663,7 +747,7 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], BatchExecuteResult);
 	        this.message = source["message"];
 	    }
@@ -687,9 +771,9 @@ export namespace executorapi {
 		}
 	}
 	export class Result_EnvPilot_internal_executor_api_ExecuteResult_ {
-	    ok: boolean;
-	    data: ExecuteResult;
-	    message: string;
+	    success: boolean;
+	    data?: ExecuteResult;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_EnvPilot_internal_executor_api_ExecuteResult_(source);
@@ -697,7 +781,7 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], ExecuteResult);
 	        this.message = source["message"];
 	    }
@@ -721,9 +805,9 @@ export namespace executorapi {
 		}
 	}
 	export class Result_EnvPilot_internal_executor_api_ExecutionListResult_ {
-	    ok: boolean;
-	    data: ExecutionListResult;
-	    message: string;
+	    success: boolean;
+	    data?: ExecutionListResult;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_EnvPilot_internal_executor_api_ExecutionListResult_(source);
@@ -731,7 +815,7 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], ExecutionListResult);
 	        this.message = source["message"];
 	    }
@@ -755,9 +839,9 @@ export namespace executorapi {
 		}
 	}
 	export class Result_bool_ {
-	    ok: boolean;
-	    data: boolean;
-	    message: string;
+	    success: boolean;
+	    data?: boolean;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_bool_(source);
@@ -765,15 +849,15 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = source["data"];
 	        this.message = source["message"];
 	    }
 	}
 	export class Result_string_ {
-	    ok: boolean;
-	    data: string;
-	    message: string;
+	    success: boolean;
+	    data?: string;
+	    message?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Result_string_(source);
@@ -781,7 +865,7 @@ export namespace executorapi {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.ok = source["ok"];
+	        this.success = source["success"];
 	        this.data = source["data"];
 	        this.message = source["message"];
 	    }
@@ -929,16 +1013,16 @@ export namespace model {
 	    id: number;
 	    environment_id: number;
 	    group_id?: number;
-	    type: string;
+	    category: string;
+	    plugin_type: string;
 	    name: string;
-	    host: string;
-	    port: number;
 	    description: string;
 	    tags: string[];
 	    credential_id?: number;
 	    status: string;
 	    // Go type: time
 	    last_checked_at?: any;
+	    ext_config: Record<string, any>;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -956,15 +1040,15 @@ export namespace model {
 	        this.id = source["id"];
 	        this.environment_id = source["environment_id"];
 	        this.group_id = source["group_id"];
-	        this.type = source["type"];
+	        this.category = source["category"];
+	        this.plugin_type = source["plugin_type"];
 	        this.name = source["name"];
-	        this.host = source["host"];
-	        this.port = source["port"];
 	        this.description = source["description"];
 	        this.tags = source["tags"];
 	        this.credential_id = source["credential_id"];
 	        this.status = source["status"];
 	        this.last_checked_at = this.convertValues(source["last_checked_at"], null);
+	        this.ext_config = source["ext_config"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.environment = this.convertValues(source["environment"], Environment);
@@ -1027,6 +1111,109 @@ export namespace model {
 	        this.started_at = this.convertValues(source["started_at"], null);
 	        this.finished_at = this.convertValues(source["finished_at"], null);
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace plugin {
+	
+	export class SelectOption {
+	    value: string;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SelectOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.value = source["value"];
+	        this.label = source["label"];
+	    }
+	}
+	export class ConfigField {
+	    key: string;
+	    label: string;
+	    type: string;
+	    required: boolean;
+	    default_val?: any;
+	    options?: SelectOption[];
+	    placeholder?: string;
+	    description?: string;
+	    secret?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigField(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.label = source["label"];
+	        this.type = source["type"];
+	        this.required = source["required"];
+	        this.default_val = source["default_val"];
+	        this.options = this.convertValues(source["options"], SelectOption);
+	        this.placeholder = source["placeholder"];
+	        this.description = source["description"];
+	        this.secret = source["secret"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PluginDef {
+	    type_id: string;
+	    display_name: string;
+	    category: string;
+	    icon_name: string;
+	    config_schema: ConfigField[];
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginDef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.type_id = source["type_id"];
+	        this.display_name = source["display_name"];
+	        this.category = source["category"];
+	        this.icon_name = source["icon_name"];
+	        this.config_schema = this.convertValues(source["config_schema"], ConfigField);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

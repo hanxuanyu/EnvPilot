@@ -110,27 +110,46 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: React.ReactNode
+  /** 底部操作区内容（固定不随内容滚动） */
+  footer?: React.ReactNode
   className?: string
 }
 
-function Modal({ open, onClose, title, children, className }: ModalProps) {
+function Modal({ open, onClose, title, children, footer, className }: ModalProps) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* 遮罩层 */}
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-150"
         onClick={onClose}
       />
+      {/* 弹窗容器：flex 列布局 + 最大高度限制 */}
       <div
         className={cn(
-          'relative z-10 w-full max-w-lg rounded-lg border p-6 shadow-xl',
+          'relative z-10 w-full max-w-lg flex flex-col rounded-lg border shadow-xl',
           'bg-card border-border text-foreground',
+          'max-h-[90vh]',
           'animate-in fade-in-0 zoom-in-95 duration-200',
           className
         )}
       >
-        <h3 className="text-base font-semibold mb-5 text-foreground">{title}</h3>
-        {children}
+        {/* ── 标题区（固定） ── */}
+        <div className="flex-shrink-0 px-6 pt-5 pb-4 border-b border-border">
+          <h3 className="text-base font-semibold text-foreground">{title}</h3>
+        </div>
+
+        {/* ── 内容区（可滚动） ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+          {children}
+        </div>
+
+        {/* ── 操作区（固定，仅在传入 footer 时渲染） ── */}
+        {footer && (
+          <div className="flex-shrink-0 flex justify-end gap-2 px-6 pt-4 pb-5 border-t border-border">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )

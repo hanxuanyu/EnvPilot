@@ -1,25 +1,26 @@
-// backendService.ts 后端 API 调用封装
-// 统一封装所有 Wails 后端调用，方便未来替换和单元测试
-import { Ping, GetVersion } from '@wailsjs/go/main/App'
+// backendService.ts — 后端基础 API（Ping / Version）
+import { IS_SERVER_MODE, http } from '@/lib/apiClient'
 
-// 版本信息类型
+// 桌面模式使用 Wails 绑定
+import { Ping as WailsPing, GetVersion as WailsGetVersion } from '@wailsjs/go/main/App'
+
 export interface VersionInfo {
   name: string
   version: string
 }
 
-/**
- * ping 测试后端通信是否正常
- * @returns "pong" 表示正常
- */
 export async function ping(): Promise<string> {
-  return Ping()
+  if (IS_SERVER_MODE) {
+    await http.get<string>('/api/ping')
+    return 'pong'
+  }
+  return WailsPing()
 }
 
-/**
- * getVersion 获取应用版本信息
- */
 export async function getVersion(): Promise<VersionInfo> {
-  const result = await GetVersion()
+  if (IS_SERVER_MODE) {
+    return http.get<VersionInfo>('/api/version')
+  }
+  const result = await WailsGetVersion()
   return result as unknown as VersionInfo
 }

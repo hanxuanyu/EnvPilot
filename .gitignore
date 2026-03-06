@@ -5,6 +5,15 @@
 # ── Wails 构建产物 ──────────────────────────────────────────
 build/bin/
 
+# ── 服务端模式构建产物 ────────────────────────────────────────
+# cmd/server/dist 由 Makefile 从 frontend/dist-server 复制而来，不提交
+cmd/server/dist/*
+!cmd/server/dist/.gitkeep
+# 服务端前端构建产物（make build-server 产生）
+frontend/dist-server/
+# 编译输出目录
+bin/
+
 # ── Go 编译产物 ─────────────────────────────────────────────
 *.exe
 *.exe~

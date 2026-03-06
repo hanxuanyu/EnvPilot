@@ -1,6 +1,6 @@
 // EnvironmentPage.tsx — 环境管理页面（shadcn 风格组件 + Sonner toast）
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, Layers, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Layers, ChevronRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAssetStore } from '@/store/assetStore'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal, FormField } from '@/components/ui/dialog'
 import { environmentService, groupService } from '@/services/assetService'
-import type { Environment, Group } from '@/services/assetService'
+import type { Environment, Group } from '@/types/asset'
 
 const ENV_COLORS = [
   '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
@@ -16,7 +16,7 @@ const ENV_COLORS = [
 ]
 
 export default function EnvironmentPage() {
-  const { environments, loadEnvironments } = useAssetStore()
+  const { environments, loading, loadEnvironments } = useAssetStore()
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
   const [showEnvForm, setShowEnvForm] = useState(false)
@@ -29,7 +29,7 @@ export default function EnvironmentPage() {
   useEffect(() => {
     if (!selectedEnv) { setGroups([]); return }
     groupService.listByEnvironment(selectedEnv.id)
-      .then(setGroups)
+      .then(list => setGroups(list as Group[]))
       .catch(e => toast.error('加载分组失败', { description: e.message }))
   }, [selectedEnv])
 
@@ -49,7 +49,7 @@ export default function EnvironmentPage() {
       await groupService.delete(id)
       toast.success('分组已删除')
       if (selectedEnv) {
-        setGroups(await groupService.listByEnvironment(selectedEnv.id))
+        setGroups(await groupService.listByEnvironment(selectedEnv.id) as Group[])
       }
     } catch (e: any) {
       toast.error('删除失败', { description: e.message })
@@ -61,9 +61,27 @@ export default function EnvironmentPage() {
       <div className="w-72 flex flex-col gap-3 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-semibold text-foreground">环境列表</h2>
-          <Button size="sm" onClick={() => { setEditingEnv(null); setShowEnvForm(true) }}>
-            <Plus className="w-3.5 h-3.5" /> 新建环境
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              title="刷新"
+              disabled={loading}
+              onClick={async () => {
+                await loadEnvironments()
+                if (selectedEnv) {
+                  groupService.listByEnvironment(selectedEnv.id)
+                    .then(list => setGroups(list as Group[]))
+                    .catch(e => toast.error('加载分组失败', { description: e.message }))
+                }
+              }}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button size="sm" onClick={() => { setEditingEnv(null); setShowEnvForm(true) }}>
+              <Plus className="w-3.5 h-3.5" /> 新建环境
+            </Button>
+          </div>
         </div>
         <div className="space-y-1.5">
           {environments.length === 0 ? (
@@ -208,7 +226,7 @@ export default function EnvironmentPage() {
                 await groupService.create({ environment_id: selectedEnv.id, ...data })
                 toast.success('分组已创建')
               }
-              setGroups(await groupService.listByEnvironment(selectedEnv.id))
+              setGroups(await groupService.listByEnvironment(selectedEnv.id) as Group[])
               setShowGroupForm(false)
             } catch (e: any) {
               toast.error('保存失败', { description: e.message })
@@ -252,7 +270,18 @@ function EnvFormModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={env ? '编辑环境' : '新建环境'} className="max-w-sm">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={env ? '编辑环境' : '新建环境'}
+      className="max-w-sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={saving}>保存</Button>
+        </>
+      }
+    >
       <div className="space-y-4">
         <FormField label="环境名称" required>
           <Input value={name} onChange={e => setName(e.target.value)} placeholder="例如：生产环境" />
@@ -277,10 +306,6 @@ function EnvFormModal({
             ))}
           </div>
         </FormField>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={handleSubmit} loading={saving}>保存</Button>
-        </div>
       </div>
     </Modal>
   )
@@ -316,7 +341,18 @@ function GroupFormModal({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={group ? '编辑分组' : '新建分组'} className="max-w-sm">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={group ? '编辑分组' : '新建分组'}
+      className="max-w-sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={saving}>保存</Button>
+        </>
+      }
+    >
       <div className="space-y-4">
         <FormField label="分组名称" required>
           <Input value={name} onChange={e => setName(e.target.value)} placeholder="例如： Web 层" />
@@ -324,10 +360,6 @@ function GroupFormModal({
         <FormField label="描述">
           <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="可选" />
         </FormField>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={handleSubmit} loading={saving}>保存</Button>
-        </div>
       </div>
     </Modal>
   )

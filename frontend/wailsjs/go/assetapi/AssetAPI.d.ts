@@ -20,6 +20,8 @@ export function DeleteGroup(arg1:number):Promise<assetapi.Result_bool_>;
 
 export function GetAsset(arg1:number):Promise<assetapi.Result_EnvPilot_internal_asset_model_Asset_>;
 
+export function GetPluginSchema(arg1:string):Promise<assetapi.Result_EnvPilot_internal_plugin_PluginDef_>;
+
 export function ListAssets(arg1:assetapi.ListAssetsReq):Promise<assetapi.Result___EnvPilot_internal_asset_model_Asset_>;
 
 export function ListCredentials():Promise<assetapi.Result___EnvPilot_internal_asset_model_Credential_>;
@@ -27,6 +29,10 @@ export function ListCredentials():Promise<assetapi.Result___EnvPilot_internal_as
 export function ListEnvironments():Promise<assetapi.Result___EnvPilot_internal_asset_model_Environment_>;
 
 export function ListGroupsByEnvironment(arg1:number):Promise<assetapi.Result___EnvPilot_internal_asset_model_Group_>;
+
+export function ListPlugins(arg1:string):Promise<assetapi.Result___EnvPilot_internal_plugin_PluginDef_>;
+
+export function RevealCredential(arg1:number):Promise<assetapi.Result_string_>;
 
 export function UpdateAsset(arg1:assetapi.UpdateAssetReq):Promise<assetapi.Result_EnvPilot_internal_asset_model_Asset_>;
 

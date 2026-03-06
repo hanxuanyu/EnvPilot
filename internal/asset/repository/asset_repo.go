@@ -2,11 +2,11 @@ package repository
 
 import (
 	"EnvPilot/internal/asset/model"
+	"EnvPilot/internal/plugin"
 
 	"gorm.io/gorm"
 )
 
-// AssetRepo 资产数据访问对象
 type AssetRepo struct {
 	db *gorm.DB
 }
@@ -15,13 +15,14 @@ func NewAssetRepo(db *gorm.DB) *AssetRepo {
 	return &AssetRepo{db: db}
 }
 
-// AssetQuery 资产查询条件
-type AssetQuery struct {
+// AssetFilter 资产列表查询过滤条件
+type AssetFilter struct {
 	EnvironmentID uint
 	GroupID       uint
-	Type          model.AssetType
-	// Keyword 模糊搜索：匹配名称或 Host
-	Keyword string
+	Category      plugin.AssetCategory
+	PluginType    string
+	Status        model.AssetStatus
+	Keyword       string // 模糊匹配 name
 }
 
 func (r *AssetRepo) Create(a *model.Asset) error {
@@ -36,7 +37,6 @@ func (r *AssetRepo) Delete(id uint) error {
 	return r.db.Delete(&model.Asset{}, id).Error
 }
 
-// FindByID 按 ID 查询，预加载环境、分组、凭据
 func (r *AssetRepo) FindByID(id uint) (*model.Asset, error) {
 	var a model.Asset
 	err := r.db.
@@ -47,22 +47,29 @@ func (r *AssetRepo) FindByID(id uint) (*model.Asset, error) {
 	return &a, err
 }
 
-// List 根据条件查询资产列表
-func (r *AssetRepo) List(q AssetQuery) ([]model.Asset, error) {
-	tx := r.db.Preload("Environment").Preload("Group").Preload("Credential")
+func (r *AssetRepo) List(f AssetFilter) ([]model.Asset, error) {
+	tx := r.db.
+		Preload("Environment").
+		Preload("Group").
+		Preload("Credential")
 
-	if q.EnvironmentID > 0 {
-		tx = tx.Where("environment_id = ?", q.EnvironmentID)
+	if f.EnvironmentID > 0 {
+		tx = tx.Where("environment_id = ?", f.EnvironmentID)
 	}
-	if q.GroupID > 0 {
-		tx = tx.Where("group_id = ?", q.GroupID)
+	if f.GroupID > 0 {
+		tx = tx.Where("group_id = ?", f.GroupID)
 	}
-	if q.Type != "" {
-		tx = tx.Where("type = ?", q.Type)
+	if f.Category != "" {
+		tx = tx.Where("category = ?", f.Category)
 	}
-	if q.Keyword != "" {
-		like := "%" + q.Keyword + "%"
-		tx = tx.Where("name LIKE ? OR host LIKE ?", like, like)
+	if f.PluginType != "" {
+		tx = tx.Where("plugin_type = ?", f.PluginType)
+	}
+	if f.Status != "" {
+		tx = tx.Where("status = ?", f.Status)
+	}
+	if f.Keyword != "" {
+		tx = tx.Where("name LIKE ?", "%"+f.Keyword+"%")
 	}
 
 	var list []model.Asset
@@ -70,16 +77,16 @@ func (r *AssetRepo) List(q AssetQuery) ([]model.Asset, error) {
 	return list, err
 }
 
-// UpdateStatus 仅更新资产状态（供健康检查模块调用）
 func (r *AssetRepo) UpdateStatus(id uint, status model.AssetStatus) error {
 	return r.db.Model(&model.Asset{}).
 		Where("id = ?", id).
 		Update("status", status).Error
 }
 
-// CountByEnvironment 统计某环境下的资产数量
 func (r *AssetRepo) CountByEnvironment(envID uint) (int64, error) {
 	var count int64
-	err := r.db.Model(&model.Asset{}).Where("environment_id = ?", envID).Count(&count).Error
+	err := r.db.Model(&model.Asset{}).
+		Where("environment_id = ?", envID).
+		Count(&count).Error
 	return count, err
 }

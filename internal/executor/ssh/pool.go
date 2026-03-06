@@ -9,6 +9,7 @@ import (
 	assetModel "EnvPilot/internal/asset/model"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
+	"EnvPilot/internal/plugin"
 	"EnvPilot/pkg/logger"
 
 	"go.uber.org/zap"
@@ -54,7 +55,6 @@ func (p *Pool) GetClient(assetID uint) (*gossh.Client, error) {
 			entry.lastUsed = time.Now()
 			return entry.client, nil
 		}
-		// 连接已失效，移除缓存
 		_ = entry.client.Close()
 		delete(p.conns, assetID)
 	}
@@ -95,12 +95,22 @@ func (p *Pool) dial(assetID uint) (*gossh.Client, error) {
 		return nil, fmt.Errorf("资产不存在 [id=%d]", assetID)
 	}
 
-	if asset.Type != assetModel.AssetTypeServer {
-		return nil, fmt.Errorf("资产类型不支持 SSH [type=%s]", asset.Type)
+	if asset.Category != plugin.CategoryServer {
+		return nil, fmt.Errorf("资产类别不支持 SSH [category=%s]", asset.Category)
 	}
 
 	if asset.CredentialID == nil {
 		return nil, fmt.Errorf("资产未配置凭据，无法建立 SSH 连接 [id=%d]", assetID)
+	}
+
+	// host 和 port 从 ext_config 获取
+	host := asset.ExtConfig.GetString("host")
+	port := asset.ExtConfig.GetInt("port")
+	if host == "" {
+		return nil, fmt.Errorf("资产未配置主机地址 [id=%d]", assetID)
+	}
+	if port <= 0 {
+		port = 22
 	}
 
 	secret, err := p.credSvc.RevealSecret(*asset.CredentialID)
@@ -116,11 +126,11 @@ func (p *Pool) dial(assetID uint) (*gossh.Client, error) {
 	cfg := &gossh.ClientConfig{
 		User:            asset.Credential.Username,
 		Auth:            []gossh.AuthMethod{authMethod},
-		HostKeyCallback: gossh.InsecureIgnoreHostKey(), // 内网运维工具，暂不校验 host key
+		HostKeyCallback: gossh.InsecureIgnoreHostKey(),
 		Timeout:         15 * time.Second,
 	}
 
-	addr := fmt.Sprintf("%s:%d", asset.Host, asset.Port)
+	addr := fmt.Sprintf("%s:%d", host, port)
 	client, err := gossh.Dial("tcp", addr, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("SSH 连接失败 [%s]: %w", addr, err)

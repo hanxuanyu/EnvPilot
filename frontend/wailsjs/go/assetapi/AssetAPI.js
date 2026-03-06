@@ -38,6 +38,10 @@ export function GetAsset(arg1) {
   return window['go']['assetapi']['AssetAPI']['GetAsset'](arg1);
 }
 
+export function GetPluginSchema(arg1) {
+  return window['go']['assetapi']['AssetAPI']['GetPluginSchema'](arg1);
+}
+
 export function ListAssets(arg1) {
   return window['go']['assetapi']['AssetAPI']['ListAssets'](arg1);
 }
@@ -52,6 +56,14 @@ export function ListEnvironments() {
 
 export function ListGroupsByEnvironment(arg1) {
   return window['go']['assetapi']['AssetAPI']['ListGroupsByEnvironment'](arg1);
+}
+
+export function ListPlugins(arg1) {
+  return window['go']['assetapi']['AssetAPI']['ListPlugins'](arg1);
+}
+
+export function RevealCredential(arg1) {
+  return window['go']['assetapi']['AssetAPI']['RevealCredential'](arg1);
 }
 
 export function UpdateAsset(arg1) {

@@ -5,37 +5,34 @@ import (
 
 	"EnvPilot/internal/asset/model"
 	"EnvPilot/internal/asset/repository"
+	"EnvPilot/internal/plugin"
 	"EnvPilot/pkg/logger"
 
 	"go.uber.org/zap"
 )
 
-// CreateAssetRequest 创建资产请求参数
 type CreateAssetRequest struct {
-	EnvironmentID uint
-	GroupID       *uint
-	Type          model.AssetType
-	Name          string
-	Host          string
-	Port          int
-	Description   string
-	Tags          model.Tags
-	CredentialID  *uint
+	EnvironmentID uint                 `json:"environment_id"`
+	GroupID       *uint                `json:"group_id"`
+	Category      plugin.AssetCategory `json:"category"`
+	PluginType    string               `json:"plugin_type"`
+	Name          string               `json:"name"`
+	Description   string               `json:"description"`
+	Tags          model.Tags           `json:"tags"`
+	CredentialID  *uint                `json:"credential_id"`
+	ExtConfig     model.ExtConfig      `json:"ext_config"`
 }
 
-// UpdateAssetRequest 更新资产请求参数
 type UpdateAssetRequest struct {
-	ID            uint
-	GroupID       *uint
-	Name          string
-	Host          string
-	Port          int
-	Description   string
-	Tags          model.Tags
-	CredentialID  *uint
+	ID           uint            `json:"id"`
+	GroupID      *uint           `json:"group_id"`
+	Name         string          `json:"name"`
+	Description  string          `json:"description"`
+	Tags         model.Tags      `json:"tags"`
+	CredentialID *uint           `json:"credential_id"`
+	ExtConfig    model.ExtConfig `json:"ext_config"`
 }
 
-// AssetService 资产业务逻辑服务
 type AssetService struct {
 	repo    *repository.AssetRepo
 	envRepo *repository.EnvironmentRepo
@@ -50,29 +47,30 @@ func NewAssetService(repo *repository.AssetRepo, envRepo *repository.Environment
 	}
 }
 
-// Create 创建资产，自动补全默认端口
 func (s *AssetService) Create(req CreateAssetRequest) (*model.Asset, error) {
 	if _, err := s.envRepo.FindByID(req.EnvironmentID); err != nil {
 		return nil, fmt.Errorf("环境不存在 [id=%d]", req.EnvironmentID)
 	}
 
-	// 未指定端口时使用类型默认端口
-	port := req.Port
-	if port <= 0 {
-		port = model.DefaultPort(req.Type)
+	if _, err := plugin.Get(req.PluginType); err != nil {
+		return nil, fmt.Errorf("插件类型无效: %w", err)
+	}
+
+	if req.ExtConfig == nil {
+		req.ExtConfig = make(model.ExtConfig)
 	}
 
 	a := &model.Asset{
 		EnvironmentID: req.EnvironmentID,
 		GroupID:       req.GroupID,
-		Type:          req.Type,
+		Category:      req.Category,
+		PluginType:    req.PluginType,
 		Name:          req.Name,
-		Host:          req.Host,
-		Port:          port,
 		Description:   req.Description,
 		Tags:          req.Tags,
 		CredentialID:  req.CredentialID,
 		Status:        model.AssetStatusUnknown,
+		ExtConfig:     req.ExtConfig,
 	}
 
 	if err := s.repo.Create(a); err != nil {
@@ -81,26 +79,28 @@ func (s *AssetService) Create(req CreateAssetRequest) (*model.Asset, error) {
 
 	s.log.Info("创建资产",
 		zap.String("name", req.Name),
-		zap.String("type", string(req.Type)),
-		zap.String("host", req.Host),
+		zap.String("plugin_type", req.PluginType),
+		zap.String("category", string(req.Category)),
 	)
 	return a, nil
 }
 
-// Update 更新资产信息
 func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 	a, err := s.repo.FindByID(req.ID)
 	if err != nil {
 		return nil, fmt.Errorf("资产不存在 [id=%d]", req.ID)
 	}
 
+	if req.ExtConfig == nil {
+		req.ExtConfig = make(model.ExtConfig)
+	}
+
 	a.GroupID = req.GroupID
 	a.Name = req.Name
-	a.Host = req.Host
-	a.Port = req.Port
 	a.Description = req.Description
 	a.Tags = req.Tags
 	a.CredentialID = req.CredentialID
+	a.ExtConfig = req.ExtConfig
 
 	if err := s.repo.Update(a); err != nil {
 		return nil, fmt.Errorf("更新资产失败: %w", err)
@@ -110,7 +110,6 @@ func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 	return a, nil
 }
 
-// Delete 删除资产
 func (s *AssetService) Delete(id uint) error {
 	if _, err := s.repo.FindByID(id); err != nil {
 		return fmt.Errorf("资产不存在 [id=%d]", id)
@@ -122,17 +121,24 @@ func (s *AssetService) Delete(id uint) error {
 	return nil
 }
 
-// GetByID 获取单个资产详情
 func (s *AssetService) GetByID(id uint) (*model.Asset, error) {
 	return s.repo.FindByID(id)
 }
 
-// List 查询资产列表（支持筛选和搜索）
-func (s *AssetService) List(q repository.AssetQuery) ([]model.Asset, error) {
-	return s.repo.List(q)
+func (s *AssetService) List(f repository.AssetFilter) ([]model.Asset, error) {
+	return s.repo.List(f)
 }
 
-// UpdateStatus 更新资产在线状态（供健康检查模块调用）
 func (s *AssetService) UpdateStatus(id uint, status model.AssetStatus) error {
 	return s.repo.UpdateStatus(id, status)
+}
+
+// ListPlugins 列出已注册插件，category 为空时返回全部
+func (s *AssetService) ListPlugins(category plugin.AssetCategory) []*plugin.PluginDef {
+	return plugin.List(category)
+}
+
+// GetPluginSchema 获取指定插件的完整定义（含 ConfigSchema）
+func (s *AssetService) GetPluginSchema(pluginType string) (*plugin.PluginDef, error) {
+	return plugin.Get(pluginType)
 }

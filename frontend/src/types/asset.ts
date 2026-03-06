@@ -1,14 +1,15 @@
-// asset.ts 资产管理模块的前端类型定义
-// 与 Go 后端 model 保持一致
+// asset.ts — 资产管理模块前端类型定义
 
-// ── 通用响应包装 ──────────────────────────────────────
+// ── 通用响应包装 ──
+
 export interface Result<T> {
-  ok: boolean
+  success: boolean
   data: T
   message: string
 }
 
-// ── 环境 ──────────────────────────────────────────────
+// ── 环境 / 分组 / 凭据 ──
+
 export interface Environment {
   id: number
   name: string
@@ -19,7 +20,6 @@ export interface Environment {
   groups?: Group[]
 }
 
-// ── 分组 ──────────────────────────────────────────────
 export interface Group {
   id: number
   environment_id: number
@@ -30,7 +30,6 @@ export interface Group {
   environment?: Environment
 }
 
-// ── 凭据类型 ──────────────────────────────────────────
 export type CredentialType = 'password' | 'ssh_key' | 'token'
 
 export interface Credential {
@@ -43,23 +42,60 @@ export interface Credential {
   updated_at: string
 }
 
-// ── 资产类型 ──────────────────────────────────────────
-export type AssetType = 'server' | 'mysql' | 'redis' | 'rocketmq' | 'rabbitmq'
+// ── 插件 Schema ──
+
+export type ConfigFieldType =
+  | 'text'
+  | 'number'
+  | 'password'
+  | 'textarea'
+  | 'boolean'
+  | 'select'
+
+export interface SelectOption {
+  value: string
+  label: string
+}
+
+export interface ConfigField {
+  key: string
+  label: string
+  type: ConfigFieldType
+  required: boolean
+  default_val?: unknown
+  options?: SelectOption[]
+  placeholder?: string
+  description?: string
+  secret?: boolean
+}
+
+export type AssetCategory = 'server' | 'database' | 'cache' | 'mq' | 'other'
+
+export interface PluginDef {
+  type_id: string
+  display_name: string
+  category: AssetCategory
+  icon_name: string
+  config_schema: ConfigField[]
+}
+
+// ── 资产 ──
+
 export type AssetStatus = 'unknown' | 'online' | 'offline' | 'warning'
 
 export interface Asset {
   id: number
   environment_id: number
   group_id?: number
-  type: AssetType
+  category: AssetCategory
+  plugin_type: string
   name: string
-  host: string
-  port: number
   description: string
   tags: string[]
   credential_id?: number
   status: AssetStatus
   last_checked_at?: string
+  ext_config: Record<string, unknown>
   created_at: string
   updated_at: string
   environment?: Environment
@@ -67,7 +103,8 @@ export interface Asset {
   credential?: Credential
 }
 
-// ── 请求参数类型 ──────────────────────────────────────
+// ── 请求体类型 ──
+
 export interface CreateEnvironmentReq {
   name: string
   description: string
@@ -93,30 +130,30 @@ export interface UpdateGroupReq {
 export interface CreateAssetReq {
   environment_id: number
   group_id?: number
-  type: AssetType
+  category: AssetCategory
+  plugin_type: string
   name: string
-  host: string
-  port: number
   description: string
   tags: string[]
   credential_id?: number
+  ext_config: Record<string, unknown>
 }
 
 export interface UpdateAssetReq {
   id: number
   group_id?: number
   name: string
-  host: string
-  port: number
   description: string
   tags: string[]
   credential_id?: number
+  ext_config: Record<string, unknown>
 }
 
 export interface ListAssetsReq {
   environment_id?: number
   group_id?: number
-  type?: AssetType
+  category?: AssetCategory | ''
+  plugin_type?: string
   keyword?: string
 }
 
@@ -135,13 +172,22 @@ export interface UpdateCredentialReq {
   secret: string
 }
 
-// ── 资产类型展示配置 ──────────────────────────────────
-export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+// ── 展示辅助常量 ──
+
+export const CATEGORY_LABELS: Record<AssetCategory, string> = {
   server: '服务器',
-  mysql: 'MySQL',
-  redis: 'Redis',
-  rocketmq: 'RocketMQ',
-  rabbitmq: 'RabbitMQ',
+  database: '数据库',
+  cache: '缓存',
+  mq: '消息队列',
+  other: '其他',
+}
+
+export const CATEGORY_COLORS: Record<AssetCategory, string> = {
+  server: '#60a5fa',
+  database: '#f97316',
+  cache: '#ef4444',
+  mq: '#8b5cf6',
+  other: '#6b7280',
 }
 
 export const ASSET_STATUS_LABELS: Record<AssetStatus, string> = {
@@ -158,11 +204,18 @@ export const ASSET_STATUS_COLORS: Record<AssetStatus, string> = {
   warning: '#f59e0b',
 }
 
-// 各资产类型的默认端口
-export const ASSET_DEFAULT_PORTS: Record<AssetType, number> = {
-  server: 22,
-  mysql: 3306,
-  redis: 6379,
-  rocketmq: 9876,
-  rabbitmq: 5672,
+/** 从 ext_config 中提取可展示的连接地址 */
+export function getAssetAddress(asset: Asset): string {
+  const cfg = asset.ext_config ?? {}
+  const host = cfg['host'] as string | undefined
+  const port = cfg['port'] as number | undefined
+  if (host && port) return `${host}:${port}`
+  if (host) return host
+  // RocketMQ
+  const ns = cfg['name_server'] as string | undefined
+  if (ns) return ns
+  // Kafka
+  const brokers = cfg['brokers'] as string | undefined
+  if (brokers) return brokers
+  return '—'
 }

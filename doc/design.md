@@ -4,16 +4,32 @@
 
 | 字段 | 内容 |
 |------|------|
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 | 日期 | 2026-03-06 |
-| 状态 | 评审中 |
+| 状态 | 实现中 |
 | 关联需求 | req.md v0.2 |
+| 变更说明 | v1.1 新增双模式部署架构（桌面 Wails + 服务端 HTTP）、EventEmitter 抽象、服务端 API 设计 |
 
 ---
 
 ## 2. 整体架构
 
-### 2.1 系统分层
+### 2.1 部署模式概览
+
+EnvPilot 支持两种独立的部署模式，共享全部业务逻辑：
+
+| 特性 | 桌面模式（Wails） | 服务端模式（HTTP） |
+|------|-----------------|-----------------|
+| 入口 | `main.go` + `app.go` | `cmd/server/main.go` |
+| 前端通信 | Wails IPC（原生 WebView 桥接） | REST API + SSE + WebSocket |
+| 实时事件 | `wailsruntime.EventsEmit` | `EventBus` → SSE / WebSocket |
+| 前端构建 | `npm run build`（`dist/`） | `npm run build:server`（`dist-server/`） |
+| 二进制产物 | `envpilot`（含 WebView） | `envpilot-server`（含嵌入静态资源） |
+| 构建命令 | `make build-desktop` | `make build-server` |
+
+### 2.2 系统分层
+
+#### 桌面模式
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -21,28 +37,73 @@
 │   页面层    →    Store 层    →    Service 层             │
 │ (Pages/UI)    (Zustand)       (services/*.ts)           │
 └──────────────────────┬──────────────────────────────────┘
-                       │  Wails 桥接（自动生成 JS Binding）
+                       │  Wails IPC（原生 WebView 桥接）
 ┌──────────────────────┴──────────────────────────────────┐
-│                     后端（Go）                           │
-│  API 层（Wails 绑定）→ Service 层 → Repository 层       │
-│                              ↓                          │
-│               Plugin Registry（插件注册表）              │
+│              后端（Go）—— app.go / Wails 绑定层          │
+│  internal/asset/api  +  internal/executor/api           │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────┴──────────────────────────────────┐
+│              内部服务层（internal/app/container.go）     │
+│  Asset Service  ─  Executor Service  ─  Plugin Registry │
 │                              ↓                          │
 │                    SQLite（GORM）                        │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 模块依赖关系
+#### 服务端模式
 
 ```
-asset ─── plugin   (资产模块依赖插件注册表)
-        └── connector (插件包含连接器实现)
-executor ─── asset  (执行时查询资产+凭据)
-connector ── asset  (连接时查询资产 ExtConfig+凭据)
-health ───── asset  (健康检查时查询资产配置)
-audit ───── 全模块  (各模块注入 AuditService)
-dns ──────── asset  (DNS 解析目标来自资产)
+┌─────────────────────────────────────────────────────────┐
+│                     前端（React）                        │
+│   pages → store → services/*.ts → apiClient.ts          │
+└──────┬──────────────────────────┬───────────────────────┘
+       │ REST API（/api/*）        │ WebSocket / SSE
+┌──────┴──────────────────────────┴───────────────────────┐
+│              HTTP 层（api/ 包）                          │
+│  asset_handler  ─  executor_handler  ─  router + CORS   │
+│                EventBus（进程内发布订阅）                 │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+┌──────────────────────┴──────────────────────────────────┐
+│              内部服务层（internal/app/container.go）     │
+│  Asset Service  ─  Executor Service  ─  Plugin Registry │
+│                              ↓                          │
+│                    SQLite（GORM）                        │
+└─────────────────────────────────────────────────────────┘
 ```
+
+### 2.3 模块依赖关系
+
+```
+internal/app/container  ── 所有服务的统一初始化入口
+asset ─── plugin        (资产模块依赖插件注册表)
+        └── connector   (插件包含连接器实现)
+executor ─── asset      (执行时查询资产+凭据)
+executor ─── event      (通过 Emitter 接口推送事件，解耦 Wails/HTTP)
+connector ── asset      (连接时查询资产 ExtConfig+凭据)
+health ───── asset      (健康检查时查询资产配置)
+audit ───── 全模块      (各模块注入 AuditService)
+dns ──────── asset      (DNS 解析目标来自资产)
+```
+
+### 2.4 事件推送抽象
+
+命令执行输出和终端 I/O 需要实时推送到前端。为解耦具体传输方式，定义 `event.Emitter` 接口：
+
+```go
+// pkg/event/emitter.go
+type Emitter interface {
+    Emit(event string, data interface{})
+}
+```
+
+| 模式 | 实现 | 内部机制 |
+|------|------|---------|
+| 桌面 | `WailsEmitter`（`internal/executor/api/`） | `wailsruntime.EventsEmit` → Wails IPC |
+| 服务端 | `BusEmitter`（`api/event_bus.go`） | `EventBus.Publish` → SSE / WebSocket |
+
+服务层 `executor_service.go` 只依赖 `event.Emitter` 接口，两种模式下逻辑完全相同。
 
 ---
 
@@ -1401,7 +1462,7 @@ import { cn } from '@/lib/utils'
 <div className={cn('base-class', condition && 'conditional-class', className)} />
 ```
 
-- 响应式断点：当前为桌面端固定窗口（1440×900），不需要移动端适配，但组件内部布局应使用 `flex`/`grid` 而非固定 `px` 宽度
+- 响应式断点：桌面模式为固定窗口（1440×900），服务端模式需兼容浏览器窗口缩放。组件内部布局应使用 `flex`/`grid` 而非固定 `px` 宽度，避免在服务端模式下出现布局溢出
 
 ---
 
@@ -1458,3 +1519,196 @@ wails dev
 - `frontend/wailsjs/go/models.ts`
 
 **禁止**手动修改 `wailsjs/` 下任何自动生成的文件。
+
+### 10.6 服务端模式开发流程
+
+新增 HTTP 接口时需同步更新：
+
+1. **Go handler**（`api/asset_handler.go` 或 `api/executor_handler.go`）
+2. **路由注册**（`api/router.go`）
+3. **前端 service 函数**，在 `IS_SERVER_MODE` 分支中添加 HTTP 调用
+
+```typescript
+// frontend/src/services/xxxService.ts
+export async function newOperation(param: Param): Promise<Result> {
+  if (IS_SERVER_MODE) {
+    return apiClient.http.post('/api/xxx/operation', param)
+  }
+  return XxxAPIJs.NewOperation(param).then(unwrap)
+}
+```
+
+---
+
+## 11. 服务端模式 API 设计
+
+### 11.1 统一响应格式
+
+所有 REST 接口均返回与 Wails 模式相同的 `Result[T]` 结构：
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "message": ""
+}
+```
+
+失败时：
+```json
+{
+  "success": false,
+  "message": "错误描述"
+}
+```
+
+### 11.2 资产管理接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/plugins` | 获取所有插件定义 |
+| GET | `/api/plugins/{type}/schema` | 获取指定插件 Schema |
+| GET | `/api/environments` | 获取环境列表 |
+| POST | `/api/environments` | 创建环境 |
+| PUT | `/api/environments/{id}` | 更新环境 |
+| DELETE | `/api/environments/{id}` | 删除环境 |
+| GET | `/api/groups` | 获取分组列表（`?env_id=` 过滤） |
+| POST | `/api/groups` | 创建分组 |
+| PUT | `/api/groups/{id}` | 更新分组 |
+| DELETE | `/api/groups/{id}` | 删除分组 |
+| GET | `/api/assets` | 资产列表（支持 `category`/`plugin_type`/`env_id` 查询参数） |
+| POST | `/api/assets` | 创建资产 |
+| PUT | `/api/assets/{id}` | 更新资产 |
+| DELETE | `/api/assets/{id}` | 删除资产 |
+| GET | `/api/credentials` | 凭据列表 |
+| POST | `/api/credentials` | 创建凭据 |
+| PUT | `/api/credentials/{id}` | 更新凭据 |
+| DELETE | `/api/credentials/{id}` | 删除凭据 |
+| POST | `/api/credentials/{id}/reveal` | 获取凭据明文（审计记录） |
+
+### 11.3 命令执行接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/executions` | 提交单资产命令执行 |
+| POST | `/api/executions/batch` | 提交批量执行 |
+| GET | `/api/executions/{id}` | 获取执行记录详情 |
+| GET | `/api/executions` | 分页查询执行历史（`?asset_id=&page=&page_size=`） |
+| POST | `/api/executions/check-dangerous` | 检查危险命令 |
+| GET | `/api/executions/{id}/stream` | **SSE**：实时订阅命令输出流 |
+
+**SSE 输出流格式**：
+
+```
+event: output
+data: {"line": "Hello, World!\n", "stream": "stdout"}
+
+event: done
+data: {"exit_code": 0, "duration_ms": 1234}
+```
+
+### 11.4 在线终端接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/ws/terminal` | **WebSocket**：在线 PTY 终端（查询参数 `asset_id`） |
+
+**WebSocket 消息格式**：
+
+上行（浏览器 → 服务器）：
+```json
+{"type": "input", "data": "ls -la\n"}
+{"type": "resize", "cols": 220, "rows": 50}
+{"type": "close"}
+```
+
+下行（服务器 → 浏览器）：
+```json
+{"type": "output", "data": "total 48\n..."}
+{"type": "error", "message": "连接失败"}
+{"type": "closed"}
+```
+
+### 11.5 SPA 路由回退
+
+所有非 `/api/` 和 `/ws/` 前缀的请求均返回内嵌的 `index.html`，支持前端 React Router 的客户端路由：
+
+```go
+// api/router.go
+mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    // 非 API 路径 → 返回 index.html
+    http.ServeFileFS(w, r, assets, "index.html")
+})
+```
+
+### 11.6 CORS 策略
+
+服务端模式默认允许所有来源（便于开发和内网部署）：
+
+```
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+Access-Control-Allow-Headers: Content-Type, Authorization
+```
+
+> **生产部署建议**：通过 `--cors-origin` 启动参数或配置文件限制允许的来源域名。
+
+---
+
+## 12. 构建与部署
+
+### 12.1 桌面模式构建
+
+```bash
+make build-desktop
+# 产物：build/bin/envpilot（当前平台）
+```
+
+内部流程：
+1. Wails 自动构建前端（`dist/`，`mode=desktop`）
+2. 将前端资产嵌入 Go 二进制
+3. 链接 WebView2 运行时
+
+### 12.2 服务端模式构建
+
+```bash
+make build-server
+# 产物：bin/envpilot-server（当前平台）
+
+make build-server-linux  # 交叉编译 Linux amd64
+# 产物：bin/envpilot-server-linux-amd64
+```
+
+内部流程：
+1. `npm run build:server --prefix frontend`（输出 `frontend/dist-server/`）
+2. `cp -r frontend/dist-server/* cmd/server/dist/`
+3. `go build -o bin/envpilot-server ./cmd/server/`（`//go:embed all:dist` 内嵌静态资源）
+
+### 12.3 Vite 双模式构建配置
+
+| 构建参数 | 桌面模式 | 服务端模式 |
+|---------|---------|----------|
+| `mode` | `desktop`（默认） | `server` |
+| `outDir` | `dist/` | `dist-server/` |
+| `__APP_MODE__` | `'desktop'` | `'server'` |
+| `__API_BASE__` | `''` | `''`（代理模式）或实际地址 |
+
+前端代码通过编译期常量判断模式：
+
+```typescript
+// frontend/src/lib/apiClient.ts
+export const IS_SERVER_MODE = (typeof __APP_MODE__ !== 'undefined')
+    && __APP_MODE__ === 'server'
+```
+
+### 12.4 服务端运行
+
+```bash
+# 本地运行（默认 :8080）
+./bin/envpilot-server
+
+# 指定地址
+./bin/envpilot-server --addr :9090
+
+# 数据存储位置默认为 ~/.envpilot/（与桌面模式相同）
+```

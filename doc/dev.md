@@ -3,6 +3,8 @@
 > 本文档记录所有开发阶段的目标、任务拆解和完成状态。
 > 每个阶段开始前更新计划，完成后更新状态。
 > 详细的系统设计请参考 `doc/design.md`，需求规格请参考 `req.md`。
+>
+> **当前架构**：桌面模式（Wails）+ 服务端模式（HTTP/SSE/WebSocket）双模式，共享 `internal/` 业务逻辑。
 
 ---
 
@@ -11,15 +13,18 @@
 | 层次 | 技术 | 版本 |
 |------|------|------|
 | 桌面容器 | Wails | v2.11.0 |
+| HTTP 服务 | Go 标准库 net/http | 1.22+ 路径参数语法 |
 | 后端语言 | Go | 1.24 |
 | 前端框架 | React + TypeScript | 18 / 5 |
-| 样式系统 | TailwindCSS | v4 |
+| 样式系统 | TailwindCSS + shadcn/ui | v4 |
 | 状态管理 | Zustand | latest |
 | 路由 | React Router DOM | v7 |
 | 本地数据库 | SQLite (GORM) | - |
 | 日志 | zap + lumberjack | - |
 | SSH | golang.org/x/crypto/ssh | - |
 | 加密 | AES-256-GCM + PBKDF2 | - |
+| WebSocket（服务端） | gorilla/websocket | - |
+| 实时推流 | SSE（服务端）/ Wails EventsEmit（桌面） | - |
 
 ---
 
@@ -27,24 +32,35 @@
 
 ```
 internal/
-├── plugin/      插件注册表（新增）
+├── app/         共享初始化容器 Bootstrap()（无 Wails 依赖）
+├── plugin/      插件注册表（PluginDef / Registry）
 ├── asset/       资产管理（环境/分组/资产/凭据）
-├── executor/    SSH 命令执行
-├── terminal/    在线 Terminal（WebSocket + PTY）
-├── connector/   中间件连接器（插件化）
-├── dns/         内置 DNS 服务
-├── health/      健康检查
-├── audit/       操作审计
+├── executor/    SSH 命令执行 + 在线终端
+├── connector/   中间件连接器（插件化，待实现）
+├── dns/         内置 DNS 服务（待实现）
+├── health/      健康检查（待实现）
+├── audit/       操作审计（待实现）
 ├── config/      系统配置
-└── auth/        本地认证
+└── auth/        本地认证（待实现）
+
+api/             HTTP handler 层（服务端模式专用）
+├── router.go            路由注册 + CORS + SPA fallback
+├── asset_handler.go     资产管理 REST handler
+├── executor_handler.go  命令执行 / SSE 流 / WebSocket 终端
+├── event_bus.go         进程内发布订阅总线
+└── util.go              JSON 响应工具
+
+cmd/
+└── server/      服务端模式独立入口 + 静态资源内嵌
 
 pkg/
 ├── crypto/      AES-256 加解密 + PBKDF2 密钥派生
+├── event/       EventEmitter 接口（解耦 Wails / HTTP 事件推送）
 └── logger/      全局日志（zap）
 
 database/
 ├── db.go                   SQLite 连接初始化
-└── migration/              数据库迁移管理
+└── migration/              版本化迁移（schema_migrations 追踪）
 ```
 
 ---
@@ -84,11 +100,22 @@ s.audit.Record(ctx, audit.ActionSSHCmd, audit.ResourceAsset, asset.ID, asset.Nam
 ### 前端 API 调用
 
 ```typescript
-// ✅ 正确：通过 services/ 封装
+// ✅ 正确：通过 services/ 封装（内部自动切换桌面/服务端模式）
 import { listAssets, listPlugins } from '@/services/assetService'
 
-// ❌ 错误：直接调用 wailsjs（不可维护）
+// ❌ 错误：直接调用 wailsjs（服务端模式不可用）
 import { ListAssets } from '@/wailsjs/go/assetapi/AssetAPI'
+```
+
+所有 `services/*.ts` 内部通过 `IS_SERVER_MODE` 常量切换调用方式：
+
+```typescript
+// 桌面模式：调用 Wails IPC 绑定
+// 服务端模式：调用 apiClient.http（标准 REST）
+export async function listAssets(filter?: AssetFilter) {
+  if (IS_SERVER_MODE) return apiClient.http.get('/api/assets', filter)
+  return AssetAPIJs.ListAssets(filter).then(unwrap)
+}
 ```
 
 ### 数据库迁移
@@ -101,9 +128,9 @@ m.add("004_asset_refactor", migrateAssetRefactor)
 
 迁移文件编号全局递增，不允许修改已执行的迁移。
 
-### Wails API 绑定
+### Wails API 绑定（桌面模式）
 
-所有 Wails 绑定方法使用 `Result[T]` 泛型包装响应：
+所有 Wails 绑定方法使用 `Result[T]` 泛型包装响应；HTTP 接口同样使用相同结构体：
 
 ```go
 type Result[T any] struct {
@@ -112,6 +139,30 @@ type Result[T any] struct {
     Message string `json:"message,omitempty"`
 }
 ```
+
+### 事件推送
+
+业务逻辑层不依赖具体的事件实现，统一使用 `event.Emitter` 接口：
+
+```go
+// pkg/event/emitter.go
+type Emitter interface {
+    Emit(event string, data interface{})
+}
+```
+
+- **桌面模式**：`executor_api.go` 创建 `WailsEmitter`，内部调用 `wailsruntime.EventsEmit`
+- **服务端模式**：`api/executor_handler.go` 创建 `BusEmitter`，内部向 `EventBus` 发布；SSE handler 订阅并推流到浏览器
+
+### 数据库迁移
+
+每个阶段在 `database/migration/migrations/` 下新增迁移文件，并在 `migrator.go` 中注册。`schema_migrations` 表追踪已执行记录，每个迁移只执行一次：
+
+```go
+m.add("004_dns", migrateDNS)
+```
+
+迁移文件编号全局递增，**不允许修改已执行的迁移**。
 
 ---
 
@@ -122,14 +173,13 @@ type Result[T any] struct {
 | 阶段 1 | 项目初始化 | ✅ 完成 | 工程骨架、基础设施 |
 | 阶段 2 | 资产管理系统（初版） | ✅ 完成 | 旧数据模型，已被阶段 2R 替代 |
 | 阶段 3 | 服务器执行系统 | ✅ 完成 | SSH 命令执行 + 在线终端 |
-| **阶段 2R** | **资产管理重构** | ⬜ 待开始 | 插件化架构 + 新数据模型 |
+| **阶段 2R** | **资产管理重构** | ✅ 完成 | 插件化架构 + 新数据模型 |
+| **阶段 D** | **双模式部署支持** | ✅ 完成 | 桌面（Wails）+ 服务端（HTTP）双模式 |
 | 阶段 4 | 中间件连接器 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 5 | DNS 服务 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 6 | 健康检查 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 7 | 审计系统 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 8 | 配置系统 | ⬜ 待开始 | 独立模块 |
-
-> **开发优先级**：阶段 2R 是所有后续阶段的基础，必须首先完成。
 
 ---
 
@@ -153,14 +203,15 @@ type Result[T any] struct {
 
 | 文件 | 说明 |
 |------|------|
-| `app.go` | Wails 组合根，所有模块在此初始化 |
-| `main.go` | 程序入口，窗口配置 |
+| `main.go` | 桌面模式入口，Wails 窗口配置 |
+| `app.go` | Wails 生命周期回调 + 基础 API（Ping/GetVersion） |
+| `internal/app/container.go` | 共享初始化容器 Bootstrap()，无 Wails 依赖 |
 | `config/config.yaml` | 系统配置文件 |
 | `pkg/crypto/aes.go` | AES-256-GCM 加解密 |
 | `pkg/crypto/key_derive.go` | PBKDF2 密钥派生 |
 | `pkg/logger/logger.go` | 全局日志 |
 | `database/db.go` | SQLite 连接初始化 |
-| `database/migration/migrator.go` | 迁移执行器 |
+| `database/migration/migrator.go` | 版本化迁移执行器（schema_migrations 追踪） |
 | `frontend/src/App.tsx` | 前端路由配置 |
 
 ---
@@ -219,31 +270,29 @@ Asset: id, env_id, group_id, type(server|mysql|redis|rocketmq|rabbitmq), name, h
 
 ---
 
-## 阶段 2R：资产管理重构 ⬜
+## 阶段 2R：资产管理重构 ✅
 
 **目标**：将资产管理迁移到插件化架构，支持不同类型资产的独立配置格式
 
 **前置条件**：阶段 1-3 已完成
 
-**估时**：4-6 天
-
 ### 核心变更
 
 1. 新增 `internal/plugin/` 模块（插件注册表）
 2. 内置插件定义（8 种：linux_server、windows_server、mysql、postgresql、redis、rocketmq、rabbitmq、kafka）
-3. `assets` 表结构重构（`004_asset_refactor` 迁移）
+3. `assets` 表结构重构（直接重建，不兼容旧数据）
 4. Asset 数据模型新增 `category`、`plugin_type`、`ext_config` 字段，移除 `host`、`port`
 5. 前端新增 `DynamicConfigForm` 组件，根据插件 Schema 动态渲染表单
 
-### 任务拆解
+### 完成内容
 
-#### 后端任务
+#### 后端
 
-- [ ] Task 2R.1 — 创建 `internal/plugin/` 模块
+- [x] Task 2R.1 — 创建 `internal/plugin/` 模块
   - `definition.go`：PluginDef、ConfigField 数据结构定义
   - `registry.go`：Register/Get/List 接口实现
   
-- [ ] Task 2R.2 — 实现 8 个内置插件定义（`internal/plugin/builtin/`）
+- [x] Task 2R.2 — 实现 8 个内置插件定义（`internal/plugin/builtin/`）
   - `linux_server.go`：Host、Port(22)、OsType、JumpHost
   - `windows_server.go`：Host、Port(3389)、Protocol
   - `mysql.go`：Host、Port(3306)、Database、ExtraParams、SSLMode
@@ -253,72 +302,135 @@ Asset: id, env_id, group_id, type(server|mysql|redis|rocketmq|rabbitmq), name, h
   - `rabbitmq.go`：Host、Port(5672)、VHost、TLS
   - `kafka.go`：Brokers、SecurityProtocol、SASLMechanism
 
-- [ ] Task 2R.3 — 数据库迁移 `004_asset_refactor`
-  - 旧表备份（重命名 assets → assets_v1）
-  - 创建新 assets 表（含 category、plugin_type、ext_config）
-  - 数据迁移（type → category+plugin_type，host+port → ext_config JSON）
-  - 创建必要索引
+- [x] Task 2R.3 — 数据库迁移（在 `002_asset.go` 中 DROP TABLE 后重建，迁移系统确保只执行一次）
 
-- [ ] Task 2R.4 — 重构 `internal/asset/model/asset.go`
-  - 新增 ExtConfig 类型（map[string]interface{}，自定义 Scan/Value）
-  - 新增 Tags 类型序列化（已有，确认兼容）
-  - 字段调整：添加 Category、PluginType、ExtConfig，删除 Host、Port
+- [x] Task 2R.4 — 重构 `internal/asset/model/asset.go`（ExtConfig、Tags 自定义 Scan/Value）
 
-- [ ] Task 2R.5 — 重构 `internal/asset/repository/asset_repo.go`
-  - 更新 AssetFilter 结构（新增 Category、PluginType 过滤条件）
-  - 更新 List 查询（旧的 type 字段改为 plugin_type）
-  - 从 ExtConfig 中快照 host 字段到 Execution 记录（执行时仍需获取 host）
+- [x] Task 2R.5 — 重构 `internal/asset/repository/asset_repo.go`（Category/PluginType 过滤）
 
-- [ ] Task 2R.6 — 重构 `internal/asset/service/asset_service.go`
-  - 注入 plugin.Registry（验证 plugin_type 合法性）
-  - 新增 GetPluginSchema / ListPlugins 方法
-  - CreateAsset/UpdateAsset 时校验 ext_config 中的 required 字段
+- [x] Task 2R.6 — 重构 `internal/asset/service/asset_service.go`（注入 PluginRegistry、ListPlugins/GetPluginSchema）
 
-- [ ] Task 2R.7 — 重构 `internal/asset/api/asset_api.go`
-  - 新增 `ListPlugins(category string)` 接口
-  - 新增 `GetPluginSchema(pluginType string)` 接口
-  - 更新 CreateAssetRequest / UpdateAssetRequest（ext_config 替换 host/port）
-  - 在 `app.go` 中注册新 API 方法并运行 `wails generate`
+- [x] Task 2R.7 — 重构 `internal/asset/api/asset_api.go`（ListPlugins / GetPluginSchema 接口）
 
-- [ ] Task 2R.8 — 修复受影响的 executor 模块
-  - `executor_service.go` 中获取资产 host 的方式改为从 ext_config 读取
-  - 终端服务同步修改
-  - 更新 Execution 记录中 asset_host 的取值逻辑
+- [x] Task 2R.8 — 修复 executor 模块：从 `ext_config.host/port` 读取连接参数；命令执行使用 `bash -lc` 解决 PATH 问题
 
-#### 前端任务
+#### 前端
 
-- [ ] Task 2R.9 — 更新前端类型定义 `frontend/src/types/asset.ts`
-  - 新增 PluginDef、ConfigField、ConfigFieldType、SelectOption 类型
-  - 更新 Asset 类型（ext_config 替换 host/port，新增 category/plugin_type）
-  - 更新 CreateAssetRequest / UpdateAssetRequest
+- [x] Task 2R.9 — 更新 `frontend/src/types/asset.ts`（PluginDef、ConfigField、Asset 重构）
 
-- [ ] Task 2R.10 — 实现 `DynamicConfigForm` 组件（`frontend/src/components/asset/`）
-  - `DynamicField.tsx`：按 field.type 渲染对应组件（Input/Select/Switch/Textarea/TagInput）
-  - `DynamicConfigForm.tsx`：遍历 schema 渲染所有字段
-  - `PluginSelector.tsx`：插件类型选择（按 category 分组，图标+名称展示）
+- [x] Task 2R.10 — 实现 `DynamicConfigForm` 组件（`frontend/src/components/asset/DynamicConfigForm.tsx`）
 
-- [ ] Task 2R.11 — 重构 `AssetFormModal`（`frontend/src/pages/AssetPage.tsx` 或抽取到组件目录）
-  - 步骤 1：选择 category（类别）
-  - 步骤 2：选择 plugin_type（插件，按类别过滤）
-  - 步骤 3：DynamicConfigForm（根据所选插件的 schema 渲染）
-  - 同步更新：凭据绑定、标签输入、描述输入保留在表单中
+- [x] Task 2R.11 — 重构 `AssetPage.tsx`（分步选择 category → plugin → DynamicConfigForm）
 
-- [ ] Task 2R.12 — 更新 `assetService.ts` 和 `assetStore.ts`
-  - 新增 `listPlugins`、`getPluginSchema` 调用封装
-  - Store 中新增 plugins 状态及 loadPlugins action
-  - 更新 createAsset/updateAsset 请求结构
+- [x] Task 2R.12 — 更新 `assetService.ts` 和 `assetStore.ts`（listPlugins、getPluginSchema）
 
-- [ ] Task 2R.13 — 更新资产列表表格
-  - 展示列调整：类型列显示 category+plugin_type（图标+名称）
-  - 筛选栏增加 category 和 plugin_type 过滤选项
+- [x] Task 2R.13 — 资产列表表格展示 category+plugin_type，支持过滤
 
-### 验收标准
+### 关键文件
 
-- [ ] 资产创建时可选择插件类型，表单字段按插件 Schema 自动渲染
-- [ ] 不同插件类型显示不同的配置字段（如 MySQL 显示 Database/ExtraParams，Redis 显示 DB/TLS）
-- [ ] 旧数据迁移正确（server → linux_server，mysql → mysql 等）
-- [ ] executor 模块仍可正常执行命令（host 从 ext_config 读取）
-- [ ] 新增 postgresql 插件无需修改任何现有代码，只需在 builtin/ 添加一个 go 文件
+| 文件 | 说明 |
+|------|------|
+| `internal/plugin/definition.go` | PluginDef、ConfigField 结构 |
+| `internal/plugin/registry.go` | Register / Get / List |
+| `internal/plugin/builtin/` | 8 个内置插件定义（`init()` 自注册） |
+| `internal/asset/model/asset.go` | 新版 Asset 模型（ExtConfig JSON 字段） |
+| `internal/asset/service/asset_service.go` | 业务逻辑（含插件校验） |
+| `frontend/src/components/asset/DynamicConfigForm.tsx` | 动态表单渲染 |
+| `frontend/src/pages/AssetPage.tsx` | 资产管理页面（重构版） |
+
+---
+
+## 阶段 D：双模式部署支持 ✅
+
+**目标**：在保留 Wails 桌面模式的同时，支持以独立 HTTP 服务器形式部署，两种模式共享 `internal/` 全部业务逻辑
+
+**前置条件**：阶段 1、2R、3 已完成
+
+### 架构方案
+
+核心思路是"解耦入口层，共享逻辑层"：
+
+```
+main.go（Wails）          cmd/server/main.go（HTTP）
+     │                           │
+     ▼                           ▼
+   app.go                   api/router.go
+(Wails 生命周期)          (HTTP/SSE/WebSocket)
+     │                           │
+     └──────────┬────────────────┘
+                ▼
+      internal/app/container.go
+         Bootstrap()（共享初始化）
+                │
+     ┌──────────┴──────────┐
+     ▼                     ▼
+internal/asset/      internal/executor/
+ (业务逻辑)           (业务逻辑)
+```
+
+事件推送通过 `pkg/event.Emitter` 接口抽象：
+- **桌面**：`WailsEmitter` → `wailsruntime.EventsEmit`
+- **服务端**：`BusEmitter` → `EventBus` pub/sub → SSE 推送到浏览器
+
+### 完成内容
+
+#### Go 后端
+
+- [x] Task D.1 — `pkg/event/emitter.go`：定义 `Emitter` 接口 + `Noop` 实现
+
+- [x] Task D.2 — `executor_service.go` / `terminal_service.go`：移除 `wailsruntime` 导入，改为接受 `event.Emitter` 参数
+
+- [x] Task D.3 — `internal/executor/api/executor_api.go`：添加 `WailsEmitter` 实现，在 Wails 调用时传入
+
+- [x] Task D.4 — `internal/app/container.go`：`Bootstrap()` 集中初始化所有服务，无 Wails 依赖
+
+- [x] Task D.5 — `app.go` 精简：使用 `container.Bootstrap()`，只保留 Wails 生命周期代码
+
+- [x] Task D.6 — `api/event_bus.go`：进程内 pub/sub 总线 + `BusEmitter`
+
+- [x] Task D.7 — `api/asset_handler.go`：资产管理全部 REST handler
+
+- [x] Task D.8 — `api/executor_handler.go`：命令执行（POST）、SSE 输出流（GET）、WebSocket 终端（GET）
+
+- [x] Task D.9 — `api/router.go`：`http.NewServeMux` 路由 + CORS 中间件 + SPA fallback
+
+- [x] Task D.10 — `cmd/server/main.go`：服务端入口；`cmd/server/embed.go`：嵌入前端静态资源
+
+#### 前端
+
+- [x] Task D.11 — `frontend/src/vite-env.d.ts`：声明 `__APP_MODE__` / `__API_BASE__` 类型
+
+- [x] Task D.12 — `frontend/vite.config.ts`：支持 `--mode server` 构建，输出 `dist-server/`，注入全局常量
+
+- [x] Task D.13 — `frontend/package.json`：新增 `build:server` / `dev:server` 脚本
+
+- [x] Task D.14 — `frontend/src/lib/apiClient.ts`：HTTP REST、WebSocket URL、SSE 订阅、WebSocket 终端管理
+
+- [x] Task D.15 — `frontend/src/lib/wailsRuntime.ts`：Wails 事件安全封装（浏览器环境降级为 no-op）
+
+- [x] Task D.16 — `frontend/src/hooks/useWailsReady.ts`：服务端模式直接 ready，桌面模式等待 Wails 桥接
+
+- [x] Task D.17 — `services/backendService.ts` / `assetService.ts` / `executorService.ts`：双模式 `IS_SERVER_MODE` 分支
+
+- [x] Task D.18 — `frontend/src/pages/TerminalPage.tsx`：服务端使用 WebSocket，桌面使用 Wails IPC
+
+#### 构建
+
+- [x] Task D.19 — `Makefile`：`build-desktop` / `build-server` / `build-server-linux` / `dev` / `dev-server` / `clean`
+
+### 关键文件
+
+| 文件 | 说明 |
+|------|------|
+| `pkg/event/emitter.go` | 事件发射接口，解耦 Wails / HTTP |
+| `internal/app/container.go` | 共享服务初始化（Bootstrap） |
+| `api/router.go` | HTTP 路由（服务端专用） |
+| `api/executor_handler.go` | SSE 命令流 + WebSocket 终端 |
+| `api/event_bus.go` | 进程内 pub/sub |
+| `cmd/server/main.go` | 服务端二进制入口 |
+| `frontend/src/lib/apiClient.ts` | 前端 HTTP/WS/SSE 客户端 |
+| `frontend/src/lib/wailsRuntime.ts` | 浏览器安全 Wails 事件封装 |
+| `Makefile` | 双模式构建脚本 |
 
 ---
 

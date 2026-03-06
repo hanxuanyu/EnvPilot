@@ -10,24 +10,24 @@ import (
 	"sync"
 
 	sshpkg "EnvPilot/internal/executor/ssh"
+	"EnvPilot/pkg/event"
 	"EnvPilot/pkg/logger"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 	gossh "golang.org/x/crypto/ssh"
 )
 
 // TerminalSession 活跃的 SSH 终端会话
 type TerminalSession struct {
-	ID       string
-	AssetID  uint
-	session  *gossh.Session
-	stdin    io.WriteCloser
-	wailsCtx context.Context // 用于向前端推送事件
-	cancel   context.CancelFunc
+	ID      string
+	AssetID uint
+	session *gossh.Session
+	stdin   io.WriteCloser
+	emitter event.Emitter // 用于向调用方推送终端事件
+	cancel  context.CancelFunc
 }
 
-// TerminalService 在线终端会话管理服务（Task 3.5）
+// TerminalService 在线终端会话管理服务
 type TerminalService struct {
 	mu       sync.Mutex
 	sessions map[string]*TerminalSession
@@ -46,8 +46,10 @@ func NewTerminalService(pool *sshpkg.Pool) *TerminalService {
 
 // StartTerminal 启动一个 SSH PTY 会话，返回 sessionID
 //
-// ctx 为 Wails 自动注入的应用上下文，用于 EventsEmit。
-func (s *TerminalService) StartTerminal(ctx context.Context, assetID uint) (string, error) {
+// emitter 用于推送终端事件：
+//   - terminal:output:{sessionId}  → base64 编码的终端输出
+//   - terminal:closed:{sessionId}  → 会话关闭通知
+func (s *TerminalService) StartTerminal(assetID uint, emitter event.Emitter) (string, error) {
 	client, err := s.pool.GetClient(assetID)
 	if err != nil {
 		return "", fmt.Errorf("SSH 连接失败: %w", err)
@@ -90,12 +92,12 @@ func (s *TerminalService) StartTerminal(ctx context.Context, assetID uint) (stri
 	sessionID := generateSessionID()
 
 	ts := &TerminalSession{
-		ID:       sessionID,
-		AssetID:  assetID,
-		session:  session,
-		stdin:    stdin,
-		wailsCtx: ctx,
-		cancel:   cancel,
+		ID:      sessionID,
+		AssetID: assetID,
+		session: session,
+		stdin:   stdin,
+		emitter: emitter,
+		cancel:  cancel,
 	}
 
 	s.mu.Lock()
@@ -169,11 +171,11 @@ func (s *TerminalService) closeSession(sessionID string) {
 	_ = ts.stdin.Close()
 	_ = ts.session.Close()
 
-	runtime.EventsEmit(ts.wailsCtx, "terminal:closed:"+sessionID, nil)
+	ts.emitter.Emit("terminal:closed:"+sessionID, nil)
 	s.log.Info("终端会话已关闭", zap.String("sessionID", sessionID))
 }
 
-// readOutput 持续读取 SSH PTY 输出并通过 Wails 事件推送到前端
+// readOutput 持续读取 SSH PTY 输出并通过 Emitter 推送到调用方
 //
 // 输出以 base64 编码确保二进制安全传输。
 func (s *TerminalService) readOutput(ctx context.Context, ts *TerminalSession, stdout io.Reader) {
@@ -190,7 +192,7 @@ func (s *TerminalService) readOutput(ctx context.Context, ts *TerminalSession, s
 		n, err := stdout.Read(buf)
 		if n > 0 {
 			data := base64.StdEncoding.EncodeToString(buf[:n])
-			runtime.EventsEmit(ts.wailsCtx, event, data)
+			ts.emitter.Emit(event, data)
 		}
 		if err != nil {
 			// EOF 或会话关闭时退出循环

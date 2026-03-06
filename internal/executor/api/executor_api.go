@@ -7,10 +7,21 @@ import (
 	"EnvPilot/internal/executor/repository"
 	"EnvPilot/internal/executor/service"
 	sshpkg "EnvPilot/internal/executor/ssh"
+	"EnvPilot/pkg/event"
 	"EnvPilot/pkg/logger"
 
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 )
+
+// WailsEmitter 桌面模式下通过 Wails IPC 推送事件的 Emitter 实现
+type WailsEmitter struct {
+	ctx context.Context
+}
+
+func (w *WailsEmitter) Emit(ev string, data interface{}) {
+	wailsruntime.EventsEmit(w.ctx, ev, data)
+}
 
 // ExecutorAPI 执行器模块的 Wails 绑定结构体
 // 对前端暴露 SSH 命令执行和在线终端功能
@@ -47,6 +58,11 @@ func (a *ExecutorAPI) Cleanup() {
 	a.pool.CloseAll()
 }
 
+// wailsEmitter 创建当前 ctx 对应的 Wails Emitter
+func (a *ExecutorAPI) wailsEmitter() event.Emitter {
+	return &WailsEmitter{ctx: a.ctx}
+}
+
 // ==================== 命令执行 ====================
 
 // ExecuteCommandReq 单条命令执行请求
@@ -65,7 +81,7 @@ type ExecuteResult struct {
 
 // ExecuteCommand 在单个资产上执行命令（异步，立即返回执行记录）
 //
-// 实时事件通过 a.ctx（startup 阶段注入）推送给前端：
+// 实时事件通过 Wails IPC 推送给前端：
 //   - executor:output:{id}  → 命令输出流
 //   - executor:done:{id}    → 执行完成
 func (a *ExecutorAPI) ExecuteCommand(req ExecuteCommandReq) Result[ExecuteResult] {
@@ -74,7 +90,7 @@ func (a *ExecutorAPI) ExecuteCommand(req ExecuteCommandReq) Result[ExecuteResult
 		Command:  req.Command,
 		Operator: req.Operator,
 		Force:    req.Force,
-	})
+	}, a.wailsEmitter())
 	if err != nil {
 		a.log.Warn("执行命令失败", zap.Error(err))
 		return Fail[ExecuteResult](err.Error())
@@ -106,7 +122,7 @@ func (a *ExecutorAPI) BatchExecuteCommand(req BatchExecuteReq) Result[BatchExecu
 		Command:  req.Command,
 		Operator: req.Operator,
 		Force:    req.Force,
-	})
+	}, a.wailsEmitter())
 	if err != nil {
 		return Fail[BatchExecuteResult](err.Error())
 	}
@@ -137,9 +153,9 @@ func (a *ExecutorAPI) GetExecution(id uint) Result[*execModel.Execution] {
 
 // ListExecutionsReq 执行记录查询请求
 type ListExecutionsReq struct {
-	AssetID  uint   `json:"asset_id"`
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
+	AssetID  uint `json:"asset_id"`
+	Page     int  `json:"page"`
+	PageSize int  `json:"page_size"`
 }
 
 // ExecutionListResult 执行记录列表结果
@@ -170,11 +186,11 @@ func (a *ExecutorAPI) CheckDangerousCommand(command string) Result[bool] {
 
 // StartTerminal 启动一个 SSH PTY 终端会话，返回 sessionID
 //
-// 终端事件通过 a.ctx（startup 阶段注入）推送给前端：
+// 终端事件通过 Wails IPC 推送给前端：
 //   - terminal:output:{sessionId}  → base64 编码的终端输出
 //   - terminal:closed:{sessionId}  → 会话关闭通知
 func (a *ExecutorAPI) StartTerminal(assetId uint) Result[string] {
-	sessionID, err := a.termSvc.StartTerminal(a.ctx, assetId)
+	sessionID, err := a.termSvc.StartTerminal(assetId, a.wailsEmitter())
 	if err != nil {
 		a.log.Warn("启动终端会话失败", zap.Uint("assetId", assetId), zap.Error(err))
 		return Fail[string](err.Error())

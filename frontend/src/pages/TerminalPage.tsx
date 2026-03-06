@@ -1,13 +1,18 @@
-// TerminalPage.tsx  在线 SSH 终端（xterm.js + Wails 事件，Task 3.5/3.6）
+// TerminalPage.tsx  在线 SSH 终端（xterm.js，桌面 / 服务端双模式）
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Terminal, Power, PowerOff, Maximize2, Server, ChevronDown } from 'lucide-react'
+import { Terminal, Power, PowerOff, Maximize2, Server } from 'lucide-react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { executorService } from '@/services/executorService'
+import { IS_SERVER_MODE } from '@/lib/apiClient'
 import { useAssetStore } from '@/store/assetStore'
+import { Button } from '@/components/ui/button'
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select'
 
 // xterm.js 深色主题配置
 const XTERM_THEME = {
@@ -38,8 +43,8 @@ export default function TerminalPage() {
   const navigate = useNavigate()
   const { assets, loadAssets } = useAssetStore()
 
-  // 只显示 server 类型资产
-  const serverAssets = assets.filter(a => a.type === 'server')
+  // 只显示 server 类别资产
+  const serverAssets = assets.filter(a => a.category === 'server')
 
   const [selectedAssetId, setSelectedAssetId] = useState<number>(
     paramAssetId ? Number(paramAssetId) : 0
@@ -136,12 +141,7 @@ export default function TerminalPage() {
 
       term.writeln('\x1b[1;34m正在连接到服务器...\x1b[0m')
 
-      const sid = await executorService.startTerminal(selectedAssetId)
-      sessionIdRef.current = sid
-      setSessionId(sid)
-
-      // 订阅终端输出（base64 编码）
-      executorService.onTerminalOutput(sid, (data: string) => {
+      const handleOutput = (data: string) => {
         try {
           const bytes = atob(data)
           const arr = new Uint8Array(bytes.length)
@@ -150,15 +150,32 @@ export default function TerminalPage() {
         } catch {
           term.write(data)
         }
-      })
-
-      // 订阅会话关闭事件
-      executorService.onTerminalClosed(sid, () => {
+      }
+      const handleClosed = () => {
         term.writeln('\r\n\x1b[1;31m[会话已断开]\x1b[0m')
         setConnected(false)
         setSessionId(null)
         sessionIdRef.current = null
-      })
+      }
+
+      let sid: string
+      if (IS_SERVER_MODE) {
+        // 服务端模式：WebSocket 一步建立连接并注册回调
+        sid = await executorService.connectTerminal(
+          selectedAssetId,
+          handleOutput,
+          handleClosed,
+          (msg) => toast.error(msg),
+        )
+      } else {
+        // 桌面模式：Wails IPC
+        sid = await executorService.startTerminal(selectedAssetId)
+        executorService.onTerminalOutput(sid, handleOutput)
+        executorService.onTerminalClosed(sid, handleClosed)
+      }
+
+      sessionIdRef.current = sid
+      setSessionId(sid)
 
       // 初始尺寸上报
       setTimeout(() => {
@@ -218,76 +235,110 @@ export default function TerminalPage() {
   const selectedAsset = serverAssets.find(a => a.id === selectedAssetId)
 
   return (
-    <div className="h-full flex flex-col gap-4 animate-fade-in">
-      {/* 页面标题 */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">在线终端</h1>
-        <p className="text-sm text-muted-foreground mt-1">SSH PTY 终端 · xterm.js 渲染</p>
-      </div>
+    <div className="h-full flex flex-col gap-3 animate-fade-in">
+      {/* 紧凑工具栏：标题 + 控制区合并为单行 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* 标题区 */}
+        <div className="flex items-center gap-2 mr-2">
+          <Terminal className="w-5 h-5 text-muted-foreground" />
+          <h1 className="text-base font-semibold text-foreground whitespace-nowrap">在线终端</h1>
+        </div>
 
-      {/* 控制栏 */}
-      <div className="flex items-center gap-3 flex-wrap">
-        {/* 服务器选择 */}
-        <div className="relative">
-          <select
-            value={selectedAssetId}
-            onChange={e => {
+        {/* 分割线 */}
+        <div className="h-5 w-px bg-border mx-1" />
+
+        {/* 服务器选择：图标在 trigger 外侧，避免 SelectValue 渲染多行节点时错位 */}
+        <div className="flex items-center h-8 rounded-md border border-border bg-background focus-within:ring-1 focus-within:ring-ring overflow-hidden">
+          <span className="flex items-center px-2.5 border-r border-border h-full bg-muted/40 shrink-0">
+            <Server className="w-3.5 h-3.5 text-muted-foreground" />
+          </span>
+          <Select
+            value={String(selectedAssetId)}
+            onValueChange={v => {
               if (connected) {
                 toast.warning('请先断开当前连接再切换服务器')
                 return
               }
-              const id = Number(e.target.value)
+              const id = Number(v)
               setSelectedAssetId(id)
               if (id) navigate(`/terminal/${id}`)
             }}
             disabled={connected}
-            className="appearance-none bg-card border border-border rounded-lg pl-10 pr-8 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50 min-w-[220px]"
           >
-            <option value={0}>— 选择服务器 —</option>
-            {serverAssets.map(a => (
-              <option key={a.id} value={a.id}>
-                {a.name}  {a.host}:{a.port}
-              </option>
-            ))}
-          </select>
-          <Server className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <SelectTrigger className="w-[220px] h-8 border-0 shadow-none rounded-none focus:ring-0 text-sm">
+              <SelectValue placeholder="选择目标服务器" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">— 选择服务器 —</SelectItem>
+              {serverAssets.map(a => {
+                const host = (a.ext_config?.['host'] as string) ?? ''
+                const port = a.ext_config?.['port'] ?? ''
+                return (
+                  <SelectItem
+                    key={a.id}
+                    value={String(a.id)}
+                    textValue={`${a.name}  ${host}:${port}`}
+                  >
+                    <span className="flex flex-col">
+                      <span>{a.name}</span>
+                      <span className="text-xs text-muted-foreground font-mono">{`${host}:${port}`}</span>
+                    </span>
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* 连接 / 断开按钮 */}
         {!connected ? (
-          <button
+          <Button
+            size="sm"
             onClick={connect}
             disabled={connecting || !selectedAssetId}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            loading={connecting}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white h-8"
           >
-            <Power className="w-4 h-4" />
+            {!connecting && <Power className="w-3.5 h-3.5" />}
             {connecting ? '连接中...' : '连接'}
-          </button>
+          </Button>
         ) : (
-          <button
-            onClick={disconnect}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600/80 hover:bg-red-700 text-white text-sm font-medium transition-colors"
-          >
-            <PowerOff className="w-4 h-4" />
+          <Button size="sm" variant="destructive" onClick={disconnect} className="h-8">
+            <PowerOff className="w-3.5 h-3.5" />
             断开
-          </button>
+          </Button>
         )}
 
-        {/* 状态指示 */}
-        <div className={`flex items-center gap-1.5 text-sm ${connected ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/40'}`} />
+        {/* 状态 Badge */}
+        <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border ${
+          connected
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            : 'bg-muted/50 border-border text-muted-foreground'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-emerald-400 animate-pulse' : 'bg-muted-foreground/40'}`} />
           {connected ? `已连接 · ${selectedAsset?.name ?? ''}` : '未连接'}
         </div>
 
+        {/* 快捷键提示（连接后显示） */}
         {connected && (
-          <button
+          <div className="flex gap-3 text-xs text-muted-foreground/60 ml-2">
+            <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+C</kbd> 中断</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+D</kbd> 退出</span>
+            <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+L</kbd> 清屏</span>
+          </div>
+        )}
+
+        {/* 全屏按钮 */}
+        {connected && (
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={toggleFullscreen}
-            className="ml-auto p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
             title="全屏"
+            className="ml-auto h-8 w-8"
           >
             <Maximize2 className="w-4 h-4" />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -298,16 +349,16 @@ export default function TerminalPage() {
             <Terminal className="w-12 h-12 opacity-20" />
             <div className="text-center">
               <p className="text-sm font-medium">SSH 在线终端</p>
-              <p className="text-xs mt-1 opacity-60">选择服务器后点击「连接」</p>
+              <p className="text-xs mt-1 opacity-60">从上方选择服务器后点击「连接」</p>
             </div>
             {selectedAssetId > 0 && (
-              <button
+              <Button
                 onClick={connect}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 <Power className="w-4 h-4" />
                 立即连接
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -317,16 +368,6 @@ export default function TerminalPage() {
           style={{ display: connected || connecting ? 'block' : 'none' }}
         />
       </div>
-
-      {/* 快捷键提示 */}
-      {connected && (
-        <div className="flex gap-4 text-xs text-muted-foreground/60 flex-wrap">
-          <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+C</kbd> 中断</span>
-          <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+D</kbd> 退出</span>
-          <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+L</kbd> 清屏</span>
-          <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">↑↓</kbd> 历史命令</span>
-        </div>
-      )}
     </div>
   )
 }
