@@ -17,6 +17,7 @@
 package service
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -119,54 +120,82 @@ func validate(cfg *model.AppConfig) error {
 	return nil
 }
 
-// applyDefaults 为未设置的字段填充合理默认值
+// applyDefaults 将 model.Default() 中的值填入 cfg 的空白字段。
+// 不覆盖用户已显式配置的非零值，保持向后兼容。
 func applyDefaults(cfg *model.AppConfig) {
+	d := model.Default()
+
+	// App
 	if cfg.App.DataDir == "" {
-		cfg.App.DataDir = "./data"
+		cfg.App.DataDir = d.App.DataDir
 	}
 	if cfg.App.LogDir == "" {
-		cfg.App.LogDir = "./logs"
+		cfg.App.LogDir = d.App.LogDir
 	}
+
+	// Log
 	if cfg.Log.Level == "" {
-		cfg.Log.Level = "info"
+		cfg.Log.Level = d.Log.Level
 	}
 	if cfg.Log.Filename == "" {
-		cfg.Log.Filename = "envpilot.log"
+		cfg.Log.Filename = d.Log.Filename
 	}
 	if cfg.Log.MaxSize <= 0 {
-		cfg.Log.MaxSize = 100
+		cfg.Log.MaxSize = d.Log.MaxSize
 	}
 	if cfg.Log.MaxBackups <= 0 {
-		cfg.Log.MaxBackups = 7
+		cfg.Log.MaxBackups = d.Log.MaxBackups
 	}
 	if cfg.Log.MaxAge <= 0 {
-		cfg.Log.MaxAge = 30
+		cfg.Log.MaxAge = d.Log.MaxAge
 	}
+
+	// Database
 	if cfg.Database.Filename == "" {
-		cfg.Database.Filename = "envpilot.db"
+		cfg.Database.Filename = d.Database.Filename
 	}
 	if cfg.Database.MaxIdleConns <= 0 {
-		cfg.Database.MaxIdleConns = 2
+		cfg.Database.MaxIdleConns = d.Database.MaxIdleConns
 	}
 	if cfg.Database.MaxOpenConns <= 0 {
-		cfg.Database.MaxOpenConns = 10
+		cfg.Database.MaxOpenConns = d.Database.MaxOpenConns
 	}
+
+	// DNS
 	if cfg.DNS.ListenAddr == "" {
-		cfg.DNS.ListenAddr = "127.0.0.1:5353"
+		cfg.DNS.ListenAddr = d.DNS.ListenAddr
 	}
 	if cfg.DNS.Upstream == "" {
-		cfg.DNS.Upstream = "8.8.8.8:53"
+		cfg.DNS.Upstream = d.DNS.Upstream
 	}
 	if cfg.DNS.DefaultTTL == 0 {
-		cfg.DNS.DefaultTTL = 300
+		cfg.DNS.DefaultTTL = d.DNS.DefaultTTL
 	}
+
+	// Health
 	if cfg.Health.CheckInterval <= 0 {
-		cfg.Health.CheckInterval = 60
+		cfg.Health.CheckInterval = d.Health.CheckInterval
 	}
 	if cfg.Health.Timeout <= 0 {
-		cfg.Health.Timeout = 10
+		cfg.Health.Timeout = d.Health.Timeout
 	}
+
+	// Security
 	if cfg.Security.SaltFile == "" {
-		cfg.Security.SaltFile = ".salt"
+		cfg.Security.SaltFile = d.Security.SaltFile
 	}
+}
+
+// GenerateDefaultYAML 将 model.Default() 序列化为 YAML，
+// 用于在用户目录自动创建初始配置文件。
+// 配置结构发生变更时只需维护 model.Default()，此处无需改动。
+func GenerateDefaultYAML() ([]byte, error) {
+	data, err := yaml.Marshal(model.Default())
+	if err != nil {
+		return nil, fmt.Errorf("序列化默认配置失败: %w", err)
+	}
+	var buf bytes.Buffer
+	buf.WriteString("# EnvPilot 系统配置文件（自动生成，可按需修改后重启生效）\n")
+	buf.Write(data)
+	return buf.Bytes(), nil
 }

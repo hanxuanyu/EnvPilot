@@ -58,3 +58,50 @@ type HealthSection struct {
 	Timeout       int  `yaml:"timeout"`
 	AutoCheck     bool `yaml:"auto_check"`
 }
+
+// Default 返回填充了所有默认值的 AppConfig 实例。
+//
+// 这是全局唯一的默认值来源：
+//   - service.applyDefaults 基于此函数补全缺失字段
+//   - service.GenerateDefaultYAML 基于此函数生成初始配置文件内容
+//
+// 新增配置字段时，在此处补充对应默认值即可，其余逻辑自动同步。
+func Default() *AppConfig {
+	return &AppConfig{
+		App: AppSection{
+			Name:    "EnvPilot",
+			Version: "0.1.0",
+			DataDir: "./data",
+			LogDir:  "./logs",
+		},
+		Log: LogSection{
+			Level:      "info",
+			Filename:   "envpilot.log",
+			MaxSize:    100,
+			MaxBackups: 7,
+			MaxAge:     30,
+			Compress:   true,
+		},
+		Database: DatabaseSection{
+			Filename:     "envpilot.db",
+			MaxIdleConns: 2,
+			MaxOpenConns: 10,
+		},
+		Security: SecuritySection{
+			MasterPasswordEnabled: false,
+			SaltFile:              ".salt",
+			DangerousCommands:     []string{"rm -rf", "DROP", "DELETE", "TRUNCATE", "FORMAT"},
+		},
+		DNS: DNSSection{
+			Enabled:    false,
+			ListenAddr: "127.0.0.1:5353",
+			Upstream:   "8.8.8.8:53",
+			DefaultTTL: 300,
+		},
+		Health: HealthSection{
+			CheckInterval: 60,
+			Timeout:       10,
+			AutoCheck:     true,
+		},
+	}
+}

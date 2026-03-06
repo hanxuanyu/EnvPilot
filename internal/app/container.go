@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	assetAPI "EnvPilot/internal/asset/api"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
+	configModel "EnvPilot/internal/config/model"
 	configService "EnvPilot/internal/config/service"
 	executorAPI "EnvPilot/internal/executor/api"
 	executorRepo "EnvPilot/internal/executor/repository"
@@ -72,12 +74,19 @@ func (c *Container) Cleanup() {
 //  6. 构建所有业务服务和 API 层
 func Bootstrap() (*Container, error) {
 	// ── 1. 配置 ──────────────────────────────────────────────────
-	cfgPath := findConfigPath()
+	cfgPath, dataBase, err := findOrCreateConfig()
+	if err != nil {
+		return nil, fmt.Errorf("配置文件初始化失败: %w", err)
+	}
 	cfgSvc, err := configService.NewConfigService(cfgPath)
 	if err != nil {
 		return nil, fmt.Errorf("配置加载失败: %w", err)
 	}
 	cfg := cfgSvc.Get()
+
+	// dataBase 非空时，将相对 data_dir / log_dir 转为绝对路径，
+	// 避免打包模式下 CWD 不确定（如 macOS .app 的 CWD = /）导致路径错误
+	resolveRelativePaths(cfg, dataBase)
 
 	// ── 2. 日志 ───────────────────────────────────────────────────
 	logPath := filepath.Join(cfg.App.LogDir, cfg.Log.Filename)
@@ -182,16 +191,137 @@ func initCipher(dataDir, saltFile string) (*crypto.AESCipher, error) {
 	return crypto.NewCipherFromPassword(builtinPassword, salt)
 }
 
-// findConfigPath 查找配置文件路径
-func findConfigPath() string {
-	for _, path := range []string{
+// findOrCreateConfig 按优先级查找配置文件，找不到时自动创建默认配置。
+//
+// 返回值：
+//   - cfgPath:     配置文件的绝对路径
+//   - resolveBase: data_dir / log_dir 相对路径的解析基准目录；
+//     空字符串表示保持原样（开发模式，CWD 即项目根目录）
+//
+// 搜索/创建优先级：
+//
+//	┌──────────────────────────────────────────────────────────────┐
+//	│  步骤  │ 路径                          │ 适用场景            │
+//	├──────────────────────────────────────────────────────────────┤
+//	│  1     │ 相对路径（config/config.yaml）│ wails dev / go run  │
+//	│  2     │ 可执行文件同级 config/ 目录   │ Linux/Windows 部署  │
+//	│  3     │ 用户配置目录                  │ 已安装/已初始化     │
+//	│  4(创建)│ macOS → 用户配置目录         │ .app 首次启动       │
+//	│        │ Linux/Windows → exe 目录（可写）或用户配置目录     │
+//	└──────────────────────────────────────────────────────────────┘
+func findOrCreateConfig() (cfgPath string, resolveBase string, err error) {
+	// ── 1. 开发模式相对路径（CWD = 项目根目录）──────────────────
+	for _, p := range []string{
 		"config/config.yaml",
 		"../config/config.yaml",
 		"../../config/config.yaml",
 	} {
-		if _, err := os.Stat(path); err == nil {
-			return path
+		if _, statErr := os.Stat(p); statErr == nil {
+			abs, absErr := filepath.Abs(p)
+			if absErr != nil {
+				abs = p
+			}
+			// resolveBase="" → data_dir/log_dir 仍相对 CWD（开发习惯不变）
+			return abs, "", nil
 		}
 	}
-	return "config/config.yaml"
+
+	// ── 2. 可执行文件同级目录（Linux/Windows 绿色部署）──────────
+	var exeDir string
+	if exe, exeErr := os.Executable(); exeErr == nil {
+		exeDir = filepath.Dir(filepath.Clean(exe))
+		for _, p := range []string{
+			filepath.Join(exeDir, "config", "config.yaml"),
+			filepath.Join(exeDir, "config.yaml"),
+		} {
+			if _, statErr := os.Stat(p); statErr == nil {
+				// 以 exe 目录为基准解析相对路径
+				return p, exeDir, nil
+			}
+		}
+	}
+
+	// ── 3. 用户配置目录（已安装 / 之前已初始化）────────────────
+	userCfgPath, ucErr := userConfigFilePath()
+	if ucErr != nil {
+		return "", "", fmt.Errorf("无法确定用户配置目录: %w", ucErr)
+	}
+	if _, statErr := os.Stat(userCfgPath); statErr == nil {
+		return userCfgPath, filepath.Dir(userCfgPath), nil
+	}
+
+	// ── 4. 首次运行：选择写入位置并生成默认配置 ─────────────────
+	createDir, base := chooseConfigCreateDir(exeDir, filepath.Dir(userCfgPath))
+	if mkErr := os.MkdirAll(createDir, 0755); mkErr != nil {
+		return "", "", fmt.Errorf("创建配置目录失败 [%s]: %w", createDir, mkErr)
+	}
+	defaultYAML, genErr := configService.GenerateDefaultYAML()
+	if genErr != nil {
+		return "", "", fmt.Errorf("生成默认配置失败: %w", genErr)
+	}
+	cfgFile := filepath.Join(createDir, "config.yaml")
+	if writeErr := os.WriteFile(cfgFile, defaultYAML, 0644); writeErr != nil {
+		return "", "", fmt.Errorf("写入默认配置失败 [%s]: %w", cfgFile, writeErr)
+	}
+	return cfgFile, base, nil
+}
+
+// chooseConfigCreateDir 根据平台和可写性决定首次创建配置文件的目录。
+//
+// 策略：
+//   - macOS：.app 通常位于 /Applications（不可写），始终使用用户配置目录
+//   - Linux / Windows：可执行文件目录可写时优先使用，否则回退到用户配置目录
+//
+// 返回 (配置目录, data_dir/log_dir 解析基准目录)。
+func chooseConfigCreateDir(exeDir, userDir string) (createDir, base string) {
+	if runtime.GOOS != "darwin" && exeDir != "" && isWritableDir(exeDir) {
+		// 在 exe 目录下建 config/ 子目录存放配置，数据/日志与 exe 同级
+		return filepath.Join(exeDir, "config"), exeDir
+	}
+	// macOS 或 exe 目录不可写 → 用户配置目录
+	return userDir, userDir
+}
+
+// isWritableDir 通过临时文件探测目录是否可写。
+func isWritableDir(dir string) bool {
+	probe := filepath.Join(dir, ".envpilot_write_probe")
+	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	os.Remove(probe)
+	return true
+}
+
+// userConfigFilePath 返回当前用户专属的配置文件路径（不保证文件存在）。
+//   - macOS:   ~/Library/Application Support/EnvPilot/config.yaml
+//   - Linux:   ~/.config/EnvPilot/config.yaml
+//   - Windows: %AppData%\EnvPilot\config.yaml
+func userConfigFilePath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return "", homeErr
+		}
+		dir = filepath.Join(home, ".config")
+	}
+	return filepath.Join(dir, "EnvPilot", "config.yaml"), nil
+}
+
+// resolveRelativePaths 将 data_dir / log_dir 中的相对路径转为绝对路径。
+//
+// baseDir 为空时不做任何转换（开发模式，CWD 就是正确基准）。
+// 非空时以 baseDir 为根展开，确保打包/部署模式下路径稳定。
+func resolveRelativePaths(cfg *configModel.AppConfig, baseDir string) {
+	if baseDir == "" {
+		return
+	}
+	if !filepath.IsAbs(cfg.App.DataDir) {
+		cfg.App.DataDir = filepath.Clean(filepath.Join(baseDir, cfg.App.DataDir))
+	}
+	if !filepath.IsAbs(cfg.App.LogDir) {
+		cfg.App.LogDir = filepath.Clean(filepath.Join(baseDir, cfg.App.LogDir))
+	}
 }

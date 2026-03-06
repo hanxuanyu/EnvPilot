@@ -7,6 +7,7 @@ package api
 import (
 	"io/fs"
 	"net/http"
+	"strings"
 
 	"EnvPilot/internal/app"
 )
@@ -75,22 +76,44 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	// ── SPA fallback（前端静态资源）──────────────────────────────
 	if staticFiles != nil {
-		mux.Handle("/", spaHandler(http.FileServerFS(staticFiles)))
+		mux.Handle("/", spaHandler(staticFiles))
 	}
 
 	return corsMiddleware(mux)
 }
 
-// spaHandler 将所有非文件请求（如 /assets, /environments 等 SPA 路由）
-// 映射到 index.html，保证浏览器刷新能正常加载 SPA。
-func spaHandler(fileServer http.Handler) http.Handler {
+// spaHandler 处理前端静态资源和 SPA 路由 fallback。
+//
+// 逻辑：
+//   - 请求路径对应实际文件（JS/CSS/图片等）→ 直接返回文件
+//   - 请求路径不存在对应文件（/assets, /environments 等 SPA 路由）→ 返回 index.html
+//
+// 这样浏览器直接刷新任意 SPA 路由时，React Router 能正确接管渲染。
+func spaHandler(staticFiles fs.FS) http.Handler {
+	fileServer := http.FileServerFS(staticFiles)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 如果请求以 /api 或 /ws 开头，不走 SPA fallback
-		if len(r.URL.Path) >= 4 && (r.URL.Path[:4] == "/api" || r.URL.Path[:3] == "/ws") {
+		uPath := strings.TrimPrefix(r.URL.Path, "/")
+
+		// 根路径直接交给 fileServer（返回 index.html）
+		if uPath == "" {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// 静态文件存在则直接返回
+		if _, err := fs.Stat(staticFiles, uPath); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// 文件不存在 → SPA fallback：返回 index.html，由 React Router 处理路由
+		indexContent, err := fs.ReadFile(staticFiles, "index.html")
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		fileServer.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(indexContent)
 	})
 }
 
