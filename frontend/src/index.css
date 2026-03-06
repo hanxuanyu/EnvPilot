@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+/* EnvPilot 深色主题配置（TailwindCSS v4 @theme 语法） */
+@theme {
+  /* 品牌主色：蓝色科技感 */
+  --color-primary: hsl(213 93% 58%);
+  --color-primary-foreground: hsl(222 47% 6%);
+
+  /* 背景与卡片 */
+  --color-background: hsl(222 47% 6%);
+  --color-foreground: hsl(210 40% 98%);
+  --color-card: hsl(222 47% 8%);
+  --color-card-foreground: hsl(210 40% 98%);
+
+  /* 弹出层 */
+  --color-popover: hsl(222 47% 8%);
+  --color-popover-foreground: hsl(210 40% 98%);
+
+  /* 次要 */
+  --color-secondary: hsl(217 32% 17%);
+  --color-secondary-foreground: hsl(210 40% 98%);
+
+  /* 静音/占位 */
+  --color-muted: hsl(217 32% 17%);
+  --color-muted-foreground: hsl(215 20% 65%);
+
+  /* 强调 */
+  --color-accent: hsl(217 32% 20%);
+  --color-accent-foreground: hsl(210 40% 98%);
+
+  /* 危险操作 */
+  --color-destructive: hsl(0 62% 50%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+
+  /* 边框与输入框 */
+  --color-border: hsl(217 32% 17%);
+  --color-input: hsl(217 32% 17%);
+  --color-ring: hsl(213 93% 58%);
+
+  /* 侧边栏专属颜色 */
+  --color-sidebar: hsl(222 47% 4%);
+  --color-sidebar-foreground: hsl(215 20% 70%);
+  --color-sidebar-border: hsl(217 32% 12%);
+  --color-sidebar-accent: hsl(217 32% 15%);
+  --color-sidebar-accent-foreground: hsl(210 40% 98%);
+
+  /* 圆角 */
+  --radius: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
+
+  /* 动画 */
+  --animate-fade-in: fade-in 0.2s ease-out;
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* 全局基础样式 */
+* {
+  box-sizing: border-box;
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  /* 禁用文本选择拖拽（桌面应用体验） */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 允许输入框和代码区域选择文本 */
+input, textarea, pre, code, [data-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* 自定义滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-muted);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+}
