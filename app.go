@@ -24,22 +24,27 @@ import (
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
 	configService "EnvPilot/internal/config/service"
+	executorAPI "EnvPilot/internal/executor/api"
+	executorRepo "EnvPilot/internal/executor/repository"
+	executorSvc "EnvPilot/internal/executor/service"
+	sshPool "EnvPilot/internal/executor/ssh"
 	"EnvPilot/database"
 	"EnvPilot/database/migration"
 	"EnvPilot/pkg/crypto"
 	"EnvPilot/pkg/logger"
 
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
 
 // App Wails 应用主结构体，所有对前端暴露的方法都挂载在此
 type App struct {
-	ctx      context.Context
-	config   *configService.ConfigService
-	db       *gorm.DB
-	// AssetAPI 资产管理模块接口（Wails 会自动扫描并绑定公开字段的公开方法）
-	AssetAPI *assetAPI.AssetAPI
+	ctx         context.Context
+	config      *configService.ConfigService
+	db          *gorm.DB
+	AssetAPI    *assetAPI.AssetAPI    // 资产管理模块（Wails 自动绑定公开字段的公开方法）
+	ExecutorAPI *executorAPI.ExecutorAPI // 命令执行 + 在线终端模块
 }
 
 // NewApp 创建应用实例并完成所有模块的初始化
@@ -96,28 +101,49 @@ func NewApp() (*App, error) {
 	}
 
 	// ── 第六步：初始化业务模块 ─────────────────────────────────────
-	assetAPIInst := buildAssetAPI(db, cipher)
+	// 共享 repo（供多个模块使用，避免重复创建）
+	sharedAssetRepo := assetRepo.NewAssetRepo(db)
+	sharedCredRepo  := assetRepo.NewCredentialRepo(db)
+	sharedCredSvc   := assetSvc.NewCredentialService(sharedCredRepo, cipher)
+
+	assetAPIInst    := buildAssetAPI(db, sharedAssetRepo, sharedCredSvc)
+	executorAPIInst := buildExecutorAPI(db, sharedAssetRepo, sharedCredSvc)
 
 	return &App{
-		config:   cfgSvc,
-		db:       db,
-		AssetAPI: assetAPIInst,
+		config:      cfgSvc,
+		db:          db,
+		AssetAPI:    assetAPIInst,
+		ExecutorAPI: executorAPIInst,
 	}, nil
 }
 
 // buildAssetAPI 构建资产管理模块（依赖注入）
-func buildAssetAPI(db *gorm.DB, cipher *crypto.AESCipher) *assetAPI.AssetAPI {
-	envRepo  := assetRepo.NewEnvironmentRepo(db)
-	grpRepo  := assetRepo.NewGroupRepo(db)
-	astRepo  := assetRepo.NewAssetRepo(db)
-	credRepo := assetRepo.NewCredentialRepo(db)
+func buildAssetAPI(
+	db *gorm.DB,
+	ar *assetRepo.AssetRepo,
+	credSvc *assetSvc.CredentialService,
+) *assetAPI.AssetAPI {
+	envRepo := assetRepo.NewEnvironmentRepo(db)
+	grpRepo := assetRepo.NewGroupRepo(db)
 
-	envSvc  := assetSvc.NewEnvironmentService(envRepo)
-	grpSvc  := assetSvc.NewGroupService(grpRepo, envRepo)
-	astSvc  := assetSvc.NewAssetService(astRepo, envRepo)
-	credSvc := assetSvc.NewCredentialService(credRepo, cipher)
+	envSvc := assetSvc.NewEnvironmentService(envRepo)
+	grpSvc := assetSvc.NewGroupService(grpRepo, envRepo)
+	astSvc := assetSvc.NewAssetService(ar, envRepo)
 
 	return assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, credSvc)
+}
+
+// buildExecutorAPI 构建执行器模块（依赖注入）
+func buildExecutorAPI(
+	db *gorm.DB,
+	ar *assetRepo.AssetRepo,
+	credSvc *assetSvc.CredentialService,
+) *executorAPI.ExecutorAPI {
+	pool     := sshPool.NewPool(ar, credSvc)
+	execRepo := executorRepo.NewExecutionRepo(db)
+	execSvc  := executorSvc.NewExecutorService(pool, execRepo, ar)
+	termSvc  := executorSvc.NewTerminalService(pool)
+	return executorAPI.NewExecutorAPI(execSvc, termSvc, pool)
 }
 
 // initCipher 初始化 AES 加密器。
@@ -155,15 +181,23 @@ func initCipher(dataDir, saltFile string) (*crypto.AESCipher, error) {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.ExecutorAPI.SetContext(ctx)
 	logger.Info("应用窗口已就绪")
 }
 
 func (a *App) domReady(ctx context.Context) {
 	logger.Info("前端 DOM 就绪")
+	// 通知前端桥接已就绪，解决页面刷新后 useEffect 比桥接更早触发导致数据为空的问题
+	wailsruntime.EventsEmit(ctx, "backend:ready")
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	logger.Info("EnvPilot 正在关闭，清理资源...")
+	// 关闭所有 SSH 连接和终端会话
+	if a.ExecutorAPI != nil {
+		a.ExecutorAPI.Cleanup()
+		logger.Info("SSH 连接和终端会话已清理")
+	}
 	if a.db != nil {
 		if sqlDB, err := a.db.DB(); err == nil {
 			_ = sqlDB.Close()

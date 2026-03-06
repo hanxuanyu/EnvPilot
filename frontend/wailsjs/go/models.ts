@@ -1,4 +1,4 @@
-export namespace api {
+export namespace assetapi {
 	
 	export class CreateAssetReq {
 	    environment_id: number;
@@ -467,6 +467,328 @@ export namespace api {
 
 }
 
+export namespace executorapi {
+	
+	export class BatchExecuteReq {
+	    asset_ids: number[];
+	    command: string;
+	    operator: string;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchExecuteReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_ids = source["asset_ids"];
+	        this.command = source["command"];
+	        this.operator = source["operator"];
+	        this.force = source["force"];
+	    }
+	}
+	export class ExecuteResult {
+	    dangerous: boolean;
+	    execution?: model.Execution;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExecuteResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dangerous = source["dangerous"];
+	        this.execution = this.convertValues(source["execution"], model.Execution);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class BatchExecuteResult {
+	    results: ExecuteResult[];
+	    dangerous: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BatchExecuteResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.results = this.convertValues(source["results"], ExecuteResult);
+	        this.dangerous = source["dangerous"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ExecuteCommandReq {
+	    asset_id: number;
+	    command: string;
+	    operator: string;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExecuteCommandReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.command = source["command"];
+	        this.operator = source["operator"];
+	        this.force = source["force"];
+	    }
+	}
+	
+	export class ExecutionListResult {
+	    list: model.Execution[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExecutionListResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.list = this.convertValues(source["list"], model.Execution);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ListExecutionsReq {
+	    asset_id: number;
+	    page: number;
+	    page_size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListExecutionsReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.page = source["page"];
+	        this.page_size = source["page_size"];
+	    }
+	}
+	export class Result__EnvPilot_internal_executor_model_Execution_ {
+	    ok: boolean;
+	    data?: model.Execution;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_executor_model_Execution_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = this.convertValues(source["data"], model.Execution);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_EnvPilot_internal_executor_api_BatchExecuteResult_ {
+	    ok: boolean;
+	    data: BatchExecuteResult;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_BatchExecuteResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = this.convertValues(source["data"], BatchExecuteResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_EnvPilot_internal_executor_api_ExecuteResult_ {
+	    ok: boolean;
+	    data: ExecuteResult;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_ExecuteResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = this.convertValues(source["data"], ExecuteResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_EnvPilot_internal_executor_api_ExecutionListResult_ {
+	    ok: boolean;
+	    data: ExecutionListResult;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_ExecutionListResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = this.convertValues(source["data"], ExecutionListResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_bool_ {
+	    ok: boolean;
+	    data: boolean;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_bool_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Result_string_ {
+	    ok: boolean;
+	    data: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ok = source["ok"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
+
+}
+
 export namespace model {
 	
 	export class Credential {
@@ -670,6 +992,61 @@ export namespace model {
 	}
 	
 	
+	export class Execution {
+	    id: number;
+	    asset_id: number;
+	    asset_name: string;
+	    asset_host: string;
+	    command: string;
+	    output: string;
+	    exit_code: number;
+	    status: string;
+	    operator: string;
+	    // Go type: time
+	    started_at: any;
+	    // Go type: time
+	    finished_at?: any;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Execution(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.asset_id = source["asset_id"];
+	        this.asset_name = source["asset_name"];
+	        this.asset_host = source["asset_host"];
+	        this.command = source["command"];
+	        this.output = source["output"];
+	        this.exit_code = source["exit_code"];
+	        this.status = source["status"];
+	        this.operator = source["operator"];
+	        this.started_at = this.convertValues(source["started_at"], null);
+	        this.finished_at = this.convertValues(source["finished_at"], null);
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

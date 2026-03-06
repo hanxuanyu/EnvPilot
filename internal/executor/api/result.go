@@ -1,15 +1,11 @@
-// result.go 统一 API 响应结构体
-// 所有 Wails 绑定方法使用此结构体返回，前端统一处理
-package assetapi
+// Package executorapi 定义执行器模块对前端暴露的所有接口。
+// 使用独立包名避免与 internal/asset/api（package api）产生 Wails 绑定冲突。
+package executorapi
 
-// Result 泛型响应包装
-// 前端通过 result.ok 判断成功与否
+// Result 统一 API 响应包装（与 asset/api 中的 Result 独立定义，避免跨模块依赖）
 type Result[T any] struct {
-	// Ok 表示操作是否成功
 	Ok      bool   `json:"ok"`
-	// Data 成功时的返回数据
 	Data    T      `json:"data"`
-	// Message 失败时的错误信息
 	Message string `json:"message"`
 }
 

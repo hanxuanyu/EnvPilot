@@ -39,6 +39,7 @@ func main() {
 		Bind: []interface{}{
 			app,
 			app.AssetAPI,
+			app.ExecutorAPI,
 		},
 		Windows: &windows.Options{
 			// WebView2 渲染引擎，支持现代 Web 特性

@@ -53,7 +53,7 @@ database/
 |------|------|------|
 | 阶段 1 | 项目初始化 | ✅ 完成 |
 | 阶段 2 | 资产管理系统 | ✅ 完成 |
-| 阶段 3 | 服务器执行系统 | 🚧 进行中 |
+| 阶段 3 | 服务器执行系统 | ✅ 完成 |
 | 阶段 4 | 中间件连接器 | ⬜ 待开始 |
 | 阶段 5 | DNS 服务 | ⬜ 待开始 |
 | 阶段 6 | 健康检查 | ⬜ 待开始 |
@@ -145,7 +145,7 @@ Credential（凭据）
 
 ---
 
-## 阶段 3：服务器执行系统 ⬜
+## 阶段 3：服务器执行系统 ✅
 
 **目标**：SSH 命令执行 + 在线 Terminal
 
@@ -153,26 +153,46 @@ Credential（凭据）
 
 ```
 Execution（执行记录）
-  - id, asset_id, command, output, exit_code
+  - id, asset_id, asset_name, asset_host
+  - command, output, exit_code
+  - status: running | success | failed | interrupted
   - started_at, finished_at, operator
 ```
 
 ### 任务拆解
 
-- [ ] Task 3.1 — SSH 连接管理（连接池，复用连接）
-- [ ] Task 3.2 — 单条命令执行（实时输出流）
-- [ ] Task 3.3 — 批量执行（多资产并发执行）
-- [ ] Task 3.4 — 执行记录存储
-- [ ] Task 3.5 — 在线 Terminal（WebSocket + SSH PTY）
-- [ ] Task 3.6 — xterm.js 前端集成
-- [ ] Task 3.7 — 危险命令拦截（高风险命令二次确认）
-- [ ] Task 3.8 — 执行页面 UI
+- [x] Task 3.1 — SSH 连接管理（连接池，复用连接）
+- [x] Task 3.2 — 单条命令执行（实时输出流 via Wails EventsEmit）
+- [x] Task 3.3 — 批量执行（多资产并发执行）
+- [x] Task 3.4 — 执行记录存储（SQLite，分页查询）
+- [x] Task 3.5 — 在线 Terminal（SSH PTY + Wails 事件推送）
+- [x] Task 3.6 — xterm.js 前端集成（@xterm/xterm + @xterm/addon-fit）
+- [x] Task 3.7 — 危险命令拦截（正则匹配 + 二次确认对话框）
+- [x] Task 3.8 — 执行页面 UI（ExecutorPage + TerminalPage）
 
-### 技术重点
+### 关键文件
 
-- `golang.org/x/crypto/ssh` 实现 SSH 客户端
-- Wails WebSocket 或 EventEmit 实现实时输出
-- xterm.js 终端渲染
+| 文件 | 说明 |
+|------|------|
+| `internal/executor/model/execution.go` | 执行记录数据模型 |
+| `internal/executor/repository/execution_repo.go` | 执行记录 Repository |
+| `internal/executor/ssh/pool.go` | SSH 连接池（复用连接） |
+| `internal/executor/ssh/dangerous.go` | 高危命令正则检测 |
+| `internal/executor/service/executor_service.go` | 命令执行服务（含批量） |
+| `internal/executor/service/terminal_service.go` | PTY 终端会话管理 |
+| `internal/executor/api/executor_api.go` | Wails API 绑定层 |
+| `database/migration/migrations/003_executor.go` | 数据库迁移 |
+| `frontend/src/services/executorService.ts` | 前端调用封装 |
+| `frontend/src/store/executorStore.ts` | Zustand 状态管理 |
+| `frontend/src/pages/ExecutorPage.tsx` | 命令执行页面 |
+| `frontend/src/pages/TerminalPage.tsx` | xterm.js 在线终端 |
+
+### 技术实现
+
+- `golang.org/x/crypto/ssh` 实现 SSH 客户端和 PTY
+- `runtime.EventsEmit` 推送实时输出到前端
+- `@xterm/xterm` + `@xterm/addon-fit` 渲染终端
+- 终端输出 base64 编码确保二进制安全传输
 
 ---
 

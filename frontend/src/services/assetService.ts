@@ -2,9 +2,9 @@
 //
 // 重要说明：
 //   - 导入路径使用 @wailsjs 别名（指向 wailsjs/ 目录，由 wails dev 自动生成）
-//   - Wails 按 Go 包名分目录：AssetAPI 在 go/api/ 下（非 go/main/）
+//   - Wails 按 Go 包名分目录：AssetAPI 在 go/assetapi/ 下（package assetapi）
 //   - 统一处理 Result 包装，对页面层暴露简洁的 async 接口
-import * as AssetAPIJs from '@wailsjs/go/api/AssetAPI'
+import * as AssetAPIJs from '@wailsjs/go/assetapi/AssetAPI'
 import type { model } from '@wailsjs/go/models'
 
 // ── 内部工具：解包 Result，失败时抛出错误 ──────────────────────

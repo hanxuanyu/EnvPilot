@@ -48,8 +48,8 @@ func (m *Migrator) register() {
 	m.add("001_init_system", migrateInitSystem)
 	// 阶段2：资产管理表
 	m.add("002_asset", migrateAsset)
-	// 后续阶段的迁移在对应阶段开发时添加：
-	// m.add("003_executor", migrateExecutor)
+	// 阶段3：命令执行记录表
+	m.add("003_executor", migrateExecutor)
 }
 
 // add 添加一个迁移项

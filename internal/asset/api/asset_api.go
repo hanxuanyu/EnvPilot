@@ -1,10 +1,11 @@
-// Package api 定义资产管理模块对前端暴露的所有接口。
+// Package assetapi 定义资产管理模块对前端暴露的所有接口。
 //
 // 设计原则：
 //   - API 方法作为 Wails 绑定方法，参数和返回值必须是 JSON 可序列化类型
 //   - 统一返回 Result 结构体，前端统一处理
 //   - API 层只做参数转换和错误格式化，业务逻辑在 service 层
-package api
+//   - 包名 assetapi 确保 Wails binding 生成器不与其他模块冲突
+package assetapi
 
 import (
 	"EnvPilot/internal/asset/model"

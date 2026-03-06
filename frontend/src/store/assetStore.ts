@@ -1,5 +1,6 @@
 // assetStore.ts 资产管理全局状态（Zustand）
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import type { Environment, Group, Asset, Credential } from '@/services/assetService'
 import {
   environmentService,
@@ -58,6 +59,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       set({ environments: list })
     } catch (e: any) {
       set({ error: e.message })
+      toast.error('加载环境列表失败', { description: e.message })
     } finally {
       set({ loading: false })
     }
@@ -70,6 +72,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       set({ groups: list })
     } catch (e: any) {
       set({ error: e.message })
+      toast.error('加载分组失败', { description: e.message })
     } finally {
       set({ loading: false })
     }
@@ -88,6 +91,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       set({ assets: list })
     } catch (e: any) {
       set({ error: e.message })
+      toast.error('加载资产列表失败', { description: e.message })
     } finally {
       set({ loading: false })
     }
@@ -100,6 +104,7 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       set({ credentials: list })
     } catch (e: any) {
       set({ error: e.message })
+      toast.error('加载凭据失败', { description: e.message })
     } finally {
       set({ loading: false })
     }
