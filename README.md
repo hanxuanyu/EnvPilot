@@ -47,6 +47,16 @@ wails dev
 wails build
 ```
 
+## 文档
+
+所有文档均位于 `doc/` 目录：
+
+| 文档 | 说明 |
+|------|------|
+| `doc/req.md` | 需求规格说明书（v0.2） |
+| `doc/design.md` | 系统技术设计文档（架构、数据模型、API、开发规范） |
+| `doc/dev.md` | 开发进度与阶段任务文档 |
+
 ## 项目结构
 
 ```
@@ -54,10 +64,11 @@ EnvPilot/
 ├── main.go              # 程序入口
 ├── app.go               # Wails 应用绑定（组合根）
 ├── internal/            # 业务模块
-│   ├── asset/           # 资产管理
-│   ├── executor/        # 命令执行
-│   ├── terminal/        # 在线终端
-│   ├── connector/       # 中间件连接器
+│   ├── plugin/          # 插件注册表（资产类型定义）
+│   ├── asset/           # 资产管理（环境/分组/资产/凭据）
+│   ├── executor/        # SSH 命令执行
+│   ├── terminal/        # 在线终端（PTY）
+│   ├── connector/       # 中间件连接器（插件化）
 │   ├── dns/             # DNS 服务
 │   ├── health/          # 健康检查
 │   ├── audit/           # 操作审计
@@ -67,8 +78,12 @@ EnvPilot/
 │   ├── crypto/          # AES-256 加解密
 │   └── logger/          # 全局日志
 ├── database/            # 数据库连接与迁移
-├── config/              # 配置文件
-└── frontend/            # React 前端
+├── config/              # 配置文件（YAML）
+├── doc/                 # 项目文档
+│   ├── req.md           # 需求文档
+│   ├── design.md        # 技术设计文档
+│   └── dev.md           # 开发进度文档
+└── frontend/            # React 前端（React 18 + shadcn/ui）
 ```
 
 ## 安全说明
