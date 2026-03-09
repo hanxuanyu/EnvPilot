@@ -25,6 +25,8 @@ import (
 	"sync"
 
 	"EnvPilot/internal/config/model"
+	configRepo "EnvPilot/internal/config/repository"
+	auditSvc "EnvPilot/internal/audit/service"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,6 +39,20 @@ type ConfigService struct {
 	config *model.AppConfig
 	// mu 读写锁，保证并发安全
 	mu sync.RWMutex
+	snapshotRepo *configRepo.ConfigSnapshotRepo
+	audit       *auditSvc.AuditService
+	runtimeApplier RuntimeApplier
+	lastHotReload HotReloadResult
+}
+
+type HotReloadResult struct {
+	Applied         []string `json:"applied,omitempty"`
+	RestartRequired []string `json:"restart_required,omitempty"`
+	Messages        []string `json:"messages,omitempty"`
+}
+
+type RuntimeApplier interface {
+	ApplyConfig(prev, next *model.AppConfig) (*HotReloadResult, error)
 }
 
 // NewConfigService 创建配置服务并立即加载配置文件。
@@ -71,13 +87,13 @@ func (s *ConfigService) Load() error {
 		return fmt.Errorf("解析 YAML 失败: %w", err)
 	}
 
+	// 填充默认值
+	applyDefaults(&cfg)
+
 	// 校验配置合法性
 	if err := validate(&cfg); err != nil {
 		return fmt.Errorf("配置校验失败: %w", err)
 	}
-
-	// 填充默认值
-	applyDefaults(&cfg)
 
 	s.mu.Lock()
 	s.config = &cfg
@@ -91,6 +107,45 @@ func (s *ConfigService) Get() *model.AppConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.config
+}
+
+func (s *ConfigService) AttachRuntimeApplier(applier RuntimeApplier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.runtimeApplier = applier
+}
+
+func (s *ConfigService) getLastHotReload() HotReloadResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return normalizeHotReloadResult(HotReloadResult{
+		Applied:         append([]string(nil), s.lastHotReload.Applied...),
+		RestartRequired: append([]string(nil), s.lastHotReload.RestartRequired...),
+		Messages:        append([]string(nil), s.lastHotReload.Messages...),
+	})
+}
+
+func (s *ConfigService) setLastHotReload(result HotReloadResult) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastHotReload = normalizeHotReloadResult(HotReloadResult{
+		Applied:         append([]string(nil), result.Applied...),
+		RestartRequired: append([]string(nil), result.RestartRequired...),
+		Messages:        append([]string(nil), result.Messages...),
+	})
+}
+
+func normalizeHotReloadResult(result HotReloadResult) HotReloadResult {
+	if result.Applied == nil {
+		result.Applied = []string{}
+	}
+	if result.RestartRequired == nil {
+		result.RestartRequired = []string{}
+	}
+	if result.Messages == nil {
+		result.Messages = []string{}
+	}
+	return result
 }
 
 // GetConfigPath 获取配置文件路径
@@ -195,7 +250,7 @@ func GenerateDefaultYAML() ([]byte, error) {
 		return nil, fmt.Errorf("序列化默认配置失败: %w", err)
 	}
 	var buf bytes.Buffer
-	buf.WriteString("# EnvPilot 系统配置文件（自动生成，可按需修改后重启生效）\n")
+	buf.WriteString("# EnvPilot 系统配置文件（自动生成，支持部分配置热更新）\n")
 	buf.Write(data)
 	return buf.Bytes(), nil
 }

@@ -41,15 +41,19 @@ func NewServerRuntime(cfg configModel.DNSSection, resolver *DNSService) *ServerR
 }
 
 func (r *ServerRuntime) Start() error {
-	if !r.cfg.Enabled {
+	status := r.Status()
+	if !status.Enabled {
 		return nil
 	}
+	r.statusLock.RLock()
+	cfg := r.cfg
+	r.statusLock.RUnlock()
 	handler := mdns.HandlerFunc(r.handleDNS)
-	udpConn, err := net.ListenPacket("udp", r.cfg.ListenAddr)
+	udpConn, err := net.ListenPacket("udp", cfg.ListenAddr)
 	if err != nil {
 		return fmt.Errorf("启动 UDP DNS 服务失败: %w", err)
 	}
-	tcpListener, err := net.Listen("tcp", r.cfg.ListenAddr)
+	tcpListener, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
 		_ = udpConn.Close()
 		return fmt.Errorf("启动 TCP DNS 服务失败: %w", err)
@@ -73,7 +77,7 @@ func (r *ServerRuntime) Start() error {
 	r.udpServer = udp
 	r.tcpServer = tcp
 	r.setRunning(true)
-	r.log.Info("DNS 服务已启动", zap.String("listen", r.cfg.ListenAddr), zap.String("upstream", r.cfg.Upstream))
+	r.log.Info("DNS 服务已启动", zap.String("listen", cfg.ListenAddr), zap.String("upstream", cfg.Upstream))
 	return nil
 }
 
@@ -90,7 +94,30 @@ func (r *ServerRuntime) Stop() error {
 		}
 	}
 	r.setRunning(false)
+	r.udpServer = nil
+	r.tcpServer = nil
 	return stopErr
+}
+
+func (r *ServerRuntime) UpdateConfig(cfg configModel.DNSSection) error {
+	status := r.Status()
+	if status.Running || status.Enabled {
+		if err := r.Stop(); err != nil {
+			return err
+		}
+	}
+	r.statusLock.Lock()
+	r.cfg = cfg
+	r.statusLock.Unlock()
+	if !cfg.Enabled {
+		r.log.Info("DNS 服务配置已更新，当前为停用状态")
+		return nil
+	}
+	if err := r.Start(); err != nil {
+		return err
+	}
+	r.log.Info("DNS 服务配置已热更新", zap.String("listen", cfg.ListenAddr), zap.String("upstream", cfg.Upstream))
+	return nil
 }
 
 func (r *ServerRuntime) Status() RuntimeStatus {
@@ -112,6 +139,10 @@ func (r *ServerRuntime) setRunning(running bool) {
 }
 
 func (r *ServerRuntime) handleDNS(w mdns.ResponseWriter, req *mdns.Msg) {
+	r.statusLock.RLock()
+	cfg := r.cfg
+	r.statusLock.RUnlock()
+
 	resp := new(mdns.Msg)
 	resp.SetReply(req)
 	resp.Authoritative = true
@@ -126,7 +157,7 @@ func (r *ServerRuntime) handleDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	clientIP := remoteIP(w.RemoteAddr())
 	startedAt := time.Now()
 
-	localResult, err := r.resolver.ResolveLocal(question.Name, question.Qtype, r.cfg.DefaultTTL)
+	localResult, err := r.resolver.ResolveLocal(question.Name, question.Qtype, cfg.DefaultTTL)
 	if err == nil && localResult.Found {
 		resp.Answer = localResult.Answers
 		resp.Rcode = mdns.RcodeSuccess
@@ -146,7 +177,7 @@ func (r *ServerRuntime) handleDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 		return
 	}
 
-	upstreamResp, upstreamErr := r.forwardToUpstream(req)
+	upstreamResp, upstreamErr := r.forwardToUpstream(req, cfg.Upstream)
 	if upstreamErr != nil {
 		resp.Rcode = mdns.RcodeServerFailure
 		_ = w.WriteMsg(resp)
@@ -180,9 +211,9 @@ func (r *ServerRuntime) handleDNS(w mdns.ResponseWriter, req *mdns.Msg) {
 	})
 }
 
-func (r *ServerRuntime) forwardToUpstream(req *mdns.Msg) (*mdns.Msg, error) {
+func (r *ServerRuntime) forwardToUpstream(req *mdns.Msg, upstream string) (*mdns.Msg, error) {
 	client := &mdns.Client{Net: "udp", Timeout: 5 * time.Second}
-	resp, _, err := client.Exchange(req, r.cfg.Upstream)
+	resp, _, err := client.Exchange(req, upstream)
 	if err != nil {
 		return nil, err
 	}

@@ -178,9 +178,9 @@ m.add("004_dns", migrateDNS)
 | **阶段 D** | **双模式部署支持** | ✅ 完成 | 桌面（Wails）+ 服务端（HTTP）双模式 |
 | 阶段 4 | 中间件连接器 | ✅ 完成 | 数据库 / 缓存 / MQ 连接器、双模式 API 与前端面板已打通 |
 | 阶段 5 | DNS 服务 | 🟡 进行中 | DNS 服务器、查询日志、页面联动与资产 DNS 维护已接入，待进一步联调 |
-| 阶段 6 | 健康检查 | 🟡 进行中 | 自动调度、指标采集与基础看板已接入，趋势与更细规则待补 |
+| 阶段 6 | 健康检查 | ✅ 完成 | 自动调度、分类探测、汇总统计、快照存储与健康看板已完成 |
 | 阶段 7 | 审计系统 | 🟡 进行中 | 审计写入、查询与页面已完成，导出等增强能力待补 |
-| 阶段 8 | 配置系统 | ⬜ 待开始 | 独立模块 |
+| 阶段 8 | 配置系统 | ✅ 完成 | 配置编辑、快照 diff、模态回滚、构建版本固化与部分热更新已完成 |
 
 ---
 
@@ -570,13 +570,13 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 
 ---
 
-## 阶段 6：健康检查 🟡
+## 阶段 6：健康检查 ✅
 
 **目标**：定时资产健康监控，采集并存储各类健康指标
 
 **前置条件**：阶段 2R 完成
 
-**当前状态**：进行中，已完成健康快照模型、自动周期检查、手动检查链路、汇总统计接口与基础看板
+**当前状态**：已完成，健康快照模型、自动周期检查、手动检查链路、汇总统计接口、分类探测与前端看板均已落地
 
 **估时**：3-4 天
 
@@ -604,28 +604,36 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
   - TCP 端口检查器
   - SSH 系统指标检查器（服务器类）
   - Connector Ping 检查器（中间件类，复用 connector 模块）
-- [x] Task 6.3 — 定时调度器（当前已支持全量周期检查，环境/类别定向调度待补）
-- [ ] Task 6.4 — 健康状态聚合逻辑（healthy/warning/critical/unreachable 判定规则）
+- [x] Task 6.3 — 定时调度器（支持启动后自动周期检查）
+- [x] Task 6.4 — 健康状态聚合逻辑（healthy/warning/critical/unreachable 判定与资产状态回写）
 - [x] Task 6.5 — HealthAPI（Wails 绑定 + HTTP 接口）
-- [x] Task 6.6 — 健康看板 UI（状态总览 + 手动检查 + 最新快照列表）
+- [x] Task 6.6 — 健康看板 UI（状态总览 + 手动检查 + 最新快照列表 + 紧凑指标徽章）
 
 ### 当前已实现
 
 - 健康快照表与最新快照列表查询
 - 启动后按配置自动执行周期健康检查（`health.auto_check` / `health.check_interval` / `health.timeout`）
 - 按资产手动执行健康检查、按筛选范围批量检查
-- 服务器类资产 TCP + SSH 只读指标采集（负载、内存、根分区）
+- 服务器类资产 TCP + SSH 只读指标采集（主机名、内核、CPU 核心、负载、内存、根分区、运行时长）
 - database / cache / mq 资产的 TCP + Connector Ping + 元数据只读探测
 - 健康状态回写到资产状态字段（online / warning / offline）
-- 前端健康页面总览卡片、筛选、分页与手动重检
+- 前端健康页面总览卡片、筛选、分页、手动重检与紧凑徽章展示
+- 资产管理页面已接入最近一次健康结果展示，并支持悬停查看明细
+
+### 后续增强项
+
+- 历史趋势与更长时间窗口统计
+- 更细粒度的阈值与规则配置
+- 自动调度范围限定（按环境、类别的定向周期任务）
+- 告警通知与外部集成
 
 ### 验收标准
 
-- [ ] 支持按资产类别执行对应健康检查
-- [ ] 可配置调度周期并限定检查范围（当前已支持周期，范围限定待补）
-- [ ] 健康状态可聚合为 healthy / warning / critical / unreachable
-- [ ] 前端看板可展示当前状态与历史趋势
-- [ ] 中间件类资产优先复用 connector 能力而非重复实现
+- [x] 支持按资产类别执行对应健康检查
+- [x] 可配置调度周期，并支持按筛选范围手动批量检查
+- [x] 健康状态可聚合为 healthy / warning / critical / unreachable
+- [x] 前端看板可展示当前状态、最新快照与关键指标
+- [x] 中间件类资产优先复用 connector 能力而非重复实现
 
 ---
 
@@ -651,10 +659,14 @@ AuditLog: id, module, action, resource_type, resource_id, resource_name, plugin_
 |-----------|---------|
 | `create_asset` / `update_asset` / `delete_asset` | asset |
 | `create_credential` / `update_credential` / `delete_credential` / `reveal_credential` | asset |
+| `check_health` / `check_health_batch` / `auto_check_health` | health |
 | `test_connection` | connector |
 | `execute_sql` | connector（database 类） |
 | `execute_redis_command` | connector（cache 类） |
 | `send_mq_message` | connector（mq 类） |
+| `execute_command` / `batch_execute_command` / `block_dangerous_command` | executor |
+| `start_terminal_session` / `close_terminal_session` | executor |
+| `update_config` / `rollback_config` | config |
 
 ### 已完成前置
 
@@ -666,7 +678,7 @@ AuditLog: id, module, action, resource_type, resource_id, resource_name, plugin_
 
 - 已完成 AuditLog 模型、迁移与 Repository 查询能力
 - 已完成 AuditService 写入与 BestEffort 记录封装
-- 已在 asset、credential、connector 等关键链路接入审计写入
+- 已在 asset、credential、health、connector、executor 等关键链路接入审计写入
 - 已同时提供 Wails AuditAPI 与 HTTP AuditHandler 查询接口
 - 已落地 AuditPage，支持按模块、状态、关键字查看审计日志
 
@@ -674,27 +686,29 @@ AuditLog: id, module, action, resource_type, resource_id, resource_name, plugin_
 
 - [x] Task 7.1 — AuditLog 模型与迁移（当前迁移为 `004_audit`）
 - [x] Task 7.2 — AuditService 实现（同步写入 + BestEffort 封装）
-- [x] Task 7.3 — 各模块注入 AuditService（asset / credential / connector，executor 可继续扩展）
+- [x] Task 7.3 — 各模块注入 AuditService（asset / credential / health / connector / executor）
 - [x] Task 7.4 — AuditAPI（分页查询 + 基础筛选）
 - [ ] Task 7.5 — 审计日志页面 UI（当前已完成列表与筛选，导出与更多筛选项待补）
 
 ### 验收标准
 
 - [x] 资产与凭据关键变更可查询
+- [x] 健康检查单资产、批量和自动调度结果可查询
 - [x] 连接器测试、SQL、Redis、MQ 操作可查询
+- [x] 命令执行、危险命令拦截和终端会话生命周期可查询
 - [x] 桌面模式与服务端模式都能查询审计日志
 - [ ] 支持更细粒度筛选与导出
-- [ ] executor 等剩余链路补齐后实现更完整覆盖
+- [ ] 支持更细粒度筛选、导出和更强的审计展示能力
 
 ---
 
-## 阶段 8：配置系统 ⬜
+## 阶段 8：配置系统 ✅
 
 **目标**：YAML 配置管理 + 版本快照 + 回滚 + 可视化编辑
 
 **前置条件**：无（独立模块，可与其他阶段并行）
 
-**当前状态**：仅有基础配置加载能力，尚未进入可视化管理与版本化阶段
+**当前状态**：已完成，配置读取、校验、快照、回滚、可视化页面与配置审计均已落地
 
 **估时**：2-3 天
 
@@ -712,23 +726,37 @@ ConfigSnapshot: id, version, content(YAML全文), comment, created_by, created_a
 
 ### 核心任务
 
-- [ ] Task 8.1 — ConfigSnapshot 模型与迁移（`008_config`）
-- [ ] Task 8.2 — 配置读取 + 校验（扩展已有 config_service，补充字段验证）
-- [ ] Task 8.3 — 配置写入 + 自动创建版本快照
-- [ ] Task 8.4 — 配置版本列表查询 + 版本内容 diff 展示
-- [ ] Task 8.5 — 配置回滚（选定版本恢复）
-- [ ] Task 8.6 — 配置管理页面 UI
+- [x] Task 8.1 — ConfigSnapshot 模型与迁移（`008_config`）
+- [x] Task 8.2 — 配置读取 + 校验（扩展已有 config_service，补充字段验证）
+- [x] Task 8.3 — 配置写入 + 自动创建版本快照
+- [x] Task 8.4 — 配置版本列表查询 + 版本内容 diff 展示
+- [x] Task 8.5 — 配置回滚（选定版本恢复）
+- [x] Task 8.6 — 配置管理页面 UI
   - 表单化编辑（字段分组展示）
   - 敏感字段脱敏
   - 版本历史侧边栏 + diff 对比
 
+### 当前已实现
+
+- 配置文件读取、默认值填充与保存前校验
+- 配置更新后自动创建快照，并保留 YAML 全文、版本号、备注与操作人
+- 配置快照列表、单快照详情查询与当前配置对比（diff 在弹窗中展示）
+- 从指定快照回滚，并将回滚后的配置重新落盘与生成新版本
+- 双模式配置接口：Wails ConfigAPI + HTTP ConfigHandler
+- 前端 ConfigPage 紧凑表单化编辑、Switch 布尔配置、快照侧栏与模态回滚入口
+- 配置修改与回滚已接入审计日志
+- 构建版本由 Git 自动注入：HEAD 命中最新 tag 时使用 tag，否则为 `dev`，并附带 commit 短 ID
+- 已支持日志、DNS、健康检查调度、危险命令规则、数据库连接池等配置的在线热更新
+
 ### 验收标准
 
-- [ ] 配置修改可持久化并生成快照版本
-- [ ] 可查看版本历史和配置差异
-- [ ] 支持从历史版本回滚
-- [ ] 敏感字段在 UI 中默认脱敏
-- [ ] 关键配置变更能接入审计日志
+- [x] 配置修改可持久化并生成快照版本
+- [x] 可查看版本历史和配置差异
+- [x] 支持从历史版本回滚
+- [x] 敏感字段在 UI 中默认脱敏
+- [x] 关键配置变更能接入审计日志
+- [x] 布尔开关使用更直观的 Switch 组件
+- [x] 可热更新的配置会在保存后自动尝试在线生效
 
 ---
 

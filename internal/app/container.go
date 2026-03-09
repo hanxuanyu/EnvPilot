@@ -18,7 +18,9 @@ import (
 	auditAPI "EnvPilot/internal/audit/api"
 	auditRepo "EnvPilot/internal/audit/repository"
 	auditSvc "EnvPilot/internal/audit/service"
+	configAPI "EnvPilot/internal/config/api"
 	configModel "EnvPilot/internal/config/model"
+	configRepo "EnvPilot/internal/config/repository"
 	configService "EnvPilot/internal/config/service"
 	connectorAPI "EnvPilot/internal/connector/api"
 	connectorSvc "EnvPilot/internal/connector/service"
@@ -33,6 +35,7 @@ import (
 	healthRepo "EnvPilot/internal/health/repository"
 	healthSvc "EnvPilot/internal/health/service"
 	_ "EnvPilot/internal/plugin/builtin" // 触发所有内置插件的 init() 注册
+	"EnvPilot/pkg/buildinfo"
 	"EnvPilot/pkg/crypto"
 	"EnvPilot/pkg/logger"
 
@@ -61,6 +64,7 @@ type Container struct {
 	// ── Wails 绑定层（桌面模式 App 使用）──
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
+	ConfigAPI    *configAPI.ConfigAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
 	HealthAPI    *healthAPI.HealthAPI
@@ -126,7 +130,8 @@ func Bootstrap() (*Container, error) {
 		return nil, fmt.Errorf("日志初始化失败: %w", err)
 	}
 	logger.Info("EnvPilot 启动中",
-		zap.String("version", cfg.App.Version),
+		zap.String("version", buildinfo.NormalizedVersion()),
+		zap.String("commit", buildinfo.NormalizedCommit()),
 		zap.String("config", cfgPath),
 	)
 
@@ -160,6 +165,11 @@ func Bootstrap() (*Container, error) {
 	sharedCredRepo := assetRepo.NewCredentialRepo(db)
 	auditRepoInst := auditRepo.NewAuditRepo(db)
 	auditSvcInst := auditSvc.NewAuditService(auditRepoInst)
+	configSnapshotRepoInst := configRepo.NewConfigSnapshotRepo(db)
+	cfgSvc.AttachSnapshotStore(configSnapshotRepoInst, auditSvcInst)
+	if err := cfgSvc.EnsureInitialSnapshot(); err != nil {
+		return nil, fmt.Errorf("配置快照初始化失败: %w", err)
+	}
 	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, cipher, auditSvcInst)
 
 	envRepo := assetRepo.NewEnvironmentRepo(db)
@@ -175,21 +185,26 @@ func Bootstrap() (*Container, error) {
 	if err := dnsRuntime.Start(); err != nil {
 		return nil, fmt.Errorf("DNS 服务启动失败: %w", err)
 	}
+	if err := sshPool.UpdateDangerousPatterns(cfg.Security.DangerousCommands); err != nil {
+		return nil, fmt.Errorf("危险命令规则初始化失败: %w", err)
+	}
 	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo, sharedCredRepo, dnsSvcInst, auditSvcInst)
 	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc, auditSvcInst)
 
 	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc)
 	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst)
+	configAPIInst := configAPI.NewConfigAPI(cfgSvc)
 	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc)
 	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
-	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, pool, cfg.Health)
+	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, auditSvcInst, pool, cfg.Health)
 	healthSvcInst.StartScheduler()
+	cfgSvc.AttachRuntimeApplier(newConfigRuntimeApplier(dataBase, db, dnsRuntime, healthSvcInst))
 	healthAPIInst := healthAPI.NewHealthAPI(healthSvcInst)
 	execRepo := executorRepo.NewExecutionRepo(db)
-	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo)
-	termSvc := executorSvc.NewTerminalService(pool)
+	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo, auditSvcInst)
+	termSvc := executorSvc.NewTerminalService(pool, sharedAssetRepo, auditSvcInst)
 	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, pool)
 
 	return &Container{
@@ -207,6 +222,7 @@ func Bootstrap() (*Container, error) {
 		AuditSvc:     auditSvcInst,
 		AssetAPI:     assetAPIInst,
 		AuditAPI:     auditAPIInst,
+		ConfigAPI:    configAPIInst,
 		ConnectorAPI: connectorAPIInst,
 		DNSAPI:       dnsAPIInst,
 		HealthAPI:    healthAPIInst,

@@ -55,7 +55,10 @@ type CheckAllReq struct {
 }
 
 func (a *HealthAPI) CheckAll(req CheckAllReq) Result[*healthSvc.CheckAllResult] {
-	result, err := a.svc.CheckAll(context.Background(), healthSvc.CheckAllRequest(req))
+	result, err := a.svc.CheckAll(context.Background(), healthSvc.CheckAllRequest{
+		EnvironmentID: req.EnvironmentID,
+		Category:      req.Category,
+	})
 	if err != nil {
 		return Fail[*healthSvc.CheckAllResult](err.Error())
 	}

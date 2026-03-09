@@ -10,6 +10,7 @@ import (
 	assetModel "EnvPilot/internal/asset/model"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
+	auditSvc "EnvPilot/internal/audit/service"
 	configModel "EnvPilot/internal/config/model"
 	"EnvPilot/internal/connector"
 	sshpkg "EnvPilot/internal/executor/ssh"
@@ -47,6 +48,7 @@ type SummaryResult struct {
 type CheckAllRequest struct {
 	EnvironmentID uint
 	Category      plugin.AssetCategory
+	Trigger       string
 }
 
 type CheckAllResult struct {
@@ -57,9 +59,11 @@ type HealthService struct {
 	repo      *healthRepo.HealthRepo
 	assetRepo *assetRepo.AssetRepo
 	credSvc   *assetSvc.CredentialService
+	audit     *auditSvc.AuditService
 	pool      *sshpkg.Pool
 	cfg       configModel.HealthSection
 	log       *zap.Logger
+	cfgMu      sync.RWMutex
 
 	schedulerMu     sync.Mutex
 	schedulerCancel context.CancelFunc
@@ -70,6 +74,7 @@ func NewHealthService(
 	repo *healthRepo.HealthRepo,
 	assetRepo *assetRepo.AssetRepo,
 	credSvc *assetSvc.CredentialService,
+	audit *auditSvc.AuditService,
 	pool *sshpkg.Pool,
 	cfg configModel.HealthSection,
 ) *HealthService {
@@ -77,6 +82,7 @@ func NewHealthService(
 		repo:      repo,
 		assetRepo: assetRepo,
 		credSvc:   credSvc,
+		audit:     audit,
 		pool:      pool,
 		cfg:       cfg,
 		log:       logger.Named("health"),
@@ -84,7 +90,8 @@ func NewHealthService(
 }
 
 func (s *HealthService) StartScheduler() {
-	if !s.cfg.AutoCheck {
+	cfg := s.currentConfig()
+	if !cfg.AutoCheck {
 		s.log.Info("自动健康检查未启用")
 		return
 	}
@@ -104,6 +111,19 @@ func (s *HealthService) StartScheduler() {
 	s.log.Info("自动健康检查已启动", zap.Duration("interval", interval), zap.Duration("timeout", s.checkTimeout()))
 }
 
+func (s *HealthService) UpdateConfig(cfg configModel.HealthSection) {
+	s.cfgMu.Lock()
+	s.cfg = cfg
+	s.cfgMu.Unlock()
+	s.StopScheduler()
+	s.StartScheduler()
+	s.log.Info("健康检查配置已热更新",
+		zap.Int("check_interval", cfg.CheckInterval),
+		zap.Int("timeout", cfg.Timeout),
+		zap.Bool("auto_check", cfg.AutoCheck),
+	)
+}
+
 func (s *HealthService) StopScheduler() {
 	s.schedulerMu.Lock()
 	cancel := s.schedulerCancel
@@ -120,9 +140,31 @@ func (s *HealthService) StopScheduler() {
 func (s *HealthService) CheckAsset(ctx context.Context, assetID uint) (*healthModel.HealthSnapshot, error) {
 	asset, err := s.assetRepo.FindByID(assetID)
 	if err != nil {
+		s.recordAudit(auditSvc.RecordInput{
+			Module:       "health",
+			Action:       "check_health",
+			ResourceType: "asset",
+			ResourceID:   uintPtr(assetID),
+			Success:      false,
+			Detail:       fmt.Sprintf("资产不存在 [id=%d]", assetID),
+			Request: map[string]any{
+				"asset_id": assetID,
+				"mode":     "single",
+			},
+		})
 		return nil, fmt.Errorf("资产不存在 [id=%d]", assetID)
 	}
-	return s.checkAndPersistAsset(ctx, asset)
+	snapshot, err := s.checkAndPersistAsset(ctx, asset)
+	if err != nil {
+		s.recordAssetAudit(asset, "check_health", false, err.Error(), map[string]any{
+			"mode": "single",
+		}, nil)
+		return nil, err
+	}
+	s.recordAssetAudit(asset, "check_health", true, fmt.Sprintf("健康检查完成，状态=%s", snapshot.Status), map[string]any{
+		"mode": "single",
+	}, healthAuditResult(snapshot))
+	return snapshot, nil
 }
 
 func (s *HealthService) checkAndPersistAsset(ctx context.Context, asset *assetModel.Asset) (*healthModel.HealthSnapshot, error) {
@@ -153,17 +195,61 @@ func (s *HealthService) CheckAll(ctx context.Context, req CheckAllRequest) (*Che
 		Category:      req.Category,
 	})
 	if err != nil {
+		s.recordAudit(auditSvc.RecordInput{
+			Module:       "health",
+			Action:       batchAuditAction(req.Trigger),
+			ResourceType: "health",
+			Success:      false,
+			Detail:       fmt.Sprintf("查询资产失败: %v", err),
+			Request: map[string]any{
+				"environment_id": req.EnvironmentID,
+				"category":       req.Category,
+				"trigger":        normalizeCheckTrigger(req.Trigger),
+			},
+		})
 		return nil, fmt.Errorf("查询资产失败: %w", err)
 	}
 
 	checked := 0
+	failedAssetIDs := make([]uint, 0)
 	for i := range assets {
-		if _, err := s.checkAndPersistAsset(ctx, &assets[i]); err != nil {
+		snapshot, err := s.checkAndPersistAsset(ctx, &assets[i])
+		if err != nil {
 			s.log.Warn("批量健康检查失败", zap.Uint("asset_id", assets[i].ID), zap.Error(err))
+			failedAssetIDs = append(failedAssetIDs, assets[i].ID)
+			if req.Trigger != "scheduled" {
+				s.recordAssetAudit(&assets[i], "check_health", false, err.Error(), map[string]any{
+					"mode":    "batch",
+					"trigger": normalizeCheckTrigger(req.Trigger),
+				}, nil)
+			}
 			continue
+		}
+		if req.Trigger != "scheduled" {
+			s.recordAssetAudit(&assets[i], "check_health", true, fmt.Sprintf("健康检查完成，状态=%s", snapshot.Status), map[string]any{
+				"mode":    "batch",
+				"trigger": normalizeCheckTrigger(req.Trigger),
+			}, healthAuditResult(snapshot))
 		}
 		checked++
 	}
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "health",
+		Action:       batchAuditAction(req.Trigger),
+		ResourceType: "health",
+		Success:      true,
+		Detail:       fmt.Sprintf("批量健康检查完成：成功 %d，失败 %d", checked, len(failedAssetIDs)),
+		Request: map[string]any{
+			"environment_id": req.EnvironmentID,
+			"category":       req.Category,
+			"trigger":        normalizeCheckTrigger(req.Trigger),
+		},
+		Result: map[string]any{
+			"checked":          checked,
+			"failed":           len(failedAssetIDs),
+			"failed_asset_ids": failedAssetIDs,
+		},
+	})
 	return &CheckAllResult{Checked: checked}, nil
 }
 
@@ -228,7 +314,7 @@ func (s *HealthService) runScheduledCheck(ctx context.Context) {
 	defer s.endScheduledRun()
 
 	startedAt := time.Now()
-	result, err := s.CheckAll(ctx, CheckAllRequest{})
+	result, err := s.CheckAll(ctx, CheckAllRequest{Trigger: "scheduled"})
 	if err != nil {
 		s.log.Warn("自动健康检查执行失败", zap.Error(err))
 		return
@@ -434,17 +520,25 @@ func normalizePort(asset *assetModel.Asset) int {
 }
 
 func (s *HealthService) checkInterval() time.Duration {
-	if s.cfg.CheckInterval <= 0 {
+	cfg := s.currentConfig()
+	if cfg.CheckInterval <= 0 {
 		return 60 * time.Second
 	}
-	return time.Duration(s.cfg.CheckInterval) * time.Second
+	return time.Duration(cfg.CheckInterval) * time.Second
 }
 
 func (s *HealthService) checkTimeout() time.Duration {
-	if s.cfg.Timeout <= 0 {
+	cfg := s.currentConfig()
+	if cfg.Timeout <= 0 {
 		return 10 * time.Second
 	}
-	return time.Duration(s.cfg.Timeout) * time.Second
+	return time.Duration(cfg.Timeout) * time.Second
+}
+
+func (s *HealthService) currentConfig() configModel.HealthSection {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	return s.cfg
 }
 
 func tcpCheck(ctx context.Context, host string, port int) (int64, error) {
@@ -488,4 +582,73 @@ func mapAssetStatus(status healthModel.HealthStatus) assetModel.AssetStatus {
 	default:
 		return assetModel.AssetStatusUnknown
 	}
+}
+
+func (s *HealthService) recordAssetAudit(asset *assetModel.Asset, action string, success bool, detail string, request any, result any) {
+	if asset == nil {
+		return
+	}
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "health",
+		Action:       action,
+		ResourceType: "asset",
+		ResourceID:   uintPtr(asset.ID),
+		ResourceName: asset.Name,
+		PluginType:   asset.PluginType,
+		Success:      success,
+		Detail:       detail,
+		Request: map[string]any{
+			"asset_id": asset.ID,
+			"category": asset.Category,
+			"request":  request,
+		},
+		Result: result,
+	})
+}
+
+func (s *HealthService) recordAudit(input auditSvc.RecordInput) {
+	if s.audit == nil {
+		return
+	}
+	s.audit.RecordBestEffort(input)
+}
+
+func healthAuditResult(snapshot *healthModel.HealthSnapshot) map[string]any {
+	if snapshot == nil {
+		return nil
+	}
+	return map[string]any{
+		"status":      snapshot.Status,
+		"check_type":  snapshot.CheckType,
+		"latency_ms":  snapshot.LatencyMS,
+		"checked_at":  snapshot.CheckedAt,
+		"detail":      snapshot.Detail,
+		"metric_keys": metricKeys(snapshot.Metrics),
+	}
+}
+
+func metricKeys(metrics healthModel.Metrics) []string {
+	keys := make([]string, 0, len(metrics))
+	for key := range metrics {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+func batchAuditAction(trigger string) string {
+	if trigger == "scheduled" {
+		return "auto_check_health"
+	}
+	return "check_health_batch"
+}
+
+func normalizeCheckTrigger(trigger string) string {
+	if trigger == "scheduled" {
+		return trigger
+	}
+	return "manual"
+}
+
+func uintPtr(value uint) *uint {
+	return &value
 }

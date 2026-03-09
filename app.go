@@ -11,10 +11,12 @@ import (
 	"EnvPilot/internal/app"
 	assetAPI "EnvPilot/internal/asset/api"
 	auditAPI "EnvPilot/internal/audit/api"
+	configAPI "EnvPilot/internal/config/api"
 	connectorAPI "EnvPilot/internal/connector/api"
 	dnsAPI "EnvPilot/internal/dns/api"
 	executorAPI "EnvPilot/internal/executor/api"
 	healthAPI "EnvPilot/internal/health/api"
+	"EnvPilot/pkg/buildinfo"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
@@ -28,6 +30,7 @@ type App struct {
 	container    *app.Container
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
+	ConfigAPI    *configAPI.ConfigAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
 	HealthAPI    *healthAPI.HealthAPI
@@ -44,6 +47,7 @@ func NewApp() (*App, error) {
 		container:    c,
 		AssetAPI:     c.AssetAPI,
 		AuditAPI:     c.AuditAPI,
+		ConfigAPI:    c.ConfigAPI,
 		ConnectorAPI: c.ConnectorAPI,
 		DNSAPI:       c.DNSAPI,
 		HealthAPI:    c.HealthAPI,
@@ -82,9 +86,13 @@ func (a *App) Ping() string {
 // GetVersion 获取应用版本信息
 func (a *App) GetVersion() map[string]string {
 	cfg := a.container.Config.Get()
-	logger.Info("获取版本信息", zap.String("version", cfg.App.Version))
+	logger.Info("获取版本信息",
+		zap.String("version", buildinfo.NormalizedVersion()),
+		zap.String("commit", buildinfo.NormalizedCommit()),
+	)
 	return map[string]string{
 		"name":    cfg.App.Name,
-		"version": cfg.App.Version,
+		"version": buildinfo.NormalizedVersion(),
+		"commit":  buildinfo.NormalizedCommit(),
 	}
 }

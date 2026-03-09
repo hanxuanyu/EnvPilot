@@ -654,6 +654,159 @@ export namespace auditapi {
 
 }
 
+export namespace configapi {
+	
+	export class ListSnapshotsReq {
+	    limit: number;
+	    offset: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListSnapshotsReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.limit = source["limit"];
+	        this.offset = source["offset"];
+	    }
+	}
+	export class Result__EnvPilot_internal_config_service_CurrentConfigResult_ {
+	    success: boolean;
+	    data?: service.CurrentConfigResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_config_service_CurrentConfigResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.CurrentConfigResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_config_service_ListSnapshotsResult_ {
+	    success: boolean;
+	    data?: service.ListSnapshotsResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_config_service_ListSnapshotsResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.ListSnapshotsResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_config_service_SnapshotDetailResult_ {
+	    success: boolean;
+	    data?: service.SnapshotDetailResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_config_service_SnapshotDetailResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.SnapshotDetailResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class RollbackConfigReq {
+	    snapshot_id: number;
+	    comment: string;
+	    operator: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RollbackConfigReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.snapshot_id = source["snapshot_id"];
+	        this.comment = source["comment"];
+	        this.operator = source["operator"];
+	    }
+	}
+	export class UpdateConfigReq {
+	    config: Record<string, any>;
+	    comment: string;
+	    operator: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateConfigReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.config = source["config"];
+	        this.comment = source["comment"];
+	        this.operator = source["operator"];
+	    }
+	}
+
+}
+
 export namespace connector {
 	
 	export class CommandResult {
@@ -1658,6 +1811,151 @@ export namespace healthapi {
 
 export namespace model {
 	
+	export class HealthSection {
+	    check_interval: number;
+	    timeout: number;
+	    auto_check: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new HealthSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.check_interval = source["check_interval"];
+	        this.timeout = source["timeout"];
+	        this.auto_check = source["auto_check"];
+	    }
+	}
+	export class DNSSection {
+	    enabled: boolean;
+	    listen_addr: string;
+	    upstream: string;
+	    default_ttl: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DNSSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.listen_addr = source["listen_addr"];
+	        this.upstream = source["upstream"];
+	        this.default_ttl = source["default_ttl"];
+	    }
+	}
+	export class SecuritySection {
+	    master_password_enabled: boolean;
+	    salt_file: string;
+	    dangerous_commands: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SecuritySection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.master_password_enabled = source["master_password_enabled"];
+	        this.salt_file = source["salt_file"];
+	        this.dangerous_commands = source["dangerous_commands"];
+	    }
+	}
+	export class DatabaseSection {
+	    filename: string;
+	    max_idle_conns: number;
+	    max_open_conns: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabaseSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	        this.max_idle_conns = source["max_idle_conns"];
+	        this.max_open_conns = source["max_open_conns"];
+	    }
+	}
+	export class LogSection {
+	    level: string;
+	    filename: string;
+	    max_size: number;
+	    max_backups: number;
+	    max_age: number;
+	    compress: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.level = source["level"];
+	        this.filename = source["filename"];
+	        this.max_size = source["max_size"];
+	        this.max_backups = source["max_backups"];
+	        this.max_age = source["max_age"];
+	        this.compress = source["compress"];
+	    }
+	}
+	export class AppSection {
+	    name: string;
+	    data_dir: string;
+	    log_dir: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.data_dir = source["data_dir"];
+	        this.log_dir = source["log_dir"];
+	    }
+	}
+	export class AppConfig {
+	    app: AppSection;
+	    log: LogSection;
+	    database: DatabaseSection;
+	    security: SecuritySection;
+	    dns: DNSSection;
+	    health: HealthSection;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.app = this.convertValues(source["app"], AppSection);
+	        this.log = this.convertValues(source["log"], LogSection);
+	        this.database = this.convertValues(source["database"], DatabaseSection);
+	        this.security = this.convertValues(source["security"], SecuritySection);
+	        this.dns = this.convertValues(source["dns"], DNSSection);
+	        this.health = this.convertValues(source["health"], HealthSection);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Credential {
 	    id: number;
 	    name: string;
@@ -1912,6 +2210,47 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class ConfigSnapshot {
+	    id: number;
+	    version: number;
+	    content: string;
+	    comment?: string;
+	    created_by?: string;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConfigSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.version = source["version"];
+	        this.content = source["content"];
+	        this.comment = source["comment"];
+	        this.created_by = source["created_by"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	export class DNSQueryLog {
 	    id: number;
@@ -2023,6 +2362,8 @@ export namespace model {
 		}
 	}
 	
+	
+	
 	export class Execution {
 	    id: number;
 	    asset_id: number;
@@ -2079,6 +2420,7 @@ export namespace model {
 		}
 	}
 	
+	
 	export class HealthSnapshot {
 	    id: number;
 	    asset_id: number;
@@ -2131,6 +2473,7 @@ export namespace model {
 		    return a;
 		}
 	}
+	
 
 }
 
@@ -2275,6 +2618,62 @@ export namespace service {
 	        this.checked = source["checked"];
 	    }
 	}
+	export class HotReloadResult {
+	    applied?: string[];
+	    restart_required?: string[];
+	    messages?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new HotReloadResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applied = source["applied"];
+	        this.restart_required = source["restart_required"];
+	        this.messages = source["messages"];
+	    }
+	}
+	export class CurrentConfigResult {
+	    config: model.AppConfig;
+	    yaml: string;
+	    config_path: string;
+	    requires_restart: boolean;
+	    hot_reload: HotReloadResult;
+	    latest_snapshot?: model.ConfigSnapshot;
+	
+	    static createFrom(source: any = {}) {
+	        return new CurrentConfigResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.config = this.convertValues(source["config"], model.AppConfig);
+	        this.yaml = source["yaml"];
+	        this.config_path = source["config_path"];
+	        this.requires_restart = source["requires_restart"];
+	        this.hot_reload = this.convertValues(source["hot_reload"], HotReloadResult);
+	        this.latest_snapshot = this.convertValues(source["latest_snapshot"], model.ConfigSnapshot);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ExecuteRedisCommandRequest {
 	    asset_id: number;
 	    command: string;
@@ -2309,6 +2708,7 @@ export namespace service {
 	        this.limit = source["limit"];
 	    }
 	}
+	
 	export class ListQueryLogsResult {
 	    items: model.DNSQueryLog[];
 	    total: number;
@@ -2374,7 +2774,7 @@ export namespace service {
 		}
 	}
 	export class ListSnapshotsResult {
-	    items: model.HealthSnapshot[];
+	    items: model.ConfigSnapshot[];
 	    total: number;
 	
 	    static createFrom(source: any = {}) {
@@ -2383,7 +2783,7 @@ export namespace service {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.items = this.convertValues(source["items"], model.HealthSnapshot);
+	        this.items = this.convertValues(source["items"], model.ConfigSnapshot);
 	        this.total = source["total"];
 	    }
 	
@@ -2437,6 +2837,36 @@ export namespace service {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.asset_id = source["asset_id"];
 	        this.message = this.convertValues(source["message"], connector.Message);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SnapshotDetailResult {
+	    snapshot: model.ConfigSnapshot;
+	
+	    static createFrom(source: any = {}) {
+	        return new SnapshotDetailResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.snapshot = this.convertValues(source["snapshot"], model.ConfigSnapshot);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

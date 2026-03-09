@@ -58,7 +58,10 @@ export default function Dashboard() {
           {backendStatus === 'ok' ? (
             <>
               <CheckCircle2 className="w-3.5 h-3.5" />
-              <span>后端已连接 · {versionInfo?.version ?? ''}</span>
+              <span>
+                后端已连接 · {versionInfo?.version ?? ''}
+                {versionInfo?.commit ? ` (${versionInfo.commit})` : ''}
+              </span>
             </>
           ) : backendStatus === 'error' ? (
             <>

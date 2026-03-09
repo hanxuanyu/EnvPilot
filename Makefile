@@ -14,6 +14,12 @@ APP_NAME    := EnvPilot
 SERVER_NAME := envpilot-server
 BIN_DIR     := bin
 FRONTEND    := frontend
+GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+GIT_HEAD    := $(shell git rev-parse HEAD 2>/dev/null || echo)
+GIT_TAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo)
+GIT_TAG_REF := $(shell if [ -n "$(GIT_TAG)" ]; then git rev-list -n 1 "$(GIT_TAG)" 2>/dev/null; fi)
+APP_VERSION := $(shell if [ -n "$(GIT_TAG)" ] && [ "$(GIT_HEAD)" = "$(GIT_TAG_REF)" ]; then echo "$(GIT_TAG)"; else echo dev; fi)
+LDFLAGS     := -s -w -X EnvPilot/pkg/buildinfo.Version=$(APP_VERSION) -X EnvPilot/pkg/buildinfo.Commit=$(GIT_COMMIT)
 
 # ── 平台检测 ─────────────────────────────────────────────────────
 GOOS   ?= $(shell go env GOOS)
@@ -33,6 +39,8 @@ help:
 	@echo "  make dev-server      服务端开发模式"
 	@echo "  make clean           清理构建产物"
 	@echo ""
+	@echo "当前构建版本: $(APP_VERSION) ($(GIT_COMMIT))"
+	@echo ""
 
 # ── 桌面版构建（Wails）──────────────────────────────────────────
 # 流程：npm run build（desktop 模式）→ wails build
@@ -40,7 +48,7 @@ build-desktop:
 	@echo ">>> [1/2] 构建前端（桌面模式）..."
 	npm run build --prefix $(FRONTEND)
 	@echo ">>> [2/2] 构建 Wails 桌面应用..."
-	wails build -o $(APP_NAME)
+	wails build -ldflags "$(LDFLAGS)" -o $(APP_NAME)
 	@echo ">>> 桌面版构建完成：build/bin/$(APP_NAME)"
 
 # ── 服务端版构建（HTTP）─────────────────────────────────────────
@@ -54,7 +62,7 @@ build-server:
 	@echo ">>> [3/3] 编译 Go 服务端二进制..."
 	mkdir -p $(BIN_DIR)
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
-		-ldflags="-s -w" \
+		-ldflags="$(LDFLAGS)" \
 		-o $(BIN_DIR)/$(SERVER_NAME) \
 		./cmd/server/
 	@echo ">>> 服务端版构建完成：$(BIN_DIR)/$(SERVER_NAME)"
@@ -68,7 +76,7 @@ build-server-linux:
 	cp -r $(FRONTEND)/dist-server/. cmd/server/dist/
 	mkdir -p $(BIN_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
-		-ldflags="-s -w" \
+		-ldflags="$(LDFLAGS)" \
 		-o $(BIN_DIR)/$(SERVER_NAME)-linux-amd64 \
 		./cmd/server/
 	@echo ">>> 完成：$(BIN_DIR)/$(SERVER_NAME)-linux-amd64"
@@ -80,12 +88,12 @@ build-all: build-desktop build-server
 # ── 开发模式 ─────────────────────────────────────────────────────
 dev:
 	@echo ">>> 启动桌面开发模式（wails dev）..."
-	wails dev
+	wails dev -ldflags "$(LDFLAGS)"
 
 dev-server:
 	@echo ">>> 启动服务端开发模式..."
 	@echo ">>> 请在另一个终端运行：npm run dev:server --prefix $(FRONTEND)"
-	go run ./cmd/server/ --addr :8080
+	go run -ldflags "$(LDFLAGS)" ./cmd/server/ --addr :8080
 
 # ── 清理 ─────────────────────────────────────────────────────────
 clean:

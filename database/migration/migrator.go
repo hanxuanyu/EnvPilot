@@ -68,6 +68,8 @@ func (m *Migrator) register() {
 	m.add("006_dns_query_log", migrateDNSQueryLog)
 	// 阶段6：健康检查快照表
 	m.add("007_health", migrateHealth)
+	// 阶段8：配置快照表
+	m.add("008_config", migrateConfig)
 }
 
 // add 添加一个迁移项

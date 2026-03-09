@@ -1133,13 +1133,13 @@ EnvPilot/
 │   │   ├── factory.go
 │   │   └── sql.go
 │   ├── dns/                         ⬜ 待实现（阶段 5）
-│   ├── health/                      ⬜ 待实现（阶段 6）
+│   ├── health/                      ✅ 健康快照、调度器、探测器与双模式 API
 │   ├── audit/                       🟡 审计写入、查询与页面已落地，增强项待补
 │   │   ├── api/
 │   │   ├── model/
 │   │   ├── repository/
 │   │   └── service/
-│   ├── config/                      ✅ 配置加载
+│   ├── config/                      ✅ 配置管理、快照、回滚与双模式 API
 │   └── auth/                        ⬜ 待实现
 │
 ├── pkg/
@@ -1176,9 +1176,9 @@ EnvPilot/
         │   ├── TerminalPage.tsx     ✅ (双模式：Wails IPC / WebSocket)
         │   ├── ConnectorPage.tsx    ✅ 连接器统一操作页
         │   ├── DnsPage.tsx          ⬜ 预留页面（阶段 5 实现）
-        │   ├── HealthPage.tsx       ⬜ 预留页面（阶段 6 实现）
+        │   ├── HealthPage.tsx       ✅ 健康看板与快照列表页面
         │   ├── AuditPage.tsx        🟡 审计日志查询页（导出待补）
-        │   └── ConfigPage.tsx       ⬜ 预留页面（阶段 8 实现）
+        │   └── ConfigPage.tsx       ✅ 紧凑配置编辑页 + 模态版本对比/回滚
         ├── services/
         │   ├── assetService.ts      ✅ (含 listPlugins / getPluginSchema)
         │   ├── connectorService.ts  ✅

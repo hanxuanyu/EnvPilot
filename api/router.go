@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"EnvPilot/internal/app"
+	"EnvPilot/pkg/buildinfo"
 )
 
 // NewRouter 创建 HTTP 路由。
@@ -21,6 +22,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	assetH := NewAssetHandler(c.EnvSvc, c.GrpSvc, c.AssetSvc, c.CredSvc)
 	auditH := NewAuditHandler(c.AuditSvc)
+	configH := NewConfigHandler(c.Config)
 	connH := NewConnectorHandler(c.ConnSvc)
 	dnsH := NewDNSHandler(c.DNSSvc)
 	healthH := NewHealthHandler(c.HealthSvc)
@@ -34,7 +36,11 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	})
 	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, r *http.Request) {
 		cfg := c.Config.Get()
-		writeOK(w, map[string]string{"name": cfg.App.Name, "version": cfg.App.Version})
+		writeOK(w, map[string]string{
+			"name":    cfg.App.Name,
+			"version": buildinfo.NormalizedVersion(),
+			"commit":  buildinfo.NormalizedCommit(),
+		})
 	})
 
 	// ── 插件 ──────────────────────────────────────────────────────
@@ -75,6 +81,11 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/connectors/redis", connH.ExecuteRedisCmd)
 	mux.HandleFunc("POST /api/connectors/mq", connH.SendMQMessage)
 	mux.HandleFunc("GET /api/audits", auditH.ListAuditLogs)
+	mux.HandleFunc("GET /api/config", configH.GetCurrent)
+	mux.HandleFunc("PUT /api/config", configH.Update)
+	mux.HandleFunc("GET /api/config/snapshots", configH.ListSnapshots)
+	mux.HandleFunc("GET /api/config/snapshots/{id}", configH.GetSnapshot)
+	mux.HandleFunc("POST /api/config/rollback", configH.Rollback)
 	mux.HandleFunc("GET /api/dns/records", dnsH.ListRecords)
 	mux.HandleFunc("GET /api/dns/records/by-asset/{asset_id}", dnsH.GetRecordByAssetID)
 	mux.HandleFunc("POST /api/dns/records", dnsH.CreateRecord)

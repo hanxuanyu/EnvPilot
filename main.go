@@ -40,6 +40,7 @@ func main() {
 			app,
 			app.AssetAPI,
 			app.AuditAPI,
+			app.ConfigAPI,
 			app.ConnectorAPI,
 			app.DNSAPI,
 			app.HealthAPI,

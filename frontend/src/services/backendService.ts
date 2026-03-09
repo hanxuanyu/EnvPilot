@@ -7,6 +7,7 @@ import { Ping as WailsPing, GetVersion as WailsGetVersion } from '@wailsjs/go/ma
 export interface VersionInfo {
   name: string
   version: string
+  commit: string
 }
 
 export async function ping(): Promise<string> {

@@ -100,3 +100,28 @@ input, textarea, pre, code, [data-selectable] {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted-foreground);
 }
+
+.health-badges-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.health-badges-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.health-badges-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.health-badges-scroll:hover {
+  scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 22%, transparent) transparent;
+}
+
+.health-badges-scroll:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-muted-foreground) 22%, transparent);
+}
+
+.health-badges-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-muted-foreground) 36%, transparent);
+}

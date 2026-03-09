@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { Fragment } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -166,17 +167,19 @@ export function HealthMetricBadges({
     <TooltipProvider delayDuration={120}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap ${className}`}>
-            {items.map((item) => (
-              <Badge
-                key={`${item.code}-${item.value}`}
-                variant="outline"
-                className={`inline-flex h-6 items-center gap-1 rounded-md px-1.5 py-0 text-[10px] font-medium ${toneClass(item.tone)}`}
-              >
-                <span className="text-muted-foreground/90">{item.code}</span>
-                <span className="max-w-24 truncate text-foreground">{item.value}</span>
-              </Badge>
-            ))}
+          <div className={`health-badges-scroll min-w-0 overflow-x-auto overflow-y-hidden ${className}`}>
+            <div className="flex w-max min-w-full items-center gap-1 whitespace-nowrap pr-1">
+              {items.map((item) => (
+                <Badge
+                  key={`${item.code}-${item.value}`}
+                  variant="outline"
+                  className={`inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 py-0 text-[10px] font-medium ${toneClass(item.tone)}`}
+                >
+                  <span className="text-muted-foreground/90">{item.code}</span>
+                  <span className="max-w-24 truncate text-foreground">{item.value}</span>
+                </Badge>
+              ))}
+            </div>
           </div>
         </TooltipTrigger>
         <TooltipContent align="start" className="w-80 space-y-2">
@@ -200,10 +203,10 @@ export function HealthMetricBadges({
               <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">metrics</div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] leading-5">
                 {metrics.map((entry) => (
-                  <>
-                    <span key={`${entry.key}-label`} className="text-muted-foreground">{entry.label}</span>
-                    <span key={`${entry.key}-value`} className="truncate text-right text-foreground">{entry.value}</span>
-                  </>
+                  <Fragment key={entry.key}>
+                    <span className="text-muted-foreground">{entry.label}</span>
+                    <span className="truncate text-right text-foreground">{entry.value}</span>
+                  </Fragment>
                 ))}
               </div>
             </div>

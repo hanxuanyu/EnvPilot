@@ -4,59 +4,58 @@ package model
 
 // AppConfig 顶层配置结构体，对应 config.yaml 全部内容
 type AppConfig struct {
-	App      AppSection      `yaml:"app"`
-	Log      LogSection      `yaml:"log"`
-	Database DatabaseSection `yaml:"database"`
-	Security SecuritySection `yaml:"security"`
-	DNS      DNSSection      `yaml:"dns"`
-	Health   HealthSection   `yaml:"health"`
+	App      AppSection      `yaml:"app" json:"app"`
+	Log      LogSection      `yaml:"log" json:"log"`
+	Database DatabaseSection `yaml:"database" json:"database"`
+	Security SecuritySection `yaml:"security" json:"security"`
+	DNS      DNSSection      `yaml:"dns" json:"dns"`
+	Health   HealthSection   `yaml:"health" json:"health"`
 }
 
 // AppSection 应用基础配置
 type AppSection struct {
-	Name    string `yaml:"name"`
-	Version string `yaml:"version"`
-	DataDir string `yaml:"data_dir"`
-	LogDir  string `yaml:"log_dir"`
+	Name    string `yaml:"name" json:"name"`
+	DataDir string `yaml:"data_dir" json:"data_dir"`
+	LogDir  string `yaml:"log_dir" json:"log_dir"`
 }
 
 // LogSection 日志配置
 type LogSection struct {
-	Level      string `yaml:"level"`
-	Filename   string `yaml:"filename"`
-	MaxSize    int    `yaml:"max_size"`
-	MaxBackups int    `yaml:"max_backups"`
-	MaxAge     int    `yaml:"max_age"`
-	Compress   bool   `yaml:"compress"`
+	Level      string `yaml:"level" json:"level"`
+	Filename   string `yaml:"filename" json:"filename"`
+	MaxSize    int    `yaml:"max_size" json:"max_size"`
+	MaxBackups int    `yaml:"max_backups" json:"max_backups"`
+	MaxAge     int    `yaml:"max_age" json:"max_age"`
+	Compress   bool   `yaml:"compress" json:"compress"`
 }
 
 // DatabaseSection 数据库配置
 type DatabaseSection struct {
-	Filename     string `yaml:"filename"`
-	MaxIdleConns int    `yaml:"max_idle_conns"`
-	MaxOpenConns int    `yaml:"max_open_conns"`
+	Filename     string `yaml:"filename" json:"filename"`
+	MaxIdleConns int    `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxOpenConns int    `yaml:"max_open_conns" json:"max_open_conns"`
 }
 
 // SecuritySection 安全配置
 type SecuritySection struct {
-	MasterPasswordEnabled bool     `yaml:"master_password_enabled"`
-	SaltFile              string   `yaml:"salt_file"`
-	DangerousCommands     []string `yaml:"dangerous_commands"`
+	MasterPasswordEnabled bool     `yaml:"master_password_enabled" json:"master_password_enabled"`
+	SaltFile              string   `yaml:"salt_file" json:"salt_file"`
+	DangerousCommands     []string `yaml:"dangerous_commands" json:"dangerous_commands"`
 }
 
 // DNSSection 内置 DNS 服务配置
 type DNSSection struct {
-	Enabled    bool   `yaml:"enabled"`
-	ListenAddr string `yaml:"listen_addr"`
-	Upstream   string `yaml:"upstream"`
-	DefaultTTL uint32 `yaml:"default_ttl"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	ListenAddr string `yaml:"listen_addr" json:"listen_addr"`
+	Upstream   string `yaml:"upstream" json:"upstream"`
+	DefaultTTL uint32 `yaml:"default_ttl" json:"default_ttl"`
 }
 
 // HealthSection 健康检查配置
 type HealthSection struct {
-	CheckInterval int  `yaml:"check_interval"`
-	Timeout       int  `yaml:"timeout"`
-	AutoCheck     bool `yaml:"auto_check"`
+	CheckInterval int  `yaml:"check_interval" json:"check_interval"`
+	Timeout       int  `yaml:"timeout" json:"timeout"`
+	AutoCheck     bool `yaml:"auto_check" json:"auto_check"`
 }
 
 // Default 返回填充了所有默认值的 AppConfig 实例。
@@ -70,7 +69,6 @@ func Default() *AppConfig {
 	return &AppConfig{
 		App: AppSection{
 			Name:    "EnvPilot",
-			Version: "0.1.0",
 			DataDir: "./data",
 			LogDir:  "./logs",
 		},

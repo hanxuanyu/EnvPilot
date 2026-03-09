@@ -9,6 +9,8 @@ import (
 	"io"
 	"sync"
 
+	assetRepo "EnvPilot/internal/asset/repository"
+	auditSvc "EnvPilot/internal/audit/service"
 	sshpkg "EnvPilot/internal/executor/ssh"
 	"EnvPilot/pkg/event"
 	"EnvPilot/pkg/logger"
@@ -32,14 +34,18 @@ type TerminalService struct {
 	mu       sync.Mutex
 	sessions map[string]*TerminalSession
 	pool     *sshpkg.Pool
+	assetRepo *assetRepo.AssetRepo
+	audit    *auditSvc.AuditService
 	log      *zap.Logger
 }
 
 // NewTerminalService 创建终端服务
-func NewTerminalService(pool *sshpkg.Pool) *TerminalService {
+func NewTerminalService(pool *sshpkg.Pool, assetRepo *assetRepo.AssetRepo, audit *auditSvc.AuditService) *TerminalService {
 	return &TerminalService{
 		sessions: make(map[string]*TerminalSession),
 		pool:     pool,
+		assetRepo: assetRepo,
+		audit:    audit,
 		log:      logger.Named("terminal"),
 	}
 }
@@ -52,24 +58,28 @@ func NewTerminalService(pool *sshpkg.Pool) *TerminalService {
 func (s *TerminalService) StartTerminal(assetID uint, emitter event.Emitter) (string, error) {
 	client, err := s.pool.GetClient(assetID)
 	if err != nil {
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("SSH 连接失败: %v", err), nil)
 		return "", fmt.Errorf("SSH 连接失败: %w", err)
 	}
 
 	session, err := client.NewSession()
 	if err != nil {
 		s.pool.Remove(assetID)
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("创建 SSH 会话失败: %v", err), nil)
 		return "", fmt.Errorf("创建 SSH 会话失败: %w", err)
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		session.Close()
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("获取 stdin 管道失败: %v", err), nil)
 		return "", fmt.Errorf("获取 stdin 管道失败: %w", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		session.Close()
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("获取 stdout 管道失败: %v", err), nil)
 		return "", fmt.Errorf("获取 stdout 管道失败: %w", err)
 	}
 
@@ -80,11 +90,13 @@ func (s *TerminalService) StartTerminal(assetID uint, emitter event.Emitter) (st
 	}
 	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
 		session.Close()
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("请求 PTY 失败: %v", err), nil)
 		return "", fmt.Errorf("请求 PTY 失败: %w", err)
 	}
 
 	if err := session.Shell(); err != nil {
 		session.Close()
+		s.recordAssetAudit(assetID, "start_terminal_session", false, fmt.Sprintf("启动 Shell 失败: %v", err), nil)
 		return "", fmt.Errorf("启动 Shell 失败: %w", err)
 	}
 
@@ -110,6 +122,7 @@ func (s *TerminalService) StartTerminal(assetID uint, emitter event.Emitter) (st
 		zap.String("sessionID", sessionID),
 		zap.Uint("assetID", assetID),
 	)
+	s.recordAssetAudit(assetID, "start_terminal_session", true, "终端会话已启动", map[string]any{"session_id": sessionID})
 	return sessionID, nil
 }
 
@@ -173,6 +186,7 @@ func (s *TerminalService) closeSession(sessionID string) {
 
 	ts.emitter.Emit("terminal:closed:"+sessionID, nil)
 	s.log.Info("终端会话已关闭", zap.String("sessionID", sessionID))
+	s.recordAssetAudit(ts.AssetID, "close_terminal_session", true, "终端会话已关闭", map[string]any{"session_id": sessionID})
 }
 
 // readOutput 持续读取 SSH PTY 输出并通过 Emitter 推送到调用方
@@ -209,3 +223,29 @@ func generateSessionID() string {
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
+
+func (s *TerminalService) recordAssetAudit(assetID uint, action string, success bool, detail string, result any) {
+	if s.audit == nil {
+		return
+	}
+	input := auditSvc.RecordInput{
+		Module:       "executor",
+		Action:       action,
+		ResourceType: "asset",
+		ResourceID:   uintPtr(assetID),
+		Success:      success,
+		Detail:       detail,
+		Request: map[string]any{
+			"asset_id": assetID,
+		},
+		Result: result,
+	}
+	if s.assetRepo != nil {
+		if asset, err := s.assetRepo.FindByID(assetID); err == nil {
+			input.ResourceName = asset.Name
+			input.PluginType = asset.PluginType
+		}
+	}
+	s.audit.RecordBestEffort(input)
+}
+

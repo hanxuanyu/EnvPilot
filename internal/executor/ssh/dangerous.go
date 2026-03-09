@@ -3,27 +3,78 @@ package ssh
 import (
 	"regexp"
 	"strings"
+	"sync"
 )
 
-// dangerousPatterns 高危命令正则模式列表（Task 3.7 危险命令拦截）
-var dangerousPatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)\brm\s+(-[^\s]*r|-r[^\s]*)`),           // rm -rf, rm -r 等
-	regexp.MustCompile(`(?i)\bmkfs\b`),                              // mkfs 磁盘格式化
-	regexp.MustCompile(`(?i)\bdd\s+if=`),                            // dd 设备级写入
-	regexp.MustCompile(`:\(\)\s*\{.*:\|.*&`),                        // fork bomb
-	regexp.MustCompile(`(?i)\b(shutdown|reboot|halt|poweroff)\b`),   // 关机/重启
-	regexp.MustCompile(`(?i)\bchmod\s+[0-9]*7[0-9]*\s+/`),          // 根目录危险权限
-	regexp.MustCompile(`(?i)>\s*/dev/(sd[a-z]|hd[a-z]|nvme[0-9])`), // 写入块设备
-	regexp.MustCompile(`(?i)\btruncate\s+-s\s+0\s+/`),               // 清空系统文件
+var (
+	dangerousPatternsMu sync.RWMutex
+	dangerousPatterns   = mustCompileDangerousPatterns(defaultDangerousPatterns, nil)
+)
+
+var defaultDangerousPatterns = []string{
+	`(?i)\brm\s+(-[^\s]*r|-r[^\s]*)`,
+	`(?i)\bmkfs\b`,
+	`(?i)\bdd\s+if=`,
+	`:\(\)\s*\{.*:\|.*&`,
+	`(?i)\b(shutdown|reboot|halt|poweroff)\b`,
+	`(?i)\bchmod\s+[0-9]*7[0-9]*\s+/`,
+	`(?i)>\s*/dev/(sd[a-z]|hd[a-z]|nvme[0-9])`,
+	`(?i)\btruncate\s+-s\s+0\s+/`,
+}
+
+func UpdateDangerousPatterns(patterns []string) error {
+	compiled, err := compileDangerousPatterns(defaultDangerousPatterns, patterns)
+	if err != nil {
+		return err
+	}
+	dangerousPatternsMu.Lock()
+	dangerousPatterns = compiled
+	dangerousPatternsMu.Unlock()
+	return nil
 }
 
 // IsDangerous 检查命令是否匹配高危模式
 func IsDangerous(command string) bool {
 	cmd := strings.TrimSpace(command)
-	for _, pattern := range dangerousPatterns {
+	dangerousPatternsMu.RLock()
+	patterns := append([]*regexp.Regexp(nil), dangerousPatterns...)
+	dangerousPatternsMu.RUnlock()
+	for _, pattern := range patterns {
 		if pattern.MatchString(cmd) {
 			return true
 		}
 	}
 	return false
+}
+
+func mustCompileDangerousPatterns(basePatterns []string, extraPatterns []string) []*regexp.Regexp {
+	compiled, err := compileDangerousPatterns(basePatterns, extraPatterns)
+	if err != nil {
+		panic(err)
+	}
+	return compiled
+}
+
+func compileDangerousPatterns(basePatterns []string, extraPatterns []string) ([]*regexp.Regexp, error) {
+	allPatterns := make([]string, 0, len(basePatterns)+len(extraPatterns))
+	allPatterns = append(allPatterns, basePatterns...)
+	for _, pattern := range extraPatterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		if !strings.HasPrefix(pattern, "(?") {
+			pattern = "(?i)" + pattern
+		}
+		allPatterns = append(allPatterns, pattern)
+	}
+	compiled := make([]*regexp.Regexp, 0, len(allPatterns))
+	for _, pattern := range allPatterns {
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, err
+		}
+		compiled = append(compiled, re)
+	}
+	return compiled, nil
 }
