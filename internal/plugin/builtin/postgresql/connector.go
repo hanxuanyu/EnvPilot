@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -174,6 +175,44 @@ func (c *postgresqlConnector) Execute(ctx context.Context, database, query strin
 		Affected:   int64(len(data)),
 		DurationMS: time.Since(startedAt).Milliseconds(),
 	}, nil
+}
+
+func (c *postgresqlConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	db, err := c.ensureDB(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string]any{
+		"database": c.currentDB,
+		"schema":   c.cfg.Schema,
+	}
+	details := make([]string, 0, 3)
+
+	var version, databaseName, userName string
+	if err := db.QueryRowContext(ctx, "SELECT version(), current_database(), current_user").Scan(&version, &databaseName, &userName); err == nil {
+		metrics["server_version"] = version
+		metrics["current_database"] = databaseName
+		metrics["current_user"] = userName
+		details = append(details, "数据库 "+databaseName)
+	}
+
+	if databases, err := c.ListDatabases(ctx); err == nil {
+		metrics["database_count"] = len(databases)
+		details = append(details, "实例 "+strconv.Itoa(len(databases))+" 个")
+	}
+
+	if tables, err := c.ListTables(ctx, c.currentDB); err == nil {
+		metrics["table_count"] = len(tables)
+		details = append(details, "Schema 表 "+strconv.Itoa(len(tables))+" 个")
+	}
+
+	detail := "PostgreSQL 只读探测完成"
+	if len(details) > 0 {
+		detail += "：" + strings.Join(details, "，")
+	}
+
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
 }
 
 func (c *postgresqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB, error) {

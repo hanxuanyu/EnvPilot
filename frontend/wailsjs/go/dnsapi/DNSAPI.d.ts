@@ -6,6 +6,12 @@ export function CreateRecord(arg1:dnsapi.CreateDNSRecordReq):Promise<dnsapi.Resu
 
 export function DeleteRecord(arg1:number):Promise<dnsapi.Result_bool_>;
 
+export function GetRecordByAssetID(arg1:number):Promise<dnsapi.Result_EnvPilot_internal_dns_model_DNSRecord_>;
+
+export function GetStatus():Promise<dnsapi.Result_EnvPilot_internal_dns_service_RuntimeStatus_>;
+
+export function ListQueryLogs(arg1:dnsapi.ListDNSQueryLogsReq):Promise<dnsapi.Result_EnvPilot_internal_dns_service_ListQueryLogsResult_>;
+
 export function ListRecords(arg1:dnsapi.ListDNSRecordsReq):Promise<dnsapi.Result___EnvPilot_internal_dns_model_DNSRecord_>;
 
 export function SetRecordEnabled(arg1:number,arg2:boolean):Promise<dnsapi.Result_EnvPilot_internal_dns_model_DNSRecord_>;

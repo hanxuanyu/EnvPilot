@@ -23,6 +23,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	auditH := NewAuditHandler(c.AuditSvc)
 	connH := NewConnectorHandler(c.ConnSvc)
 	dnsH := NewDNSHandler(c.DNSSvc)
+	healthH := NewHealthHandler(c.HealthSvc)
 	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.Pool, bus)
 
 	mux := http.NewServeMux()
@@ -82,6 +83,10 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/dns/records/{id}/enabled", dnsH.SetRecordEnabled)
 	mux.HandleFunc("GET /api/dns/logs", dnsH.ListQueryLogs)
 	mux.HandleFunc("GET /api/dns/status", dnsH.GetStatus)
+	mux.HandleFunc("GET /api/health/snapshots", healthH.ListSnapshots)
+	mux.HandleFunc("GET /api/health/summary", healthH.GetSummary)
+	mux.HandleFunc("POST /api/health/check/{asset_id}", healthH.CheckAsset)
+	mux.HandleFunc("POST /api/health/check-all", healthH.CheckAll)
 
 	// ── 命令执行 ──────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/executions", execH.ExecuteCommand)

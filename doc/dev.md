@@ -38,7 +38,7 @@ internal/
 ├── executor/    SSH 命令执行 + 在线终端
 ├── connector/   中间件连接器抽象、工厂与服务编排
 ├── dns/         内置 DNS 服务（待实现）
-├── health/      健康检查（待实现）
+├── health/      健康检查（已接入自动调度与快照能力）
 ├── audit/       操作审计（日志写入、查询与页面已落地）
 ├── config/      系统配置
 └── auth/        本地认证（待实现）
@@ -178,7 +178,7 @@ m.add("004_dns", migrateDNS)
 | **阶段 D** | **双模式部署支持** | ✅ 完成 | 桌面（Wails）+ 服务端（HTTP）双模式 |
 | 阶段 4 | 中间件连接器 | ✅ 完成 | 数据库 / 缓存 / MQ 连接器、双模式 API 与前端面板已打通 |
 | 阶段 5 | DNS 服务 | 🟡 进行中 | DNS 服务器、查询日志、页面联动与资产 DNS 维护已接入，待进一步联调 |
-| 阶段 6 | 健康检查 | ⬜ 待开始 | 依赖阶段 2R 完成 |
+| 阶段 6 | 健康检查 | 🟡 进行中 | 自动调度、指标采集与基础看板已接入，趋势与更细规则待补 |
 | 阶段 7 | 审计系统 | 🟡 进行中 | 审计写入、查询与页面已完成，导出等增强能力待补 |
 | 阶段 8 | 配置系统 | ⬜ 待开始 | 独立模块 |
 
@@ -570,13 +570,13 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 
 ---
 
-## 阶段 6：健康检查 ⬜
+## 阶段 6：健康检查 🟡
 
 **目标**：定时资产健康监控，采集并存储各类健康指标
 
 **前置条件**：阶段 2R 完成
 
-**当前状态**：尚未开始，但已具备复用 connector Ping 和 executor SSH 的前置能力
+**当前状态**：进行中，已完成健康快照模型、自动周期检查、手动检查链路、汇总统计接口与基础看板
 
 **估时**：3-4 天
 
@@ -599,21 +599,30 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 
 ### 核心任务
 
-- [ ] Task 6.1 — HealthSnapshot 模型与迁移（`006_health`）
-- [ ] Task 6.2 — 各指标检查器实现
-  - ICMP Ping 检查器
+- [x] Task 6.1 — HealthSnapshot 模型与迁移（`007_health`）
+- [x] Task 6.2 — 各指标检查器实现（MVP）
   - TCP 端口检查器
   - SSH 系统指标检查器（服务器类）
   - Connector Ping 检查器（中间件类，复用 connector 模块）
-- [ ] Task 6.3 — 定时调度器（可配置间隔，支持按环境/类别过滤检查范围）
+- [x] Task 6.3 — 定时调度器（当前已支持全量周期检查，环境/类别定向调度待补）
 - [ ] Task 6.4 — 健康状态聚合逻辑（healthy/warning/critical/unreachable 判定规则）
-- [ ] Task 6.5 — HealthAPI（Wails 绑定）
-- [ ] Task 6.6 — 健康看板 UI（状态总览 + 异常高亮 + 历史趋势）
+- [x] Task 6.5 — HealthAPI（Wails 绑定 + HTTP 接口）
+- [x] Task 6.6 — 健康看板 UI（状态总览 + 手动检查 + 最新快照列表）
+
+### 当前已实现
+
+- 健康快照表与最新快照列表查询
+- 启动后按配置自动执行周期健康检查（`health.auto_check` / `health.check_interval` / `health.timeout`）
+- 按资产手动执行健康检查、按筛选范围批量检查
+- 服务器类资产 TCP + SSH 只读指标采集（负载、内存、根分区）
+- database / cache / mq 资产的 TCP + Connector Ping + 元数据只读探测
+- 健康状态回写到资产状态字段（online / warning / offline）
+- 前端健康页面总览卡片、筛选、分页与手动重检
 
 ### 验收标准
 
 - [ ] 支持按资产类别执行对应健康检查
-- [ ] 可配置调度周期并限定检查范围
+- [ ] 可配置调度周期并限定检查范围（当前已支持周期，范围限定待补）
 - [ ] 健康状态可聚合为 healthy / warning / critical / unreachable
 - [ ] 前端看板可展示当前状态与历史趋势
 - [ ] 中间件类资产优先复用 connector 能力而非重复实现

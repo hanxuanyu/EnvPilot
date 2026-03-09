@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -88,6 +89,41 @@ func (c *kafkaConnector) Ping(ctx context.Context) error {
 }
 
 func (c *kafkaConnector) Close() error { return nil }
+
+func (c *kafkaConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	dialer, err := c.buildDialer()
+	if err != nil {
+		return nil, err
+	}
+	conn, err := dialer.DialContext(ctx, "tcp", c.cfg.Brokers[0])
+	if err != nil {
+		return nil, fmt.Errorf("连接 Kafka 失败: %w", err)
+	}
+	defer conn.Close()
+
+	metrics := map[string]any{
+		"configured_brokers": len(c.cfg.Brokers),
+	}
+	details := []string{"Broker " + strconv.Itoa(len(c.cfg.Brokers)) + " 个"}
+
+	if broker, err := conn.Controller(); err == nil {
+		metrics["controller"] = broker.Host + ":" + strconv.Itoa(broker.Port)
+	}
+	if brokers, err := conn.Brokers(); err == nil {
+		metrics["broker_count"] = len(brokers)
+	}
+	if partitions, err := conn.ReadPartitions(); err == nil {
+		metrics["partition_count"] = len(partitions)
+		details = append(details, "分区元数据 "+strconv.Itoa(len(partitions))+" 条")
+	}
+
+	detail := "Kafka 控制面探测完成"
+	if len(details) > 0 {
+		detail += "：" + strings.Join(details, "，")
+	}
+
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
+}
 
 func (c *kafkaConnector) SendMessage(ctx context.Context, msg connector.Message) (*connector.SendResult, error) {
 	if strings.TrimSpace(msg.Topic) == "" {

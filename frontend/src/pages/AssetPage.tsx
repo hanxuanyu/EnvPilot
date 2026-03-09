@@ -7,6 +7,7 @@ import {
 import { toast } from 'sonner'
 import { useAssetStore } from '@/store/assetStore'
 import { StatusBadge } from '@/components/common/StatusBadge'
+import { HealthMetricBadges } from '@/components/common/HealthMetricBadges'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { DynamicConfigForm } from '@/components/asset/DynamicConfigForm'
 import { Button } from '@/components/ui/button'
@@ -20,10 +21,12 @@ import {
 } from '@/components/ui/select'
 import { assetService, credentialService } from '@/services/assetService'
 import { dnsService } from '@/services/dnsService'
+import { healthService } from '@/services/healthService'
 import type {
   Asset, Credential, AssetCategory, CredentialType, PluginDef, Environment,
 } from '@/types/asset'
 import type { DNSRecord } from '@/types/dns'
+import type { HealthSnapshot } from '@/types/health'
 import {
   CATEGORY_LABELS, CATEGORY_COLORS, ASSET_STATUS_LABELS, ASSET_STATUS_COLORS,
   CREDENTIAL_TYPE_LABELS,
@@ -69,6 +72,7 @@ export default function AssetPage() {
   const [showCredForm, setShowCredForm] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
+  const [healthByAssetId, setHealthByAssetId] = useState<Record<number, HealthSnapshot>>({})
 
   useEffect(() => {
     loadEnvironments()
@@ -76,6 +80,51 @@ export default function AssetPage() {
     loadCredentials()
     loadPlugins()
   }, [])
+
+  useEffect(() => {
+    if (tab !== 'assets') return
+    if (assets.length === 0) {
+      setHealthByAssetId({})
+      return
+    }
+
+    let cancelled = false
+
+    const loadHealthSnapshots = async () => {
+      try {
+        const result = await healthService.listSnapshots({
+          environment_id: selectedEnvId ?? undefined,
+          category: categoryFilter || undefined,
+          keyword: keyword || undefined,
+          limit: Math.max(assets.length * 3, 100),
+          offset: 0,
+        })
+
+        if (cancelled) return
+
+        const visibleIds = new Set(assets.map((asset) => asset.id))
+        const latestByAsset: Record<number, HealthSnapshot> = {}
+
+        result.items.forEach((snapshot) => {
+          if (!visibleIds.has(snapshot.asset_id)) return
+          const current = latestByAsset[snapshot.asset_id]
+          if (!current || new Date(snapshot.checked_at).getTime() > new Date(current.checked_at).getTime()) {
+            latestByAsset[snapshot.asset_id] = snapshot
+          }
+        })
+
+        setHealthByAssetId(latestByAsset)
+      } catch {
+        if (!cancelled) setHealthByAssetId({})
+      }
+    }
+
+    loadHealthSnapshots()
+
+    return () => {
+      cancelled = true
+    }
+  }, [tab, assets, selectedEnvId, categoryFilter, keyword])
 
   const handleSearch = () => loadAssets({
     environment_id: selectedEnvId ?? undefined,
@@ -230,7 +279,7 @@ export default function AssetPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-secondary border-b border-border">
-                  {['资产名称', '类型', '连接地址', '环境', '状态', '操作'].map(h => (
+                  {['资产名称', '类型', '连接地址', '环境', '状态', '健康', '操作'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
@@ -238,7 +287,7 @@ export default function AssetPage() {
               <tbody>
                 {assets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
                       暂无资产，点击「添加资产」开始
                     </td>
                   </tr>
@@ -287,6 +336,9 @@ export default function AssetPage() {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={asset.status as any} />
+                      </td>
+                      <td className="px-4 py-3 max-w-[320px]">
+                        <HealthMetricBadges snapshot={healthByAssetId[asset.id]} emptyText="未检查" />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-0.5">

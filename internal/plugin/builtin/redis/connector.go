@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"EnvPilot/internal/connector"
@@ -114,6 +115,85 @@ func (c *redisConnector) Command(ctx context.Context, command string, args ...st
 		return nil, fmt.Errorf("执行 Redis 命令失败: %w", err)
 	}
 	return &connector.CommandResult{Command: strings.ToUpper(command), Result: connector.NormalizeValue(result)}, nil
+}
+
+func (c *redisConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	client, err := c.ensureClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string]any{
+		"db":  c.cfg.DB,
+		"tls": c.cfg.TLS,
+	}
+	details := make([]string, 0, 4)
+
+	if info, err := client.Info(ctx, "server").Result(); err == nil {
+		parsed := parseInfo(info)
+		if value := parsed["redis_version"]; value != "" {
+			metrics["redis_version"] = value
+			details = append(details, "版本 "+value)
+		}
+		if value := parsed["redis_mode"]; value != "" {
+			metrics["redis_mode"] = value
+		}
+	}
+
+	if info, err := client.Info(ctx, "stats").Result(); err == nil {
+		parsed := parseInfo(info)
+		if value := parsed["connected_clients"]; value != "" {
+			metrics["connected_clients"] = value
+			details = append(details, "客户端 "+value)
+		}
+		if value := parsed["blocked_clients"]; value != "" {
+			metrics["blocked_clients"] = value
+		}
+	}
+
+	if size, err := client.DBSize(ctx).Result(); err == nil {
+		metrics["db_size"] = size
+		details = append(details, "Key "+strconv.FormatInt(size, 10)+" 个")
+	}
+
+	if role, err := client.Do(ctx, "ROLE").Result(); err == nil {
+		metrics["role"] = normalizeRole(role)
+	}
+
+	detail := "Redis 只读探测完成"
+	if len(details) > 0 {
+		detail += "：" + strings.Join(details, "，")
+	}
+
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
+}
+
+func parseInfo(raw string) map[string]string {
+	result := make(map[string]string)
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		result[parts[0]] = parts[1]
+	}
+	return result
+}
+
+func normalizeRole(value any) string {
+	switch typed := value.(type) {
+	case []any:
+		if len(typed) == 0 {
+			return ""
+		}
+		return fmt.Sprint(typed[0])
+	default:
+		return fmt.Sprint(value)
+	}
 }
 
 func (c *redisConnector) ensureClient(ctx context.Context) (redisv9.UniversalClient, error) {

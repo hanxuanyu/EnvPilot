@@ -50,6 +50,15 @@ type MQConnector interface {
 	SendMessage(ctx context.Context, msg Message) (*SendResult, error)
 }
 
+type MetadataProbeResult struct {
+	Detail  string         `json:"detail,omitempty"`
+	Metrics map[string]any `json:"metrics,omitempty"`
+}
+
+type MetadataProbeConnector interface {
+	ProbeMetadata(ctx context.Context) (*MetadataProbeResult, error)
+}
+
 type QueryColumn struct {
 	Name string `json:"name"`
 	Type string `json:"type"`

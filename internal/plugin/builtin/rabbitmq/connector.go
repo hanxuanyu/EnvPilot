@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"EnvPilot/internal/connector"
@@ -93,6 +95,42 @@ func (c *rabbitmqConnector) Close() error {
 		return err
 	}
 	return nil
+}
+
+func (c *rabbitmqConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	conn, ch, err := c.ensureChannel(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string]any{
+		"vhost":        c.cfg.VHost,
+		"tls":          c.cfg.TLS,
+		"channel_open": !ch.IsClosed(),
+		"server_major": conn.Major,
+		"server_minor": conn.Minor,
+	}
+	details := []string{"AMQP 握手正常"}
+
+	if product, ok := conn.Properties["product"].(string); ok && product != "" {
+		metrics["product"] = product
+		details = append(details, product)
+	}
+	if version, ok := conn.Properties["version"].(string); ok && version != "" {
+		metrics["product_version"] = version
+		details = append(details, "版本 "+version)
+	}
+	if capabilities, ok := conn.Properties["capabilities"]; ok {
+		metrics["capabilities"] = capabilities
+	}
+	metrics["locale_count"] = len(conn.Locales)
+	details = append(details, "Locale "+strconv.Itoa(len(conn.Locales))+" 个")
+
+	detail := "RabbitMQ 控制面探测完成"
+	if len(details) > 0 {
+		detail += "：" + strings.Join(details, "，")
+	}
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
 }
 
 func (c *rabbitmqConnector) SendMessage(ctx context.Context, msg connector.Message) (*connector.SendResult, error) {

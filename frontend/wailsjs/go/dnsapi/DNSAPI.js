@@ -10,6 +10,18 @@ export function DeleteRecord(arg1) {
   return window['go']['dnsapi']['DNSAPI']['DeleteRecord'](arg1);
 }
 
+export function GetRecordByAssetID(arg1) {
+  return window['go']['dnsapi']['DNSAPI']['GetRecordByAssetID'](arg1);
+}
+
+export function GetStatus() {
+  return window['go']['dnsapi']['DNSAPI']['GetStatus']();
+}
+
+export function ListQueryLogs(arg1) {
+  return window['go']['dnsapi']['DNSAPI']['ListQueryLogs'](arg1);
+}
+
 export function ListRecords(arg1) {
   return window['go']['dnsapi']['DNSAPI']['ListRecords'](arg1);
 }

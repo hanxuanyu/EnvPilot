@@ -29,6 +29,9 @@ import (
 	executorRepo "EnvPilot/internal/executor/repository"
 	executorSvc "EnvPilot/internal/executor/service"
 	sshPool "EnvPilot/internal/executor/ssh"
+	healthAPI "EnvPilot/internal/health/api"
+	healthRepo "EnvPilot/internal/health/repository"
+	healthSvc "EnvPilot/internal/health/service"
 	_ "EnvPilot/internal/plugin/builtin" // 触发所有内置插件的 init() 注册
 	"EnvPilot/pkg/crypto"
 	"EnvPilot/pkg/logger"
@@ -42,23 +45,25 @@ import (
 // 也包含 Wails 绑定层（供桌面模式 App 使用）。
 type Container struct {
 	// ── 直接服务（无 Wails 依赖，服务端 HTTP 可直接调用）──
-	EnvSvc   *assetSvc.EnvironmentService
-	GrpSvc   *assetSvc.GroupService
-	AssetSvc *assetSvc.AssetService
-	CredSvc  *assetSvc.CredentialService
-	ConnSvc  *connectorSvc.ConnectorService
-	DNSSvc   *dnsSvc.DNSService
-	ExecSvc  *executorSvc.ExecutorService
-	TermSvc  *executorSvc.TerminalService
-	Pool     *sshPool.Pool
-	Config   *configService.ConfigService
-	AuditSvc *auditSvc.AuditService
+	EnvSvc    *assetSvc.EnvironmentService
+	GrpSvc    *assetSvc.GroupService
+	AssetSvc  *assetSvc.AssetService
+	CredSvc   *assetSvc.CredentialService
+	ConnSvc   *connectorSvc.ConnectorService
+	DNSSvc    *dnsSvc.DNSService
+	HealthSvc *healthSvc.HealthService
+	ExecSvc   *executorSvc.ExecutorService
+	TermSvc   *executorSvc.TerminalService
+	Pool      *sshPool.Pool
+	Config    *configService.ConfigService
+	AuditSvc  *auditSvc.AuditService
 
 	// ── Wails 绑定层（桌面模式 App 使用）──
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
+	HealthAPI    *healthAPI.HealthAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 
 	db *gorm.DB
@@ -66,6 +71,9 @@ type Container struct {
 
 // Cleanup 释放所有资源（SSH 连接、数据库连接等）
 func (c *Container) Cleanup() {
+	if c.HealthSvc != nil {
+		c.HealthSvc.StopScheduler()
+	}
 	if c.ExecutorAPI != nil {
 		c.ExecutorAPI.Cleanup()
 	}
@@ -161,6 +169,7 @@ func Bootstrap() (*Container, error) {
 	dnsRepoInst := dnsRepo.NewDNSRepo(db)
 	dnsQueryLogRepoInst := dnsRepo.NewDNSQueryLogRepo(db)
 	dnsSvcInst := dnsSvc.NewDNSService(dnsRepoInst, dnsQueryLogRepoInst, envRepo, sharedAssetRepo, auditSvcInst)
+	healthRepoInst := healthRepo.NewHealthRepo(db)
 	dnsRuntime := dnsSvc.NewServerRuntime(cfg.DNS, dnsSvcInst)
 	dnsSvcInst.AttachRuntime(dnsRuntime)
 	if err := dnsRuntime.Start(); err != nil {
@@ -175,6 +184,9 @@ func Bootstrap() (*Container, error) {
 	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
+	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, pool, cfg.Health)
+	healthSvcInst.StartScheduler()
+	healthAPIInst := healthAPI.NewHealthAPI(healthSvcInst)
 	execRepo := executorRepo.NewExecutionRepo(db)
 	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo)
 	termSvc := executorSvc.NewTerminalService(pool)
@@ -187,6 +199,7 @@ func Bootstrap() (*Container, error) {
 		CredSvc:      sharedCredSvc,
 		ConnSvc:      connSvc,
 		DNSSvc:       dnsSvcInst,
+		HealthSvc:    healthSvcInst,
 		ExecSvc:      execSvc,
 		TermSvc:      termSvc,
 		Pool:         pool,
@@ -196,6 +209,7 @@ func Bootstrap() (*Container, error) {
 		AuditAPI:     auditAPIInst,
 		ConnectorAPI: connectorAPIInst,
 		DNSAPI:       dnsAPIInst,
+		HealthAPI:    healthAPIInst,
 		ExecutorAPI:  execAPIInst,
 		db:           db,
 	}, nil

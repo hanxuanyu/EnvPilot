@@ -3,6 +3,7 @@ package repository
 import (
 	"EnvPilot/internal/asset/model"
 	"EnvPilot/internal/plugin"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -81,6 +82,15 @@ func (r *AssetRepo) UpdateStatus(id uint, status model.AssetStatus) error {
 	return r.db.Model(&model.Asset{}).
 		Where("id = ?", id).
 		Update("status", status).Error
+}
+
+func (r *AssetRepo) UpdateStatusCheckedAt(id uint, status model.AssetStatus, checkedAt time.Time) error {
+	return r.db.Model(&model.Asset{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":          status,
+			"last_checked_at": checkedAt,
+		}).Error
 }
 
 func (r *AssetRepo) CountByEnvironment(envID uint) (int64, error) {

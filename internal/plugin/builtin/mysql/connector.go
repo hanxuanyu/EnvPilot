@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -163,6 +164,45 @@ func (c *mysqlConnector) Execute(ctx context.Context, database, query string, li
 		Affected:   int64(len(data)),
 		DurationMS: time.Since(startedAt).Milliseconds(),
 	}, nil
+}
+
+func (c *mysqlConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	db, err := c.ensureDB(ctx, "")
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := map[string]any{
+		"database": c.currentDB,
+	}
+	details := make([]string, 0, 3)
+
+	var version, versionComment, hostname string
+	if err := db.QueryRowContext(ctx, "SELECT @@version, @@version_comment, @@hostname").Scan(&version, &versionComment, &hostname); err == nil {
+		metrics["server_version"] = version
+		metrics["version_comment"] = versionComment
+		metrics["server_host"] = hostname
+		details = append(details, "版本 "+version)
+	}
+
+	if databases, err := c.ListDatabases(ctx); err == nil {
+		metrics["database_count"] = len(databases)
+		details = append(details, "数据库 "+strconv.Itoa(len(databases))+" 个")
+	}
+
+	if c.cfg.Database != "" {
+		if tables, err := c.ListTables(ctx, c.cfg.Database); err == nil {
+			metrics["table_count"] = len(tables)
+			details = append(details, "表 "+strconv.Itoa(len(tables))+" 个")
+		}
+	}
+
+	detail := "MySQL 只读探测完成"
+	if len(details) > 0 {
+		detail += "：" + strings.Join(details, "，")
+	}
+
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
 }
 
 func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB, error) {

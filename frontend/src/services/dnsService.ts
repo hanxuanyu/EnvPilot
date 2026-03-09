@@ -9,6 +9,36 @@ import type {
 	UpdateDNSRecordReq,
 } from '@/types/dns'
 
+const EMPTY_DNS_STATUS: DNSRuntimeStatus = {
+	enabled: false,
+	running: false,
+	listen_addr: '',
+	upstream: '',
+	default_ttl: 0,
+}
+
+function normalizeRecordList(value: unknown): DNSRecord[] {
+	return Array.isArray(value) ? value as DNSRecord[] : []
+}
+
+function normalizeLogResult(value: unknown): ListDNSQueryLogsResult {
+	if (!value || typeof value !== 'object') {
+		return { items: [], total: 0 }
+	}
+	const result = value as Partial<ListDNSQueryLogsResult>
+	return {
+		items: Array.isArray(result.items) ? result.items as any[] as DNSRecord[] as never : [],
+		total: typeof result.total === 'number' ? result.total : 0,
+	}
+}
+
+function normalizeStatus(value: unknown): DNSRuntimeStatus {
+	if (!value || typeof value !== 'object') {
+		return EMPTY_DNS_STATUS
+	}
+	return { ...EMPTY_DNS_STATUS, ...(value as Partial<DNSRuntimeStatus>) }
+}
+
 function getDesktopAPI() {
 	const api = (window as any).go?.dnsapi?.DNSAPI
 	if (!api) throw new Error('DNSAPI 未绑定')
@@ -18,10 +48,10 @@ function getDesktopAPI() {
 export const dnsService = {
 	list: async (req: ListDNSRecordsReq = {}) => {
 		if (IS_SERVER_MODE) {
-			return http.get<DNSRecord[]>('/api/dns/records', req as any)
+			return normalizeRecordList(await http.get<DNSRecord[]>('/api/dns/records', req as any))
 		}
 		const result = await getDesktopAPI().ListRecords(req)
-		return unwrapResult(result as any) as DNSRecord[]
+		return normalizeRecordList(unwrapResult(result as any))
 	},
 	getByAssetId: async (assetId: number) => {
 		if (IS_SERVER_MODE) {
@@ -55,16 +85,16 @@ export const dnsService = {
 	},
 	listQueryLogs: async (req: ListDNSQueryLogsReq = {}) => {
 		if (IS_SERVER_MODE) {
-			return http.get<ListDNSQueryLogsResult>('/api/dns/logs', req as any)
+			return normalizeLogResult(await http.get<ListDNSQueryLogsResult>('/api/dns/logs', req as any))
 		}
 		const result = await getDesktopAPI().ListQueryLogs(req)
-		return unwrapResult(result as any) as ListDNSQueryLogsResult
+		return normalizeLogResult(unwrapResult(result as any))
 	},
 	getStatus: async () => {
 		if (IS_SERVER_MODE) {
-			return http.get<DNSRuntimeStatus>('/api/dns/status')
+			return normalizeStatus(await http.get<DNSRuntimeStatus>('/api/dns/status'))
 		}
 		const result = await getDesktopAPI().GetStatus()
-		return unwrapResult(result as any) as DNSRuntimeStatus
+		return normalizeStatus(unwrapResult(result as any))
 	},
 }

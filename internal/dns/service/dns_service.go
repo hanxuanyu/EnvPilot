@@ -262,7 +262,7 @@ func (s *DNSService) GetByAssetID(assetID uint) (*model.DNSRecord, error) {
 
 func (s *DNSService) GetStatus() RuntimeStatus {
 	if s.runtime == nil {
-		return RuntimeStatus{}
+		return RuntimeStatus{Enabled: false, Running: false, ListenAddr: "", Upstream: "", DefaultTTL: 0}
 	}
 	return s.runtime.Status()
 }
@@ -278,6 +278,9 @@ func (s *DNSService) List(req ListDNSRecordRequest) ([]model.DNSRecord, error) {
 	list, err := s.repo.List(repository.DNSFilter(req))
 	if err != nil {
 		return nil, fmt.Errorf("查询 DNS 记录失败: %w", err)
+	}
+	if list == nil {
+		list = []model.DNSRecord{}
 	}
 	for i := range list {
 		s.syncResolvedValue(&list[i])
@@ -434,7 +437,7 @@ func (s *DNSService) recordAudit(input auditSvc.RecordInput) {
 
 func (s *DNSService) ListQueryLogs(req ListQueryLogsRequest) (*ListQueryLogsResult, error) {
 	if s.queryLogRepo == nil {
-		return &ListQueryLogsResult{Items: []model.DNSQueryLog{}}, nil
+		return &ListQueryLogsResult{Items: []model.DNSQueryLog{}, Total: 0}, nil
 	}
 	items, total, err := s.queryLogRepo.List(repository.DNSQueryLogFilter{
 		EnvironmentID: req.EnvironmentID,
@@ -445,6 +448,9 @@ func (s *DNSService) ListQueryLogs(req ListQueryLogsRequest) (*ListQueryLogsResu
 	})
 	if err != nil {
 		return nil, fmt.Errorf("查询 DNS 日志失败: %w", err)
+	}
+	if items == nil {
+		items = []model.DNSQueryLog{}
 	}
 	return &ListQueryLogsResult{Items: items, Total: total}, nil
 }

@@ -88,6 +88,19 @@ func (c *rocketmqConnector) Ping(ctx context.Context) error {
 	return err
 }
 
+func (c *rocketmqConnector) ProbeMetadata(ctx context.Context) (*connector.MetadataProbeResult, error) {
+	if _, err := c.ensureProducer(); err != nil {
+		return nil, err
+	}
+	metrics := map[string]any{
+		"group_id":          c.cfg.GroupID,
+		"name_server_count": len(c.cfg.NameServers),
+		"authenticated":     c.cfg.AccessKey != "" || c.cfg.SecretKey != "",
+	}
+	detail := fmt.Sprintf("RocketMQ Producer 已启动：NameServer %d 个", len(c.cfg.NameServers))
+	return &connector.MetadataProbeResult{Detail: detail, Metrics: metrics}, nil
+}
+
 func (c *rocketmqConnector) Close() error {
 	if c.producer != nil {
 		err := c.producer.Shutdown()

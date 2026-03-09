@@ -14,6 +14,7 @@ import (
 	connectorAPI "EnvPilot/internal/connector/api"
 	dnsAPI "EnvPilot/internal/dns/api"
 	executorAPI "EnvPilot/internal/executor/api"
+	healthAPI "EnvPilot/internal/health/api"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
@@ -29,6 +30,7 @@ type App struct {
 	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
+	HealthAPI    *healthAPI.HealthAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 }
 
@@ -44,6 +46,7 @@ func NewApp() (*App, error) {
 		AuditAPI:     c.AuditAPI,
 		ConnectorAPI: c.ConnectorAPI,
 		DNSAPI:       c.DNSAPI,
+		HealthAPI:    c.HealthAPI,
 		ExecutorAPI:  c.ExecutorAPI,
 	}, nil
 }

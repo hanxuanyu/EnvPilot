@@ -42,6 +42,7 @@ func main() {
 			app.AuditAPI,
 			app.ConnectorAPI,
 			app.DNSAPI,
+			app.HealthAPI,
 			app.ExecutorAPI,
 		},
 		Windows: &windows.Options{
