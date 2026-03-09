@@ -10,18 +10,23 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"EnvPilot/database"
+	"EnvPilot/database/migration"
 	assetAPI "EnvPilot/internal/asset/api"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
 	configModel "EnvPilot/internal/config/model"
 	configService "EnvPilot/internal/config/service"
+	connectorAPI "EnvPilot/internal/connector/api"
+	_ "EnvPilot/internal/connector/impl/mysql"
+	_ "EnvPilot/internal/connector/impl/postgresql"
+	_ "EnvPilot/internal/connector/impl/redis"
+	connectorSvc "EnvPilot/internal/connector/service"
 	executorAPI "EnvPilot/internal/executor/api"
 	executorRepo "EnvPilot/internal/executor/repository"
 	executorSvc "EnvPilot/internal/executor/service"
 	sshPool "EnvPilot/internal/executor/ssh"
 	_ "EnvPilot/internal/plugin/builtin" // 触发所有内置插件的 init() 注册
-	"EnvPilot/database"
-	"EnvPilot/database/migration"
 	"EnvPilot/pkg/crypto"
 	"EnvPilot/pkg/logger"
 
@@ -34,18 +39,20 @@ import (
 // 也包含 Wails 绑定层（供桌面模式 App 使用）。
 type Container struct {
 	// ── 直接服务（无 Wails 依赖，服务端 HTTP 可直接调用）──
-	EnvSvc  *assetSvc.EnvironmentService
-	GrpSvc  *assetSvc.GroupService
+	EnvSvc   *assetSvc.EnvironmentService
+	GrpSvc   *assetSvc.GroupService
 	AssetSvc *assetSvc.AssetService
-	CredSvc *assetSvc.CredentialService
-	ExecSvc *executorSvc.ExecutorService
-	TermSvc *executorSvc.TerminalService
-	Pool    *sshPool.Pool
-	Config  *configService.ConfigService
+	CredSvc  *assetSvc.CredentialService
+	ConnSvc  *connectorSvc.ConnectorService
+	ExecSvc  *executorSvc.ExecutorService
+	TermSvc  *executorSvc.TerminalService
+	Pool     *sshPool.Pool
+	Config   *configService.ConfigService
 
 	// ── Wails 绑定层（桌面模式 App 使用）──
-	AssetAPI    *assetAPI.AssetAPI
-	ExecutorAPI *executorAPI.ExecutorAPI
+	AssetAPI     *assetAPI.AssetAPI
+	ConnectorAPI *connectorAPI.ConnectorAPI
+	ExecutorAPI  *executorAPI.ExecutorAPI
 
 	db *gorm.DB
 }
@@ -132,35 +139,39 @@ func Bootstrap() (*Container, error) {
 
 	// ── 6. 业务模块 ───────────────────────────────────────────────
 	sharedAssetRepo := assetRepo.NewAssetRepo(db)
-	sharedCredRepo  := assetRepo.NewCredentialRepo(db)
-	sharedCredSvc   := assetSvc.NewCredentialService(sharedCredRepo, cipher)
+	sharedCredRepo := assetRepo.NewCredentialRepo(db)
+	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, cipher)
 
-	envRepo  := assetRepo.NewEnvironmentRepo(db)
-	grpRepo  := assetRepo.NewGroupRepo(db)
-	envSvc   := assetSvc.NewEnvironmentService(envRepo)
-	grpSvc   := assetSvc.NewGroupService(grpRepo, envRepo)
-	astSvc   := assetSvc.NewAssetService(sharedAssetRepo, envRepo)
+	envRepo := assetRepo.NewEnvironmentRepo(db)
+	grpRepo := assetRepo.NewGroupRepo(db)
+	envSvc := assetSvc.NewEnvironmentService(envRepo)
+	grpSvc := assetSvc.NewGroupService(grpRepo, envRepo)
+	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo)
+	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc)
 
 	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc)
+	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc)
 
-	pool     := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
+	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
 	execRepo := executorRepo.NewExecutionRepo(db)
-	execSvc  := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo)
-	termSvc  := executorSvc.NewTerminalService(pool)
+	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo)
+	termSvc := executorSvc.NewTerminalService(pool)
 	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, pool)
 
 	return &Container{
-		EnvSvc:      envSvc,
-		GrpSvc:      grpSvc,
-		AssetSvc:    astSvc,
-		CredSvc:     sharedCredSvc,
-		ExecSvc:     execSvc,
-		TermSvc:     termSvc,
-		Pool:        pool,
-		Config:      cfgSvc,
-		AssetAPI:    assetAPIInst,
-		ExecutorAPI: execAPIInst,
-		db:          db,
+		EnvSvc:       envSvc,
+		GrpSvc:       grpSvc,
+		AssetSvc:     astSvc,
+		CredSvc:      sharedCredSvc,
+		ConnSvc:      connSvc,
+		ExecSvc:      execSvc,
+		TermSvc:      termSvc,
+		Pool:         pool,
+		Config:       cfgSvc,
+		AssetAPI:     assetAPIInst,
+		ConnectorAPI: connectorAPIInst,
+		ExecutorAPI:  execAPIInst,
+		db:           db,
 	}, nil
 }
 

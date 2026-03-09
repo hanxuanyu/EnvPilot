@@ -551,6 +551,194 @@ export namespace assetapi {
 
 }
 
+export namespace connector {
+	
+	export class CommandResult {
+	    command: string;
+	    result: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new CommandResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.command = source["command"];
+	        this.result = source["result"];
+	    }
+	}
+	export class QueryColumn {
+	    name: string;
+	    type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueryColumn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	    }
+	}
+	export class QueryResult {
+	    columns: QueryColumn[];
+	    rows: any[];
+	    affected: number;
+	    duration_ms: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueryResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.columns = this.convertValues(source["columns"], QueryColumn);
+	        this.rows = source["rows"];
+	        this.affected = source["affected"];
+	        this.duration_ms = source["duration_ms"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace connectorapi {
+	
+	export class ListTablesReq {
+	    asset_id: number;
+	    database: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListTablesReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.database = source["database"];
+	    }
+	}
+	export class Result__EnvPilot_internal_connector_CommandResult_ {
+	    success: boolean;
+	    data?: connector.CommandResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_connector_CommandResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], connector.CommandResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_connector_QueryResult_ {
+	    success: boolean;
+	    data?: connector.QueryResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_connector_QueryResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], connector.QueryResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result___string_ {
+	    success: boolean;
+	    data?: string[];
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result___string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
+	export class Result_bool_ {
+	    success: boolean;
+	    data?: boolean;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_bool_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
+
+}
+
 export namespace executorapi {
 	
 	export class BatchExecuteReq {
@@ -1233,6 +1421,45 @@ export namespace plugin {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace service {
+	
+	export class ExecuteRedisCommandRequest {
+	    asset_id: number;
+	    command: string;
+	    args: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ExecuteRedisCommandRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.command = source["command"];
+	        this.args = source["args"];
+	    }
+	}
+	export class ExecuteSQLRequest {
+	    asset_id: number;
+	    database: string;
+	    query: string;
+	    limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExecuteSQLRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.database = source["database"];
+	        this.query = source["query"];
+	        this.limit = source["limit"];
+	    }
 	}
 
 }

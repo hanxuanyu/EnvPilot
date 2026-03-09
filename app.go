@@ -10,6 +10,7 @@ import (
 
 	"EnvPilot/internal/app"
 	assetAPI "EnvPilot/internal/asset/api"
+	connectorAPI "EnvPilot/internal/connector/api"
 	executorAPI "EnvPilot/internal/executor/api"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -20,10 +21,11 @@ import (
 
 // App Wails 应用主结构体，对前端暴露 API
 type App struct {
-	ctx         context.Context
-	container   *app.Container
-	AssetAPI    *assetAPI.AssetAPI
-	ExecutorAPI *executorAPI.ExecutorAPI
+	ctx          context.Context
+	container    *app.Container
+	AssetAPI     *assetAPI.AssetAPI
+	ConnectorAPI *connectorAPI.ConnectorAPI
+	ExecutorAPI  *executorAPI.ExecutorAPI
 }
 
 // NewApp 创建应用实例（桌面模式入口）
@@ -33,9 +35,10 @@ func NewApp() (*App, error) {
 		return nil, err
 	}
 	return &App{
-		container:   c,
-		AssetAPI:    c.AssetAPI,
-		ExecutorAPI: c.ExecutorAPI,
+		container:    c,
+		AssetAPI:     c.AssetAPI,
+		ConnectorAPI: c.ConnectorAPI,
+		ExecutorAPI:  c.ExecutorAPI,
 	}, nil
 }
 
@@ -43,6 +46,7 @@ func NewApp() (*App, error) {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.ConnectorAPI.SetContext(ctx)
 	a.ExecutorAPI.SetContext(ctx)
 	logger.Info("应用窗口已就绪")
 }

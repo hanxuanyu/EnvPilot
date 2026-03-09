@@ -20,6 +20,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	bus := NewEventBus()
 
 	assetH := NewAssetHandler(c.EnvSvc, c.GrpSvc, c.AssetSvc, c.CredSvc)
+	connH := NewConnectorHandler(c.ConnSvc)
 	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.Pool, bus)
 
 	mux := http.NewServeMux()
@@ -62,6 +63,13 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("PUT /api/credentials/{id}", assetH.UpdateCredential)
 	mux.HandleFunc("DELETE /api/credentials/{id}", assetH.DeleteCredential)
 	mux.HandleFunc("POST /api/credentials/{id}/reveal", assetH.RevealCredential)
+
+	// ── 中间件连接器 ───────────────────────────────────────────────
+	mux.HandleFunc("POST /api/connectors/test", connH.TestConnection)
+	mux.HandleFunc("GET /api/connectors/{id}/databases", connH.ListDatabases)
+	mux.HandleFunc("GET /api/connectors/{id}/tables", connH.ListTables)
+	mux.HandleFunc("POST /api/connectors/sql", connH.ExecuteSQL)
+	mux.HandleFunc("POST /api/connectors/redis", connH.ExecuteRedisCmd)
 
 	// ── 命令执行 ──────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/executions", execH.ExecuteCommand)

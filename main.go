@@ -23,9 +23,9 @@ func main() {
 
 	// 启动 Wails 桌面应用
 	err = wails.Run(&options.App{
-		Title:  "EnvPilot",
-		Width:  1440,
-		Height: 900,
+		Title:     "EnvPilot",
+		Width:     1440,
+		Height:    900,
 		MinWidth:  1024,
 		MinHeight: 768,
 		AssetServer: &assetserver.Options{
@@ -39,6 +39,7 @@ func main() {
 		Bind: []interface{}{
 			app,
 			app.AssetAPI,
+			app.ConnectorAPI,
 			app.ExecutorAPI,
 		},
 		Windows: &windows.Options{

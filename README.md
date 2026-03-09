@@ -23,7 +23,7 @@ EnvPilot 是一个 DevOps 运维助手，用于统一管理服务器和中间件
 | 层次 | 技术 |
 |------|------|
 | 桌面容器 | Wails v2（Go + WebView2） |
-| 后端语言 | Go 1.23 |
+| 后端语言 | Go 1.25 |
 | HTTP 框架 | Go 标准库 `net/http`（1.22+ 路径参数语法） |
 | 前端框架 | React 18 + TypeScript |
 | 样式系统 | TailwindCSS v4 + shadcn/ui |

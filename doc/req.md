@@ -367,7 +367,7 @@
 
 - 前端：React + TypeScript + shadcn/ui + Tailwind CSS。
 - 桌面容器：Wails v2。
-- 后端服务层：Go 1.23。
+- 后端服务层：Go 1.25。
 
 ### 7.2 数据存储
 

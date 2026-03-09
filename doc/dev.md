@@ -14,7 +14,7 @@
 |------|------|------|
 | 桌面容器 | Wails | v2.11.0 |
 | HTTP 服务 | Go 标准库 net/http | 1.22+ 路径参数语法 |
-| 后端语言 | Go | 1.23 |
+| 后端语言 | Go | 1.25 |
 | 前端框架 | React + TypeScript | 18 / 5 |
 | 样式系统 | TailwindCSS + shadcn/ui | v4 |
 | 状态管理 | Zustand | latest |
