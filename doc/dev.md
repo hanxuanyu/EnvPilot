@@ -14,7 +14,7 @@
 |------|------|------|
 | 桌面容器 | Wails | v2.11.0 |
 | HTTP 服务 | Go 标准库 net/http | 1.22+ 路径参数语法 |
-| 后端语言 | Go | 1.24 |
+| 后端语言 | Go | 1.23 |
 | 前端框架 | React + TypeScript | 18 / 5 |
 | 样式系统 | TailwindCSS + shadcn/ui | v4 |
 | 状态管理 | Zustand | latest |
@@ -117,16 +117,6 @@ export async function listAssets(filter?: AssetFilter) {
   return AssetAPIJs.ListAssets(filter).then(unwrap)
 }
 ```
-
-### 数据库迁移
-
-每个阶段在 `database/migration/migrations/` 下新增迁移文件，并在 `migrator.go` 中注册：
-
-```go
-m.add("004_asset_refactor", migrateAssetRefactor)
-```
-
-迁移文件编号全局递增，不允许修改已执行的迁移。
 
 ### Wails API 绑定（桌面模式）
 

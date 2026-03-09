@@ -4,11 +4,11 @@
 
 | 字段 | 内容 |
 |------|------|
-| 版本 | v1.1 |
-| 日期 | 2026-03-06 |
+| 版本 | v1.2 |
+| 日期 | 2026-03-09 |
 | 状态 | 实现中 |
-| 关联需求 | req.md v0.2 |
-| 变更说明 | v1.1 新增双模式部署架构（桌面 Wails + 服务端 HTTP）、EventEmitter 抽象、服务端 API 设计 |
+| 关联需求 | doc/req.md v0.2 |
+| 变更说明 | v1.2 更新目录结构为当前实现状态（✅/⬜标注）；修正文件路径；v1.1 新增双模式部署架构（桌面 Wails + 服务端 HTTP）、EventEmitter 抽象、服务端 API 设计 |
 
 ---
 
@@ -996,33 +996,49 @@ interface AssetStore {
 
 ---
 
-## 8. 目录结构（目标状态）
+## 8. 目录结构（当前实现状态）
+
+> 标注说明：✅ 已实现 | ⬜ 待实现（骨架/占位）
 
 ```
 EnvPilot/
-├── main.go
-├── app.go
+├── main.go                          ✅ 桌面模式入口（Wails）
+├── app.go                           ✅ Wails 生命周期 + 基础 API
 ├── wails.json
 ├── go.mod
 │
+├── cmd/
+│   └── server/                      ✅ 服务端模式入口
+│       ├── main.go
+│       └── embed.go                 (前端静态资源内嵌)
+│
+├── api/                             ✅ 服务端 HTTP handler 层
+│   ├── router.go                    (路由 + CORS + SPA fallback)
+│   ├── asset_handler.go             (资产管理 REST handler)
+│   ├── executor_handler.go          (命令执行 POST / SSE / WebSocket)
+│   ├── event_bus.go                 (进程内 pub/sub 总线)
+│   └── util.go                      (JSON 响应工具)
+│
 ├── config/
-│   └── config.yaml
+│   └── config.yaml                  ✅
 │
 ├── database/
-│   ├── db.go
+│   ├── db.go                        ✅
 │   └── migration/
-│       ├── migrator.go
+│       ├── migrator.go              ✅
 │       └── migrations/
-│           ├── 001_init.go
-│           ├── 002_asset.go        (旧资产表，已废弃逻辑)
-│           ├── 003_executor.go
-│           └── 004_asset_refactor.go  ← 新增：资产表结构重构迁移
+│           ├── 001_init.go          ✅
+│           ├── 002_asset.go         ✅ (含插件化重构，旧结构已废弃)
+│           └── 003_executor.go      ✅
 │
 ├── internal/
-│   ├── plugin/                     ← 新增：插件注册表
-│   │   ├── definition.go           (PluginDef / ConfigField 数据结构)
-│   │   ├── registry.go             (注册/查询接口)
-│   │   └── builtin/                (内置插件定义，通过 init() 注册)
+│   ├── app/
+│   │   └── container.go             ✅ 共享初始化容器 Bootstrap()
+│   │
+│   ├── plugin/                      ✅ 插件注册表
+│   │   ├── definition.go            (PluginDef / ConfigField 数据结构)
+│   │   ├── registry.go              (Register / Get / List)
+│   │   └── builtin/                 (8 个内置插件，init() 自注册)
 │   │       ├── linux_server.go
 │   │       ├── windows_server.go
 │   │       ├── mysql.go
@@ -1032,79 +1048,81 @@ EnvPilot/
 │   │       ├── rabbitmq.go
 │   │       └── kafka.go
 │   │
-│   ├── asset/                      ← 重构
+│   ├── asset/                       ✅ 资产管理（插件化重构版）
 │   │   ├── model/
 │   │   │   ├── environment.go
 │   │   │   ├── group.go
-│   │   │   ├── asset.go            (新字段：category, plugin_type, ext_config)
+│   │   │   ├── asset.go             (category / plugin_type / ext_config)
 │   │   │   └── credential.go
 │   │   ├── repository/
-│   │   │   ├── asset_repo.go       (支持 AssetFilter 多维过滤)
+│   │   │   ├── asset_repo.go        (支持 AssetFilter 多维过滤)
 │   │   │   ├── environment_repo.go
 │   │   │   ├── group_repo.go
 │   │   │   └── credential_repo.go
 │   │   ├── service/
-│   │   │   ├── asset_service.go    (注入 plugin.Registry)
+│   │   │   ├── asset_service.go     (注入 plugin.Registry)
 │   │   │   ├── environment_service.go
 │   │   │   ├── group_service.go
 │   │   │   └── credential_service.go
-│   │   └── api/
-│   │       ├── asset_api.go        (新增 ListPlugins / GetPluginSchema)
+│   │   └── api/                     (Wails 绑定层，桌面专用)
+│   │       ├── asset_api.go         (含 ListPlugins / GetPluginSchema)
 │   │       └── result.go
 │   │
-│   ├── connector/                  ← 重构（插件化）
-│   │   ├── connector.go            (接口定义)
-│   │   ├── factory.go              (工厂 + 注册表)
-│   │   ├── impl/                   (具体实现)
-│   │   │   ├── mysql/
-│   │   │   ├── postgresql/
-│   │   │   ├── redis/
-│   │   │   ├── rocketmq/
-│   │   │   ├── rabbitmq/
-│   │   │   └── kafka/
+│   ├── executor/                    ✅ SSH 命令执行 + 在线终端
+│   │   ├── api/
+│   │   ├── model/
+│   │   ├── repository/
 │   │   ├── service/
-│   │   │   └── connector_service.go
-│   │   └── api/
-│   │       └── connector_api.go
+│   │   └── ssh/
 │   │
-│   ├── executor/                   ← 已完成，保持不变
-│   ├── dns/
-│   ├── health/
-│   ├── audit/
-│   ├── config/
-│   └── auth/
+│   ├── connector/                   ⬜ 待实现（阶段 4）
+│   ├── dns/                         ⬜ 待实现（阶段 5）
+│   ├── health/                      ⬜ 待实现（阶段 6）
+│   ├── audit/                       ⬜ 待实现（阶段 7）
+│   ├── config/                      ✅ 配置加载
+│   └── auth/                        ⬜ 待实现
 │
 ├── pkg/
-│   ├── crypto/
-│   └── logger/
+│   ├── crypto/                      ✅ AES-256-GCM + PBKDF2
+│   ├── event/                       ✅ Emitter 接口（解耦 Wails/HTTP 事件推送）
+│   └── logger/                      ✅ 全局日志（zap）
 │
 ├── doc/
-│   ├── design.md                   ← 本文档
-│   └── dev.md                      ← 开发步骤文档
-│
-├── req.md                          ← 需求文档 v0.2
+│   ├── design.md                    ← 本文档
+│   ├── dev.md                       ← 开发进度文档
+│   └── req.md                       ← 需求规格文档 v0.2
 │
 └── frontend/
     └── src/
         ├── types/
-        │   └── asset.ts            (新增 PluginDef / ConfigField 类型)
+        │   └── asset.ts             ✅ (PluginDef / ConfigField / Asset)
+        ├── lib/
+        │   ├── apiClient.ts         ✅ HTTP/WebSocket/SSE 封装（服务端模式）
+        │   └── wailsRuntime.ts      ✅ Wails 事件安全封装（桌面模式）
+        ├── hooks/
+        │   └── useWailsReady.ts     ✅
         ├── components/
-        │   ├── asset/              ← 新增
-        │   │   ├── DynamicConfigForm.tsx  (动态表单核心组件)
-        │   │   ├── DynamicField.tsx
-        │   │   ├── AssetFormModal.tsx     (重构：集成动态表单)
-        │   │   └── PluginSelector.tsx     (插件类型选择组件)
+        │   ├── asset/
+        │   │   └── DynamicConfigForm.tsx  ✅ 动态表单核心组件
         │   ├── common/
         │   └── ui/
         ├── pages/
-        │   ├── AssetPage.tsx       (重构：支持动态表单)
-        │   └── ConnectorPage.tsx   (实现：中间件查询/发送)
+        │   ├── AssetPage.tsx        ✅ 资产管理（动态表单）
+        │   ├── EnvironmentPage.tsx  ✅
+        │   ├── ExecutorPage.tsx     ✅
+        │   ├── TerminalPage.tsx     ✅ (双模式：Wails IPC / WebSocket)
+        │   ├── ConnectorPage.tsx    ⬜ 占位页（阶段 4 实现）
+        │   ├── DnsPage.tsx          ⬜ 占位页（阶段 5 实现）
+        │   ├── HealthPage.tsx       ⬜ 占位页（阶段 6 实现）
+        │   ├── AuditPage.tsx        ⬜ 占位页（阶段 7 实现）
+        │   └── ConfigPage.tsx       ⬜ 占位页（阶段 8 实现）
         ├── services/
-        │   ├── assetService.ts     (新增 listPlugins / getPluginSchema)
-        │   └── connectorService.ts (新增)
+        │   ├── assetService.ts      ✅ (含 listPlugins / getPluginSchema)
+        │   ├── executorService.ts   ✅
+        │   └── backendService.ts    ✅
         └── store/
-            ├── assetStore.ts       (新增 plugins 状态)
-            └── connectorStore.ts   (新增)
+            ├── assetStore.ts        ✅
+            └── executorStore.ts     ✅
 ```
 
 ---
