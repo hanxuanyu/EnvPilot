@@ -36,3 +36,4 @@ pnpm-debug.log*
 #   2. 团队成员可以直接看到后端 API 的类型签名
 # 注意：每次 wails dev 运行后，这些文件可能被更新，需重新提交
 # wailsjs/
+package.json.md5
