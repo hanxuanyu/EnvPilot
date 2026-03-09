@@ -39,9 +39,9 @@ EnvPilot 是一个 DevOps 运维助手，用于统一管理服务器和中间件
 - **资产管理**：环境 / 分组 / 资产 / 凭据 CRUD，插件化资产类型（8 种内置）
 - **命令执行**：SSH 单机执行、批量并发执行，实时输出流式推送
 - **在线终端**：SSH PTY 全功能终端，基于 xterm.js
-- **中间件连接**：MySQL / PostgreSQL / Redis / RocketMQ / RabbitMQ / Kafka，支持分类化操作面板
+- **中间件连接**：MySQL / PostgreSQL / Redis / RocketMQ / RabbitMQ / Kafka，已支持连接测试、库表浏览、只读 SQL、Redis 命令和 MQ 消息发送
 - **健康检查**：定时 Ping / TCP / 资源监控（待实现）
-- **操作审计**：已支持资产、凭据、连接器操作日志记录与查询
+- **操作审计**：已支持资产、凭据、连接器操作日志记录与统一查询，审计页面已可用
 
 ---
 
@@ -112,6 +112,9 @@ make build-all
 | [`doc/req.md`](doc/req.md) | 需求规格说明书（v0.2） |
 | [`doc/design.md`](doc/design.md) | 系统技术设计文档（架构、数据模型、API、开发规范） |
 | [`doc/dev.md`](doc/dev.md) | 开发进度与阶段任务文档 |
+| [`doc/modules.md`](doc/modules.md) | 模块文档导航页 |
+| [`doc/modules-foundation.md`](doc/modules-foundation.md) | 基础设施模块说明 |
+| [`doc/modules-business.md`](doc/modules-business.md) | 业务模块说明 |
 
 ---
 
@@ -168,6 +171,12 @@ EnvPilot 目前将服务器与中间件都建模为插件。每个内置插件�
 - 连接器连接测试
 - SQL 执行、Redis 命令执行、MQ 消息发送
 
+当前仍在补充的增强项包括：
+
+- 更细粒度筛选条件
+- 审计日志导出
+- executor 等剩余链路的进一步覆盖
+
 审计日志支持桌面模式和服务端模式统一查询，前端页面位于 `操作审计`。
 
 ---
@@ -211,6 +220,8 @@ EnvPilot/
 │   │   ├── repository/      # 执行记录持久化
 │   │   ├── service/         # 执行服务（依赖 event.Emitter 接口）
 │   │   └── ssh/             # SSH 连接池 + 危险命令检测
+│   ├── connector/           # 中间件连接器抽象、工厂、服务与双模式 API
+│   ├── audit/               # 审计模型、Repository、Service 与查询 API
 │   └── config/              # 系统配置
 │
 ├── pkg/                     # 公共工具包

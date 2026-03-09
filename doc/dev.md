@@ -39,7 +39,7 @@ internal/
 ├── connector/   中间件连接器抽象、工厂与服务编排
 ├── dns/         内置 DNS 服务（待实现）
 ├── health/      健康检查（待实现）
-├── audit/       操作审计（待实现）
+├── audit/       操作审计（日志写入、查询与页面已落地）
 ├── config/      系统配置
 └── auth/        本地认证（待实现）
 
@@ -94,7 +94,18 @@ type ErrPluginNotFound struct{ TypeID string }
 各 service 构造函数接受 `*audit.AuditService`，在关键操作后调用：
 
 ```go
-s.audit.Record(ctx, audit.ActionSSHCmd, audit.ResourceAsset, asset.ID, asset.Name, detail, result)
+s.audit.RecordBestEffort(audit.RecordInput{
+  Module:       "connector",
+  Action:       "execute_sql",
+  ResourceType: "asset",
+  ResourceID:   &asset.ID,
+  ResourceName: asset.Name,
+  PluginType:   asset.PluginType,
+  Success:      true,
+  Detail:       "执行只读 SQL 成功",
+  Request:      req,
+  Result:       result,
+})
 ```
 
 ### 前端 API 调用
@@ -165,10 +176,10 @@ m.add("004_dns", migrateDNS)
 | 阶段 3 | 服务器执行系统 | ✅ 完成 | SSH 命令执行 + 在线终端 |
 | **阶段 2R** | **资产管理重构** | ✅ 完成 | 插件化架构 + 新数据模型 |
 | **阶段 D** | **双模式部署支持** | ✅ 完成 | 桌面（Wails）+ 服务端（HTTP）双模式 |
-| 阶段 4 | 中间件连接器 | 🟡 进行中 | 核心连接器、MQ 接入与前端分栏页面已落地 |
+| 阶段 4 | 中间件连接器 | ✅ 完成 | 数据库 / 缓存 / MQ 连接器、双模式 API 与前端面板已打通 |
 | 阶段 5 | DNS 服务 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 6 | 健康检查 | ⬜ 待开始 | 依赖阶段 2R 完成 |
-| 阶段 7 | 审计系统 | ⬜ 待开始 | 依赖阶段 2R 完成 |
+| 阶段 7 | 审计系统 | 🟡 进行中 | 审计写入、查询与页面已完成，导出等增强能力待补 |
 | 阶段 8 | 配置系统 | ⬜ 待开始 | 独立模块 |
 
 ---
@@ -285,12 +296,8 @@ Asset: id, env_id, group_id, type(server|mysql|redis|rocketmq|rabbitmq), name, h
 - [x] Task 2R.2 — 实现 8 个内置插件定义（`internal/plugin/builtin/`）
   - `linux_server.go`：Host、Port(22)、OsType、JumpHost
   - `windows_server.go`：Host、Port(3389)、Protocol
-  - `mysql.go`：Host、Port(3306)、Database、ExtraParams、SSLMode
-  - `postgresql.go`：Host、Port(5432)、Database、SSLMode、Schema
-  - `redis.go`：Host、Port(6379)、DB、TLS、SentinelAddrs、MasterName
-  - `rocketmq.go`：NameServer、Broker、GroupID
-  - `rabbitmq.go`：Host、Port(5672)、VHost、TLS
-  - `kafka.go`：Brokers、SecurityProtocol、SASLMechanism
+  - 中间件插件统一按目录组织：`internal/plugin/builtin/<type>/definition.go`
+  - 已覆盖 mysql、postgresql、redis、rocketmq、rabbitmq、kafka 等配置 schema
 
 - [x] Task 2R.3 — 数据库迁移（在 `002_asset.go` 中 DROP TABLE 后重建，迁移系统确保只执行一次）
 
@@ -322,7 +329,7 @@ Asset: id, env_id, group_id, type(server|mysql|redis|rocketmq|rabbitmq), name, h
 |------|------|
 | `internal/plugin/definition.go` | PluginDef、ConfigField 结构 |
 | `internal/plugin/registry.go` | Register / Get / List |
-| `internal/plugin/builtin/` | 8 个内置插件定义（`init()` 自注册） |
+| `internal/plugin/builtin/` | 8 个内置插件定义与内置中间件实现聚合入口 |
 | `internal/asset/model/asset.go` | 新版 Asset 模型（ExtConfig JSON 字段） |
 | `internal/asset/service/asset_service.go` | 业务逻辑（含插件校验） |
 | `frontend/src/components/asset/DynamicConfigForm.tsx` | 动态表单渲染 |
@@ -424,7 +431,7 @@ internal/asset/      internal/executor/
 
 ---
 
-## 阶段 4：中间件连接器 🟡
+## 阶段 4：中间件连接器 ✅
 
 **目标**：统一的插件化中间件连接接口，支持数据库查询、缓存操作、MQ 消息发送
 
@@ -441,70 +448,69 @@ CacheConnector     // Command(cmd, args)
 MQConnector        // SendMessage(msg)
 ```
 
-### 任务拆解
-
-### 当前进度
+### 完成情况
 
 - 已完成连接器抽象、工厂注册和 SQL 扫描辅助
 - 已接入 MySQL、PostgreSQL、Redis、RabbitMQ、Kafka、RocketMQ
+- 已实现连接测试、数据库列表、数据表列表、只读 SQL、Redis 命令和 MQ 消息发送能力
 - 已打通 Wails API 与 HTTP API 的统一连接器调用链路
 - 已将前端页面拆分为数据库、缓存、消息队列三类标签，并为不同中间件提供独立面板
 - 已引入插件元信息扩展：`credential_types`、`capabilities`、`integration_guide`
 - 已扩展凭据类型：password、ssh_key、token、access_key_secret、sasl
-- 连接器行为已接入审计记录，连接器扩展流程已沉淀在 `internal/connector/README.md`
+- 连接器行为已接入审计记录，连接器扩展流程已收敛到 `doc/modules-business.md`
 - 内置中间件目录已集中到 `internal/plugin/builtin/<type>/`，并拆分为 `definition.go` 与 `connector.go`
 
-- [ ] Task 4.1 — 定义连接器接口（`internal/connector/connector.go`）
+- [x] Task 4.1 — 定义连接器接口（`internal/connector/connector.go`）
   - 通用 Connector 接口（Connect/Ping/Close/TypeID）
   - DatabaseConnector 接口（Execute/ListDatabases/ListTables）
   - CacheConnector 接口（Command）
   - MQConnector 接口（SendMessage）
   - 公共数据结构（QueryResult、QueryColumn、Message、SendResult）
 
-- [ ] Task 4.2 — 连接器工厂注册表（`internal/connector/factory.go`）
+- [x] Task 4.2 — 连接器工厂注册表（`internal/connector/factory.go`）
   - RegisterFactory / NewConnector 实现
 
-- [ ] Task 4.3 — MySQL 连接器实现（`internal/plugin/builtin/mysql/connector.go`）
+- [x] Task 4.3 — MySQL 连接器实现（`internal/plugin/builtin/mysql/connector.go`）
   - 从 ExtConfig 解析连接参数
   - 从 Credential 解析用户名+密码
   - 实现 DatabaseConnector 接口（支持只读限制）
 
-- [ ] Task 4.4 — PostgreSQL 连接器实现
+- [x] Task 4.4 — PostgreSQL 连接器实现
 
-- [ ] Task 4.5 — Redis 连接器实现（`internal/plugin/builtin/redis/connector.go`）
+- [x] Task 4.5 — Redis 连接器实现（`internal/plugin/builtin/redis/connector.go`）
   - 支持单机模式和 Sentinel 模式
   - 命令白名单控制
 
-- [ ] Task 4.6 — RocketMQ 连接器实现
+- [x] Task 4.6 — RocketMQ 连接器实现
 
-- [ ] Task 4.7 — RabbitMQ 连接器实现
+- [x] Task 4.7 — RabbitMQ 连接器实现
 
-- [ ] Task 4.8 — Kafka 连接器实现
+- [x] Task 4.8 — Kafka 连接器实现
 
-- [ ] Task 4.9 — ConnectorService 实现（`internal/connector/service/`）
+- [x] Task 4.9 — ConnectorService 实现（`internal/connector/service/`）
   - TestConnection（通用连接测试）
   - ExecuteSQL（注入 AuditService 记录操作）
   - ExecuteRedisCmd
   - SendMQMessage
 
-- [ ] Task 4.10 — ConnectorAPI（Wails 绑定）
+- [x] Task 4.10 — ConnectorAPI（Wails 绑定）
   - TestConnection / ExecuteSQL / ListDatabases / ListTables
   - ExecuteRedisCmd
   - SendMQMessage
   - 在 `app.go` 中注册并生成绑定
 
-- [ ] Task 4.11 — 前端 ConnectorPage 实现
+- [x] Task 4.11 — 前端 ConnectorPage 实现
   - 数据库查询标签页（SQL 输入框 + 结果表格 + 库表浏览器）
   - 缓存操作标签页（命令输入 + 结构化结果展示）
   - MQ 消息发送标签页（消息模板 + 发送历史）
 
 ### 验收标准
 
-- [ ] 可通过 UI 对 MySQL 执行只读 SQL 并查看结果
-- [ ] 可通过 UI 对 Redis 执行 GET/HGETALL/SCAN 等命令
-- [ ] 可向 RocketMQ/RabbitMQ/Kafka 发送消息并获得回执
-- [ ] 连接测试功能可正常使用
-- [ ] 新增数据库插件（如 MongoDB）只需实现 DatabaseConnector 并注册工厂
+- [x] 可通过 UI 对 MySQL 执行只读 SQL 并查看结果
+- [x] 可通过 UI 对 Redis 执行 GET/HGETALL/SCAN 等命令
+- [x] 可向 RocketMQ/RabbitMQ/Kafka 发送消息并获得回执
+- [x] 连接测试功能可正常使用
+- [x] 新增数据库插件（如 MongoDB）只需实现 DatabaseConnector 并注册工厂
 
 ---
 
@@ -514,6 +520,8 @@ MQConnector        // SendMessage(msg)
 
 **前置条件**：阶段 2R 完成
 
+**当前状态**：尚未开始，相关数据模型和运行链路均未实现
+
 **估时**：3-4 天
 
 ### 数据模型
@@ -522,7 +530,13 @@ MQConnector        // SendMessage(msg)
 DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, ttl, enabled
 ```
 
-### 任务拆解
+### 已完成前置
+
+- 资产模型已具备 `environment_id`、`asset_id`、`plugin_type` 与 `ext_config`
+- 双模式 API 与前端页面骨架已就绪，可直接承接 DNS 模块接入
+- 共享容器初始化已经稳定，后续可在 `internal/app/container.go` 中注册 DNS 服务
+
+### 核心任务
 
 - [ ] Task 5.1 — DNSRecord 模型与数据库迁移（`005_dns`）
 - [ ] Task 5.2 — DNS 记录 Repository/Service/API
@@ -537,6 +551,14 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 
 资产 ext_config.host → DNS A 记录 value（通过 asset_id 关联自动取 host）
 
+### 验收标准
+
+- [ ] 可为指定环境创建和管理 A/CNAME 记录
+- [ ] 查询请求可按环境隔离解析，不串环境
+- [ ] 未命中记录时可安全转发到上游 DNS
+- [ ] DNS 查询日志可回溯具体域名与结果
+- [ ] 前端页面可完成记录维护与查询日志查看
+
 ---
 
 ## 阶段 6：健康检查 ⬜
@@ -544,6 +566,8 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 **目标**：定时资产健康监控，采集并存储各类健康指标
 
 **前置条件**：阶段 2R 完成
+
+**当前状态**：尚未开始，但已具备复用 connector Ping 和 executor SSH 的前置能力
 
 **估时**：3-4 天
 
@@ -558,7 +582,13 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 | 缓存连接 | Connector.Ping | cache 类 |
 | MQ 连接 | Connector.Ping | mq 类 |
 
-### 任务拆解
+### 已完成前置
+
+- connector 模块已支持 database / cache / mq 资产统一 Ping
+- executor 模块已具备服务器类资产的 SSH 连接与命令执行能力
+- 资产插件体系已可按 category / plugin_type 区分检查策略
+
+### 核心任务
 
 - [ ] Task 6.1 — HealthSnapshot 模型与迁移（`006_health`）
 - [ ] Task 6.2 — 各指标检查器实现
@@ -571,41 +601,72 @@ DNSRecord: id, environment_id, asset_id, domain, record_type(A|CNAME), value, tt
 - [ ] Task 6.5 — HealthAPI（Wails 绑定）
 - [ ] Task 6.6 — 健康看板 UI（状态总览 + 异常高亮 + 历史趋势）
 
+### 验收标准
+
+- [ ] 支持按资产类别执行对应健康检查
+- [ ] 可配置调度周期并限定检查范围
+- [ ] 健康状态可聚合为 healthy / warning / critical / unreachable
+- [ ] 前端看板可展示当前状态与历史趋势
+- [ ] 中间件类资产优先复用 connector 能力而非重复实现
+
 ---
 
-## 阶段 7：审计系统 ⬜
+## 阶段 7：审计系统 🟡
 
 **目标**：全量操作审计日志，支持多维度查询
 
 **前置条件**：阶段 2R 完成（其他模块注入审计服务）
 
-**估时**：2-3 天
+**当前状态**：核心能力已完成，导出与更细粒度筛选仍可继续增强
+
+**估时**：剩余增强项约 1-2 天
 
 ### 数据模型
 
 ```
-AuditLog: id, operator, action_type, resource_type, resource_id, resource_name, detail(JSON), result, created_at
+AuditLog: id, module, action, resource_type, resource_id, resource_name, plugin_type, operator, success, detail, request_data, result_data, created_at
 ```
 
-### 操作类型
+### 当前已接入操作
 
-| ActionType | 触发模块 |
+| Action | 触发模块 |
 |-----------|---------|
-| `ssh_cmd` | executor |
-| `sql` | connector（database 类） |
-| `redis` | connector（cache 类） |
-| `mq` | connector（mq 类） |
-| `config_change` | config |
-| `credential_view` | asset（明文查看凭据） |
-| `asset_crud` | asset（创建/更新/删除资产） |
+| `create_asset` / `update_asset` / `delete_asset` | asset |
+| `create_credential` / `update_credential` / `delete_credential` / `reveal_credential` | asset |
+| `test_connection` | connector |
+| `execute_sql` | connector（database 类） |
+| `execute_redis_command` | connector（cache 类） |
+| `send_mq_message` | connector（mq 类） |
 
-### 任务拆解
+### 已完成前置
 
-- [ ] Task 7.1 — AuditLog 模型与迁移（`007_audit`）
-- [ ] Task 7.2 — AuditService 实现（写入接口，设计为异步写入避免阻塞）
-- [ ] Task 7.3 — 各模块注入 AuditService（executor/connector/asset）
-- [ ] Task 7.4 — AuditAPI（分页查询 + 多维度筛选）
-- [ ] Task 7.5 — 审计日志页面 UI（时间线展示 + 筛选 + 导出）
+- asset / credential / connector 服务层已普遍采用 `AuditService`
+- Wails 与 HTTP 双模式查询入口均已打通
+- 前端已有独立审计页面，可承接后续增强能力
+
+### 当前进度
+
+- 已完成 AuditLog 模型、迁移与 Repository 查询能力
+- 已完成 AuditService 写入与 BestEffort 记录封装
+- 已在 asset、credential、connector 等关键链路接入审计写入
+- 已同时提供 Wails AuditAPI 与 HTTP AuditHandler 查询接口
+- 已落地 AuditPage，支持按模块、状态、关键字查看审计日志
+
+### 核心任务
+
+- [x] Task 7.1 — AuditLog 模型与迁移（当前迁移为 `004_audit`）
+- [x] Task 7.2 — AuditService 实现（同步写入 + BestEffort 封装）
+- [x] Task 7.3 — 各模块注入 AuditService（asset / credential / connector，executor 可继续扩展）
+- [x] Task 7.4 — AuditAPI（分页查询 + 基础筛选）
+- [ ] Task 7.5 — 审计日志页面 UI（当前已完成列表与筛选，导出与更多筛选项待补）
+
+### 验收标准
+
+- [x] 资产与凭据关键变更可查询
+- [x] 连接器测试、SQL、Redis、MQ 操作可查询
+- [x] 桌面模式与服务端模式都能查询审计日志
+- [ ] 支持更细粒度筛选与导出
+- [ ] executor 等剩余链路补齐后实现更完整覆盖
 
 ---
 
@@ -615,6 +676,8 @@ AuditLog: id, operator, action_type, resource_type, resource_id, resource_name, 
 
 **前置条件**：无（独立模块，可与其他阶段并行）
 
+**当前状态**：仅有基础配置加载能力，尚未进入可视化管理与版本化阶段
+
 **估时**：2-3 天
 
 ### 数据模型
@@ -623,7 +686,13 @@ AuditLog: id, operator, action_type, resource_type, resource_id, resource_name, 
 ConfigSnapshot: id, version, content(YAML全文), comment, created_by, created_at
 ```
 
-### 任务拆解
+### 已完成前置
+
+- `internal/config/` 已具备 YAML 配置读取、默认值和校验基础
+- 前端已有 ConfigPage 页面入口，可直接承接后续配置管理 UI
+- 审计模块已具备记录配置变更的基础设施
+
+### 核心任务
 
 - [ ] Task 8.1 — ConfigSnapshot 模型与迁移（`008_config`）
 - [ ] Task 8.2 — 配置读取 + 校验（扩展已有 config_service，补充字段验证）
@@ -634,6 +703,14 @@ ConfigSnapshot: id, version, content(YAML全文), comment, created_by, created_a
   - 表单化编辑（字段分组展示）
   - 敏感字段脱敏
   - 版本历史侧边栏 + diff 对比
+
+### 验收标准
+
+- [ ] 配置修改可持久化并生成快照版本
+- [ ] 可查看版本历史和配置差异
+- [ ] 支持从历史版本回滚
+- [ ] 敏感字段在 UI 中默认脱敏
+- [ ] 关键配置变更能接入审计日志
 
 ---
 

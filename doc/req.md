@@ -71,10 +71,10 @@
 | 资产类别（AssetCategory） | 高层次分类：服务器、数据库、缓存、消息队列、其他 |
 | 插件类型（PluginType） | 具体技术实现标识：`linux_server`、`mysql`、`redis`、`rocketmq` 等 |
 | 扩展配置（ExtConfig） | JSON 格式存储的资产类型专属配置字段 |
-| 凭据（Credential） | 认证信息（用户名+密码 / SSH 密钥 / Token），加密存储，可跨资产复用 |
+| 凭据（Credential） | 认证信息（用户名+密码 / SSH 密钥 / Token / AccessKey-Secret / SASL），加密存储，可跨资产复用 |
 | 插件（Plugin） | 中间件类型的配置 Schema 与连接器实现的组合单元 |
 | 服务域名（Service Domain） | 为资产或服务绑定的 DNS 名称 |
-| 操作记录（Operation Log） | 命令、查询、消息发送等行为审计记录 |
+| 审计日志（Audit Log） | 命令、查询、消息发送、资产与凭据变更等行为审计记录 |
 
 ---
 
@@ -224,7 +224,7 @@
 #### 5.2.4 凭据管理
 
 - 凭据与资产解耦，支持一个凭据被多个资产引用。
-- 支持凭据类型：`password`（用户名+密码）、`ssh_key`（SSH 私钥）、`token`（API Token/连接密码）。
+- 支持凭据类型：`password`（用户名+密码）、`ssh_key`（SSH 私钥）、`token`（API Token/连接密码）、`access_key_secret`（AccessKey + SecretKey）、`sasl`（SASL 用户名 + 密钥）。
 - 所有凭据加密存储（AES-256-GCM），页面默认脱敏展示，管理员可按需临时明文查看（需二次确认）。
 
 ### 5.3 服务器管理
@@ -382,7 +382,7 @@
 |------|------|
 | `asset` | 环境/分组/资产/凭据管理（含插件注册表） |
 | `executor` | 命令与脚本执行 |
-| `terminal` | 在线终端会话管理 |
+| `terminal` | 在线终端能力域，当前主要由 `executor` 模块承载 |
 | `connector` | 中间件连接抽象（插件化） |
 | `dns` | DNS 解析与缓存 |
 | `health` | 资产健康检查与状态聚合 |
@@ -443,11 +443,12 @@ id, environment_id, asset_id, domain, record_type, target, ttl, enabled
 ### 8.6 AuditLog
 
 ```
-id, operator
-action_type   -- ssh_cmd | sql | redis | mq | config_change | credential_view
+id, module, action
 resource_type, resource_id, resource_name
-detail        -- JSON，操作内容
-result        -- success | failure
+plugin_type, operator, success
+detail        -- 文本摘要
+request_data  -- JSON，请求摘要
+result_data   -- JSON，结果摘要
 created_at
 ```
 
@@ -493,12 +494,11 @@ operator, started_at, finished_at, created_at
    - **动态表单**：根据 plugin_type 加载对应 ConfigSchema 渲染不同的配置字段
    - 凭据管理
 4. 快速操作页（命令执行 + 在线终端 + 历史记录）。
-5. 数据查询页（数据库/缓存查询）。
-6. MQ 发送页。
-7. DNS 管理页（域名映射 + 查询日志）。
-8. 运行状态页（健康看板）。
-9. 系统配置页。
-10. 审计页。
+5. 中间件操作页（统一承载数据库查询、缓存命令和 MQ 消息发送）。
+6. DNS 管理页（域名映射 + 查询日志）。
+7. 运行状态页（健康看板）。
+8. 系统配置页。
+9. 审计页。
 
 ---
 

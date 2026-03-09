@@ -209,19 +209,25 @@ CREATE TABLE executions (
 ```sql
 CREATE TABLE audit_logs (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    operator      TEXT    NOT NULL DEFAULT 'admin',
-    action_type   TEXT    NOT NULL,  -- ssh_cmd | sql | redis | mq | config_change | credential_view
+    module        TEXT    NOT NULL,
+    action        TEXT    NOT NULL,
     resource_type TEXT,
     resource_id   INTEGER,
     resource_name TEXT,
-    detail        TEXT    NOT NULL DEFAULT '{}',  -- JSON
-    result        TEXT    NOT NULL DEFAULT 'success',
+    plugin_type   TEXT,
+    operator      TEXT,
+    success       INTEGER NOT NULL DEFAULT 1,
+    detail        TEXT,
+    request_data  TEXT,
+    result_data   TEXT,
     created_at    DATETIME NOT NULL
 );
 
-CREATE INDEX idx_audit_operator ON audit_logs(operator);
-CREATE INDEX idx_audit_action   ON audit_logs(action_type);
-CREATE INDEX idx_audit_created  ON audit_logs(created_at);
+CREATE INDEX idx_audit_module    ON audit_logs(module);
+CREATE INDEX idx_audit_action    ON audit_logs(action);
+CREATE INDEX idx_audit_plugin    ON audit_logs(plugin_type);
+CREATE INDEX idx_audit_success   ON audit_logs(success);
+CREATE INDEX idx_audit_created   ON audit_logs(created_at);
 ```
 
 #### dns_records 表
@@ -383,12 +389,15 @@ const (
 
 // PluginDef 插件定义
 type PluginDef struct {
-    TypeID      string        `json:"type_id"`       // 唯一标识，如 "mysql"
-    DisplayName string        `json:"display_name"`  // 显示名称，如 "MySQL"
-    Category    AssetCategory `json:"category"`      // 所属类别
-    IconName    string        `json:"icon_name"`     // 前端图标名称
-    ConfigSchema []ConfigField `json:"config_schema"` // 配置字段 Schema
-    // 可选：连接器工厂函数（后续 connector 模块实现时注入）
+    TypeID             string           `json:"type_id"`
+    DisplayName        string           `json:"display_name"`
+    Category           AssetCategory    `json:"category"`
+    IconName           string           `json:"icon_name"`
+    ConfigSchema       []ConfigField    `json:"config_schema"`
+    CredentialRequired bool             `json:"credential_required,omitempty"`
+    CredentialTypes    []CredentialKind `json:"credential_types,omitempty"`
+    Capabilities       []Capability     `json:"capabilities,omitempty"`
+    IntegrationGuide   []string         `json:"integration_guide,omitempty"`
 }
 ```
 
@@ -437,6 +446,12 @@ func List(category AssetCategory) []*PluginDef {
 
 #### 4.1.3 内置插件定义
 
+当前内置插件采用“按插件目录集中、按职责分文件”的组织方式：
+
+- `internal/plugin/builtin/<type>/definition.go`：插件元数据注册
+- `internal/plugin/builtin/<type>/connector.go`：连接器工厂注册与实现
+- `internal/plugin/builtin/imports.go`：统一聚合导入内置中间件插件
+
 ```go
 // internal/plugin/builtin/linux_server.go
 package builtin
@@ -459,25 +474,28 @@ func init() {
     })
 }
 
-// internal/plugin/builtin/mysql.go
+// internal/plugin/builtin/mysql/definition.go
 func init() {
     plugin.Register(&plugin.PluginDef{
-        TypeID:      "mysql",
-        DisplayName: "MySQL",
-        Category:    plugin.CategoryDatabase,
-        IconName:    "database",
+        TypeID:             "mysql",
+        DisplayName:        "MySQL",
+        Category:           plugin.CategoryDatabase,
+        IconName:           "database",
+        CredentialRequired: true,
+        CredentialTypes:    []plugin.CredentialKind{plugin.CredentialKindPassword},
+        Capabilities: []plugin.Capability{
+            plugin.CapabilityTestConnection,
+            plugin.CapabilityListDatabases,
+            plugin.CapabilityListTables,
+            plugin.CapabilityExecuteSQL,
+        },
         ConfigSchema: []plugin.ConfigField{
-            {Key: "host",         Label: "主机地址",      Type: plugin.FieldTypeText,   Required: true},
-            {Key: "port",         Label: "端口",          Type: plugin.FieldTypeNumber, Required: true, DefaultVal: 3306},
-            {Key: "database",     Label: "数据库名",      Type: plugin.FieldTypeText,   Required: false},
-            {Key: "extra_params", Label: "额外连接参数",  Type: plugin.FieldTypeText,   Required: false, Placeholder: "charset=utf8mb4"},
-            {Key: "ssl_mode",     Label: "SSL 模式",      Type: plugin.FieldTypeSelect, Required: false, DefaultVal: "disable",
-                Options: []plugin.SelectOption{{Value: "disable", Label: "禁用"}, {Value: "require", Label: "要求"}}},
+            {Key: "host", Label: "主机地址", Type: plugin.FieldTypeText, Required: true},
+            {Key: "port", Label: "端口", Type: plugin.FieldTypeNumber, Required: true, DefaultVal: 3306},
+            {Key: "database", Label: "数据库名", Type: plugin.FieldTypeText, Required: false},
         },
     })
 }
-
-// 其他插件类似定义（redis、postgresql、rocketmq、rabbitmq、kafka）...
 ```
 
 #### 4.1.4 内置插件引入
@@ -634,7 +652,24 @@ func (a *AssetAPI) GetPluginSchema(pluginType string) Result[PluginDefDTO]
 
 package connector
 
-import "context"
+import (
+    "context"
+    assetModel "EnvPilot/internal/asset/model"
+)
+
+type Credential struct {
+    Type     assetModel.CredentialType
+    Username string
+    Secret   string
+}
+
+type Target struct {
+    AssetID    uint
+    AssetName  string
+    PluginType string
+    ExtConfig  assetModel.ExtConfig
+    Credential *Credential
+}
 
 // Connector 通用连接器接口
 type Connector interface {
@@ -647,7 +682,7 @@ type Connector interface {
 // DatabaseConnector 数据库连接器（继承通用接口）
 type DatabaseConnector interface {
     Connector
-    Execute(ctx context.Context, sql string) (*QueryResult, error)
+    Execute(ctx context.Context, database, query string, limit int) (*QueryResult, error)
     ListDatabases(ctx context.Context) ([]string, error)
     ListTables(ctx context.Context, database string) ([]string, error)
 }
@@ -655,13 +690,25 @@ type DatabaseConnector interface {
 // CacheConnector 缓存连接器
 type CacheConnector interface {
     Connector
-    Command(ctx context.Context, cmd string, args ...string) (interface{}, error)
+    Command(ctx context.Context, command string, args ...string) (*CommandResult, error)
 }
 
 // MQConnector 消息队列连接器
 type MQConnector interface {
     Connector
     SendMessage(ctx context.Context, msg Message) (*SendResult, error)
+}
+
+type QueryResult struct {
+    Columns    []QueryColumn
+    Rows       []map[string]any
+    Affected   int64
+    DurationMS int64
+}
+
+type CommandResult struct {
+    Command string
+    Result  any
 }
 ```
 
@@ -670,34 +717,32 @@ type MQConnector interface {
 ```go
 // internal/connector/factory.go
 
-type ConnectorFactory func(extConfig map[string]interface{}, credential *asset.Credential) (Connector, error)
+type Factory func(target *Target) (Connector, error)
 
-var factories = map[string]ConnectorFactory{}
+var factories = map[string]Factory{}
 
-func RegisterFactory(typeID string, factory ConnectorFactory) {
-    factories[typeID] = factory
+func RegisterFactory(pluginType string, factory Factory) {
+    // 实际实现中包含空值校验、重复注册保护和并发锁
 }
 
-func NewConnector(typeID string, extConfig map[string]interface{}, cred *asset.Credential) (Connector, error) {
-    factory, ok := factories[typeID]
-    if !ok {
-        return nil, fmt.Errorf("未找到插件类型 %s 的连接器工厂", typeID)
-    }
-    return factory(extConfig, cred)
+func NewConnector(target *Target) (Connector, error) {
+    // 按 target.PluginType 选择工厂，并返回对应连接器实例
 }
 ```
 
 #### 4.3.3 MySQL 连接器实现示例
 
 ```go
-// internal/connector/impl/mysql/connector.go
+// internal/plugin/builtin/mysql/connector.go
 
-type MySQLConnector struct {
-    db     *sql.DB
-    config MySQLConfig
+type mysqlConnector struct {
+    target    *connector.Target
+    cfg       mysqlConfig
+    db        *sql.DB
+    currentDB string
 }
 
-type MySQLConfig struct {
+type mysqlConfig struct {
     Host        string
     Port        int
     Database    string
@@ -708,19 +753,15 @@ type MySQLConfig struct {
 }
 
 func init() {
-    connector.RegisterFactory("mysql", func(ext map[string]interface{}, cred *asset.Credential) (connector.Connector, error) {
-        cfg := MySQLConfig{
-            Host:        extConfig.GetString(ext, "host"),
-            Port:        extConfig.GetInt(ext, "port", 3306),
-            Database:    extConfig.GetString(ext, "database"),
-            ExtraParams: extConfig.GetString(ext, "extra_params"),
-        }
-        if cred != nil {
-            cfg.Username = cred.Username
-            cfg.Password = cred.DecryptedSecret // service 层解密后传入
-        }
-        return &MySQLConnector{config: cfg}, nil
-    })
+    connector.RegisterFactory("mysql", newConnector)
+}
+
+func newConnector(target *connector.Target) (connector.Connector, error) {
+    cfg, err := parseConfig(target)
+    if err != nil {
+        return nil, err
+    }
+    return &mysqlConnector{target: target, cfg: cfg}, nil
 }
 ```
 
@@ -952,13 +993,19 @@ interface AssetStore {
 | 方法 | 描述 |
 |------|------|
 | `TestConnection(assetID)` | 连接测试 |
-| `ExecuteSQL(assetID, sql)` | 执行 SQL（数据库类） |
 | `ListDatabases(assetID)` | 列出数据库 |
-| `ListTables(assetID, database)` | 列出表 |
-| `ExecuteRedisCmd(assetID, cmd, args)` | 执行 Redis 命令 |
-| `SendMQMessage(assetID, msg)` | 发送 MQ 消息 |
+| `ListTables({asset_id, database})` | 列出表 |
+| `ExecuteSQL(req)` | 执行只读 SQL（数据库类） |
+| `ExecuteRedisCmd(req)` | 执行 Redis 命令 |
+| `SendMQMessage(req)` | 发送 MQ 消息 |
 
-### 6.3 ExecutorAPI（已有，保持）
+### 6.3 AuditAPI（新增）
+
+| 方法 | 描述 |
+|------|------|
+| `ListAuditLogs(req)` | 查询审计日志（支持 module / action / plugin_type / success / keyword / limit / offset） |
+
+### 6.4 ExecutorAPI（已有，保持）
 
 | 方法 | 描述 |
 |------|------|
@@ -998,7 +1045,7 @@ interface AssetStore {
 
 ## 8. 目录结构（当前实现状态）
 
-> 标注说明：✅ 已实现 | ⬜ 待实现（骨架/占位）
+> 标注说明：✅ 已实现 | 🟡 部分实现/待增强 | ⬜ 待实现
 
 ```
 EnvPilot/
@@ -1029,7 +1076,8 @@ EnvPilot/
 │       └── migrations/
 │           ├── 001_init.go          ✅
 │           ├── 002_asset.go         ✅ (含插件化重构，旧结构已废弃)
-│           └── 003_executor.go      ✅
+│           ├── 003_executor.go      ✅
+│           └── 004_audit.go         ✅
 │
 ├── internal/
 │   ├── app/
@@ -1038,15 +1086,18 @@ EnvPilot/
 │   ├── plugin/                      ✅ 插件注册表
 │   │   ├── definition.go            (PluginDef / ConfigField 数据结构)
 │   │   ├── registry.go              (Register / Get / List)
-│   │   └── builtin/                 (8 个内置插件，init() 自注册)
+│   │   └── builtin/                 (内置插件聚合入口)
+│   │       ├── imports.go
 │   │       ├── linux_server.go
 │   │       ├── windows_server.go
-│   │       ├── mysql.go
-│   │       ├── postgresql.go
-│   │       ├── redis.go
-│   │       ├── rocketmq.go
-│   │       ├── rabbitmq.go
-│   │       └── kafka.go
+│   │       ├── mysql/
+│   │       │   ├── definition.go
+│   │       │   └── connector.go
+│   │       ├── postgresql/
+│   │       ├── redis/
+│   │       ├── rabbitmq/
+│   │       ├── kafka/
+│   │       └── rocketmq/
 │   │
 │   ├── asset/                       ✅ 资产管理（插件化重构版）
 │   │   ├── model/
@@ -1075,10 +1126,19 @@ EnvPilot/
 │   │   ├── service/
 │   │   └── ssh/
 │   │
-│   ├── connector/                   ⬜ 待实现（阶段 4）
+│   ├── connector/                   ✅ 连接器抽象、工厂、服务编排与双模式 API
+│   │   ├── api/
+│   │   ├── service/
+│   │   ├── connector.go
+│   │   ├── factory.go
+│   │   └── sql.go
 │   ├── dns/                         ⬜ 待实现（阶段 5）
 │   ├── health/                      ⬜ 待实现（阶段 6）
-│   ├── audit/                       ⬜ 待实现（阶段 7）
+│   ├── audit/                       🟡 审计写入、查询与页面已落地，增强项待补
+│   │   ├── api/
+│   │   ├── model/
+│   │   ├── repository/
+│   │   └── service/
 │   ├── config/                      ✅ 配置加载
 │   └── auth/                        ⬜ 待实现
 │
@@ -1090,7 +1150,10 @@ EnvPilot/
 ├── doc/
 │   ├── design.md                    ← 本文档
 │   ├── dev.md                       ← 开发进度文档
-│   └── req.md                       ← 需求规格文档 v0.2
+│   ├── req.md                       ← 需求规格文档 v0.2
+│   ├── modules.md                   ← 模块文档导航页
+│   ├── modules-foundation.md        ← 基础设施模块说明
+│   └── modules-business.md          ← 业务模块说明
 │
 └── frontend/
     └── src/
@@ -1111,13 +1174,15 @@ EnvPilot/
         │   ├── EnvironmentPage.tsx  ✅
         │   ├── ExecutorPage.tsx     ✅
         │   ├── TerminalPage.tsx     ✅ (双模式：Wails IPC / WebSocket)
-        │   ├── ConnectorPage.tsx    ⬜ 占位页（阶段 4 实现）
-        │   ├── DnsPage.tsx          ⬜ 占位页（阶段 5 实现）
-        │   ├── HealthPage.tsx       ⬜ 占位页（阶段 6 实现）
-        │   ├── AuditPage.tsx        ⬜ 占位页（阶段 7 实现）
-        │   └── ConfigPage.tsx       ⬜ 占位页（阶段 8 实现）
+        │   ├── ConnectorPage.tsx    ✅ 连接器统一操作页
+        │   ├── DnsPage.tsx          ⬜ 预留页面（阶段 5 实现）
+        │   ├── HealthPage.tsx       ⬜ 预留页面（阶段 6 实现）
+        │   ├── AuditPage.tsx        🟡 审计日志查询页（导出待补）
+        │   └── ConfigPage.tsx       ⬜ 预留页面（阶段 8 实现）
         ├── services/
         │   ├── assetService.ts      ✅ (含 listPlugins / getPluginSchema)
+        │   ├── connectorService.ts  ✅
+        │   ├── auditService.ts      ✅
         │   ├── executorService.ts   ✅
         │   └── backendService.ts    ✅
         └── store/
@@ -1235,7 +1300,7 @@ plaintext, err := s.cipher.Decrypt(encrypted)
 ```
 
 - `Credential.Secret` 字段必须标注 `json:"-"`，API 层只返回 `SecretMasked`
-- 凭据明文查看操作必须写入 `audit_logs`（`action_type = credential_view`）
+- 凭据明文查看操作必须写入 `audit_logs`（`module = asset`，`action = reveal_credential`）
 
 #### 10.1.6 审计注入规范
 
@@ -1249,7 +1314,17 @@ type ExecutorService struct {
 }
 
 // 操作完成后记录
-s.audit.Record(ctx, audit.ActionSSHCmd, audit.ResourceAsset, assetID, assetName, detail, result)
+s.audit.RecordBestEffort(audit.RecordInput{
+    Module:       "connector",
+    Action:       "execute_sql",
+    ResourceType: "asset",
+    ResourceID:   &assetID,
+    ResourceName: assetName,
+    PluginType:   pluginType,
+    Success:      true,
+    Detail:       detail,
+    Result:       result,
+})
 ```
 
 ---
