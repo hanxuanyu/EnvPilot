@@ -60,6 +60,8 @@ func (m *Migrator) register() {
 	m.add("002_asset", migrateAsset)
 	// 阶段3：命令执行记录表
 	m.add("003_executor", migrateExecutor)
+	// 阶段4：审计日志表
+	m.add("004_audit", migrateAudit)
 }
 
 // add 添加一个迁移项

@@ -94,3 +94,19 @@ func (h *ConnectorHandler) ExecuteRedisCmd(w http.ResponseWriter, r *http.Reques
 	}
 	writeOK(w, result)
 }
+
+// POST /api/connectors/mq
+func (h *ConnectorHandler) SendMQMessage(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.SendMQMessageRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.SendMQMessage(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}

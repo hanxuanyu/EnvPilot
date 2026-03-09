@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	assetSvc "EnvPilot/internal/asset/service"
+	auditSvc "EnvPilot/internal/audit/service"
 	"EnvPilot/internal/connector"
 	"EnvPilot/pkg/logger"
 
@@ -16,6 +17,7 @@ import (
 type ConnectorService struct {
 	assetSvc *assetSvc.AssetService
 	credSvc  *assetSvc.CredentialService
+	auditSvc *auditSvc.AuditService
 	log      *zap.Logger
 }
 
@@ -32,26 +34,63 @@ type ExecuteRedisCommandRequest struct {
 	Args    []string `json:"args"`
 }
 
-func NewConnectorService(assetSvc *assetSvc.AssetService, credSvc *assetSvc.CredentialService) *ConnectorService {
+type SendMQMessageRequest struct {
+	AssetID uint              `json:"asset_id"`
+	Message connector.Message `json:"message"`
+}
+
+func NewConnectorService(assetSvc *assetSvc.AssetService, credSvc *assetSvc.CredentialService, auditSvc *auditSvc.AuditService) *ConnectorService {
 	return &ConnectorService{
 		assetSvc: assetSvc,
 		credSvc:  credSvc,
+		auditSvc: auditSvc,
 		log:      logger.Named("connector_service"),
 	}
 }
 
 func (s *ConnectorService) TestConnection(ctx context.Context, assetID uint) error {
+	target, targetErr := s.resolveTarget(assetID)
 	conn, err := s.newConnector(assetID)
 	if err != nil {
+		s.recordAudit(auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "test_connection",
+			ResourceType: "asset",
+			ResourceID:   uintPtr(assetID),
+			ResourceName: targetName(target, targetErr),
+			PluginType:   targetPlugin(target),
+			Success:      false,
+			Detail:       err.Error(),
+		})
 		return err
 	}
 	defer conn.Close()
 
 	if err := conn.Ping(ctx); err != nil {
+		s.recordAudit(auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "test_connection",
+			ResourceType: "asset",
+			ResourceID:   uintPtr(assetID),
+			ResourceName: targetName(target, targetErr),
+			PluginType:   conn.TypeID(),
+			Success:      false,
+			Detail:       err.Error(),
+		})
 		return err
 	}
 
 	s.log.Info("连接测试成功", zap.Uint("asset_id", assetID), zap.String("type", conn.TypeID()))
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "test_connection",
+		ResourceType: "asset",
+		ResourceID:   uintPtr(assetID),
+		ResourceName: targetName(target, targetErr),
+		PluginType:   conn.TypeID(),
+		Success:      true,
+		Detail:       "连接测试成功",
+	})
 	return nil
 }
 
@@ -97,6 +136,18 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 
 	result, err := dbConn.Execute(ctx, strings.TrimSpace(req.Database), query, limit)
 	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "execute_sql",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"database": strings.TrimSpace(req.Database),
+				"query":    query,
+				"limit":    limit,
+			},
+		})
 		return nil, err
 	}
 
@@ -105,6 +156,23 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 		zap.String("database", strings.TrimSpace(req.Database)),
 		zap.Int("row_count", len(result.Rows)),
 	)
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "execute_sql",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "执行只读 SQL 成功",
+		Request: map[string]any{
+			"database": strings.TrimSpace(req.Database),
+			"query":    query,
+			"limit":    limit,
+		},
+		Result: map[string]any{
+			"row_count":     len(result.Rows),
+			"duration_ms":   result.DurationMS,
+			"affected_rows": result.Affected,
+		},
+	})
 	return result, nil
 }
 
@@ -122,6 +190,17 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 
 	result, err := cacheConn.Command(ctx, command, req.Args...)
 	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "execute_redis_command",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"command": command,
+				"args":    req.Args,
+			},
+		})
 		return nil, err
 	}
 
@@ -129,6 +208,55 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 		zap.Uint("asset_id", req.AssetID),
 		zap.String("command", command),
 	)
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "execute_redis_command",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "执行 Redis 命令成功",
+		Request: map[string]any{
+			"command": command,
+			"args":    req.Args,
+		},
+		Result: result,
+	})
+	return result, nil
+}
+
+func (s *ConnectorService) SendMQMessage(ctx context.Context, req SendMQMessageRequest) (*connector.SendResult, error) {
+	mqConn, cleanup, err := s.newMQConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := mqConn.SendMessage(ctx, req.Message)
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "send_mq_message",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request:      summarizeMQMessage(req.Message),
+		})
+		return nil, err
+	}
+
+	s.log.Info("发送 MQ 消息成功",
+		zap.Uint("asset_id", req.AssetID),
+		zap.String("topic", req.Message.Topic),
+		zap.String("exchange", req.Message.Exchange),
+	)
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "send_mq_message",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "发送 MQ 消息成功",
+		Request:      summarizeMQMessage(req.Message),
+		Result:       result,
+	})
 	return result, nil
 }
 
@@ -168,6 +296,21 @@ func (s *ConnectorService) newCacheConnector(assetID uint) (connector.CacheConne
 	}
 
 	return cacheConn, func() { _ = cacheConn.Close() }, nil
+}
+
+func (s *ConnectorService) newMQConnector(assetID uint) (connector.MQConnector, func(), error) {
+	conn, err := s.newConnector(assetID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mqConn, ok := conn.(connector.MQConnector)
+	if !ok {
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("资产不支持消息队列操作")
+	}
+
+	return mqConn, func() { _ = mqConn.Close() }, nil
 }
 
 func (s *ConnectorService) resolveTarget(assetID uint) (*connector.Target, error) {
@@ -273,4 +416,55 @@ func isAllowedRedisCommand(command string) bool {
 	}
 	_, ok := allowed[command]
 	return ok
+}
+
+func (s *ConnectorService) recordConnectorAudit(assetID uint, input auditSvc.RecordInput) {
+	target, err := s.resolveTarget(assetID)
+	if err == nil {
+		input.ResourceID = uintPtr(assetID)
+		input.ResourceName = target.AssetName
+		if input.PluginType == "" {
+			input.PluginType = target.PluginType
+		}
+	} else if input.ResourceID == nil {
+		input.ResourceID = uintPtr(assetID)
+	}
+	s.recordAudit(input)
+}
+
+func (s *ConnectorService) recordAudit(input auditSvc.RecordInput) {
+	if s.auditSvc == nil {
+		return
+	}
+	s.auditSvc.RecordBestEffort(input)
+}
+
+func summarizeMQMessage(msg connector.Message) map[string]any {
+	return map[string]any{
+		"topic":        msg.Topic,
+		"tag":          msg.Tag,
+		"exchange":     msg.Exchange,
+		"routing_key":  msg.RoutingKey,
+		"key":          msg.Key,
+		"header_count": len(msg.Headers),
+		"body_length":  len(msg.Body),
+	}
+}
+
+func uintPtr(value uint) *uint {
+	return &value
+}
+
+func targetName(target *connector.Target, err error) string {
+	if err != nil || target == nil {
+		return ""
+	}
+	return target.AssetName
+}
+
+func targetPlugin(target *connector.Target) string {
+	if target == nil {
+		return ""
+	}
+	return target.PluginType
 }

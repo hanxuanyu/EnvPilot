@@ -71,3 +71,11 @@ func (a *ConnectorAPI) ExecuteRedisCmd(req connectorSvc.ExecuteRedisCommandReque
 	}
 	return OK(result)
 }
+
+func (a *ConnectorAPI) SendMQMessage(req connectorSvc.SendMQMessageRequest) Result[*connector.SendResult] {
+	result, err := a.svc.SendMQMessage(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.SendResult](err.Error())
+	}
+	return OK(result)
+}

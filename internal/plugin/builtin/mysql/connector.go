@@ -46,7 +46,6 @@ func parseConfig(target *connector.Target) (mysqlConfig, error) {
 	if target.Credential == nil {
 		return mysqlConfig{}, fmt.Errorf("MySQL 资产缺少访问凭据")
 	}
-
 	host := target.ExtConfig.GetString("host")
 	port := target.ExtConfig.GetInt("port")
 	if host == "" {
@@ -55,7 +54,6 @@ func parseConfig(target *connector.Target) (mysqlConfig, error) {
 	if port == 0 {
 		port = 3306
 	}
-
 	return mysqlConfig{
 		Host:        host,
 		Port:        port,
@@ -67,9 +65,7 @@ func parseConfig(target *connector.Target) (mysqlConfig, error) {
 	}, nil
 }
 
-func (c *mysqlConnector) TypeID() string {
-	return c.target.PluginType
-}
+func (c *mysqlConnector) TypeID() string { return c.target.PluginType }
 
 func (c *mysqlConnector) Connect(ctx context.Context) error {
 	_, err := c.ensureDB(ctx, "")
@@ -99,7 +95,6 @@ func (c *mysqlConnector) ListDatabases(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	rows, err := db.QueryContext(ctx, "SHOW DATABASES")
 	if err != nil {
 		return nil, fmt.Errorf("查询数据库列表失败: %w", err)
@@ -117,7 +112,6 @@ func (c *mysqlConnector) ListDatabases(ctx context.Context) ([]string, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("读取数据库列表失败: %w", err)
 	}
-
 	return items, nil
 }
 
@@ -126,7 +120,6 @@ func (c *mysqlConnector) ListTables(ctx context.Context, database string) ([]str
 	if err != nil {
 		return nil, err
 	}
-
 	rows, err := db.QueryContext(ctx, "SHOW TABLES")
 	if err != nil {
 		return nil, fmt.Errorf("查询数据表列表失败: %w", err)
@@ -144,7 +137,6 @@ func (c *mysqlConnector) ListTables(ctx context.Context, database string) ([]str
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("读取数据表列表失败: %w", err)
 	}
-
 	return items, nil
 }
 
@@ -165,7 +157,6 @@ func (c *mysqlConnector) Execute(ctx context.Context, database, query string, li
 	if err != nil {
 		return nil, err
 	}
-
 	return &connector.QueryResult{
 		Columns:    columns,
 		Rows:       data,
@@ -179,11 +170,9 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	if wantedDB == "" {
 		wantedDB = c.cfg.Database
 	}
-
 	if c.db != nil && c.currentDB == wantedDB {
 		return c.db, nil
 	}
-
 	if c.db != nil {
 		_ = c.db.Close()
 		c.db = nil
@@ -197,7 +186,6 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	parsedDSN.Passwd = c.cfg.Password
 	parsedDSN.DBName = wantedDB
 	parsedDSN.ParseTime = true
-
 	if parsedDSN.Params == nil {
 		parsedDSN.Params = make(map[string]string)
 	}

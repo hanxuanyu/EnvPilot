@@ -5,6 +5,7 @@ import (
 
 	"EnvPilot/internal/asset/model"
 	"EnvPilot/internal/asset/repository"
+	auditSvc "EnvPilot/internal/audit/service"
 	"EnvPilot/pkg/crypto"
 	"EnvPilot/pkg/logger"
 
@@ -19,19 +20,25 @@ import (
 type CredentialService struct {
 	repo   *repository.CredentialRepo
 	cipher *crypto.AESCipher
+	audit  *auditSvc.AuditService
 	log    *zap.Logger
 }
 
-func NewCredentialService(repo *repository.CredentialRepo, cipher *crypto.AESCipher) *CredentialService {
+func NewCredentialService(repo *repository.CredentialRepo, cipher *crypto.AESCipher, audit *auditSvc.AuditService) *CredentialService {
 	return &CredentialService{
 		repo:   repo,
 		cipher: cipher,
+		audit:  audit,
 		log:    logger.Named("credential"),
 	}
 }
 
 // Create 创建凭据，Secret 加密后入库
 func (s *CredentialService) Create(name string, credType model.CredentialType, username, secret string) (*model.Credential, error) {
+	if err := validateCredentialInput(credType, username, secret, false); err != nil {
+		return nil, err
+	}
+
 	encrypted, err := s.cipher.Encrypt(secret)
 	if err != nil {
 		return nil, fmt.Errorf("凭据加密失败: %w", err)
@@ -49,12 +56,29 @@ func (s *CredentialService) Create(name string, credType model.CredentialType, u
 	}
 
 	s.log.Info("创建凭据", zap.String("name", name), zap.String("type", string(credType)))
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "asset",
+		Action:       "create_credential",
+		ResourceType: "credential",
+		ResourceID:   &c.ID,
+		ResourceName: c.Name,
+		Success:      true,
+		Detail:       "创建凭据",
+		Request: map[string]any{
+			"type":     credType,
+			"username": username,
+		},
+	})
 	// 返回前脱敏
 	return s.mask(c), nil
 }
 
 // Update 更新凭据（若 secret 不为空则重新加密）
 func (s *CredentialService) Update(id uint, name string, credType model.CredentialType, username, secret string) (*model.Credential, error) {
+	if err := validateCredentialInput(credType, username, secret, true); err != nil {
+		return nil, err
+	}
+
 	c, err := s.repo.FindByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("凭据不存在 [id=%d]", id)
@@ -78,18 +102,42 @@ func (s *CredentialService) Update(id uint, name string, credType model.Credenti
 	}
 
 	s.log.Info("更新凭据", zap.Uint("id", id))
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "asset",
+		Action:       "update_credential",
+		ResourceType: "credential",
+		ResourceID:   &c.ID,
+		ResourceName: c.Name,
+		Success:      true,
+		Detail:       "更新凭据",
+		Request: map[string]any{
+			"type":     credType,
+			"username": username,
+			"rotate":   secret != "",
+		},
+	})
 	return s.mask(c), nil
 }
 
 // Delete 删除凭据
 func (s *CredentialService) Delete(id uint) error {
-	if _, err := s.repo.FindByID(id); err != nil {
+	c, err := s.repo.FindByID(id)
+	if err != nil {
 		return fmt.Errorf("凭据不存在 [id=%d]", id)
 	}
 	if err := s.repo.Delete(id); err != nil {
 		return fmt.Errorf("删除凭据失败: %w", err)
 	}
 	s.log.Info("删除凭据", zap.Uint("id", id))
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "asset",
+		Action:       "delete_credential",
+		ResourceType: "credential",
+		ResourceID:   &c.ID,
+		ResourceName: c.Name,
+		Success:      true,
+		Detail:       "删除凭据",
+	})
 	return nil
 }
 
@@ -121,6 +169,16 @@ func (s *CredentialService) RevealSecret(id uint) (string, error) {
 	}
 
 	s.log.Info("解密凭据", zap.Uint("id", id))
+	s.recordAudit(auditSvc.RecordInput{
+		Module:       "asset",
+		Action:       "reveal_credential",
+		ResourceType: "credential",
+		ResourceID:   &c.ID,
+		ResourceName: c.Name,
+		Success:      true,
+		Detail:       "查看凭据明文",
+		Request:      map[string]any{"type": c.Type},
+	})
 	return plain, nil
 }
 
@@ -130,4 +188,27 @@ func (s *CredentialService) mask(c *model.Credential) *model.Credential {
 	result.Secret = ""
 	result.SecretMasked = "****"
 	return &result
+}
+
+func validateCredentialInput(credType model.CredentialType, username, secret string, allowEmptySecret bool) error {
+	if !model.IsValidCredentialType(credType) {
+		return fmt.Errorf("不支持的凭据类型: %s", credType)
+	}
+	if !allowEmptySecret && secret == "" {
+		return fmt.Errorf("凭据密钥不能为空")
+	}
+	switch credType {
+	case model.CredentialTypePassword, model.CredentialTypeAccessKeyPair, model.CredentialTypeSASL:
+		if username == "" {
+			return fmt.Errorf("当前凭据类型要求填写用户名或标识")
+		}
+	}
+	return nil
+}
+
+func (s *CredentialService) recordAudit(input auditSvc.RecordInput) {
+	if s.audit == nil {
+		return
+	}
+	s.audit.RecordBestEffort(input)
 }

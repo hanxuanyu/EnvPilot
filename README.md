@@ -39,9 +39,9 @@ EnvPilot 是一个 DevOps 运维助手，用于统一管理服务器和中间件
 - **资产管理**：环境 / 分组 / 资产 / 凭据 CRUD，插件化资产类型（8 种内置）
 - **命令执行**：SSH 单机执行、批量并发执行，实时输出流式推送
 - **在线终端**：SSH PTY 全功能终端，基于 xterm.js
-- **中间件连接**：MySQL / PostgreSQL / Redis / RocketMQ / RabbitMQ / Kafka（待实现）
+- **中间件连接**：MySQL / PostgreSQL / Redis / RocketMQ / RabbitMQ / Kafka，支持分类化操作面板
 - **健康检查**：定时 Ping / TCP / 资源监控（待实现）
-- **操作审计**：全量操作日志（待实现）
+- **操作审计**：已支持资产、凭据、连接器操作日志记录与查询
 
 ---
 
@@ -49,7 +49,7 @@ EnvPilot 是一个 DevOps 运维助手，用于统一管理服务器和中间件
 
 ### 开发环境要求
 
-- Go 1.22+
+- Go 1.25+
 - Node.js 20+
 - Wails CLI v2（桌面模式需要）
 
@@ -115,6 +115,63 @@ make build-all
 
 ---
 
+## 插件化架构
+
+EnvPilot 目前将服务器与中间件都建模为插件。每个内置插件集中在 `internal/plugin/builtin/<type>/` 目录，通常按以下方式拆分：
+
+- `definition.go`：插件元数据定义与注册
+- `connector.go`：连接器工厂注册与具体实现
+
+插件元数据统一通过 `PluginDef` 描述：
+
+- `config_schema`：前端动态表单字段
+- `credential_types`：允许绑定的凭据类型
+- `credential_required`：是否要求强制绑定凭据
+- `capabilities`：该插件支持的连接或执行能力
+- `integration_guide`：后续扩展该类中间件时的接入要点
+
+这意味着新增一个中间件时，不需要在前端、连接器、资产管理各自维护一份元数据；同时目录内又保留了定义与运行逻辑的职责拆分，避免单文件膨胀。
+
+### 当前内置中间件能力
+
+| 类型 | 分类 | 主要能力 | 典型凭据 |
+|------|------|------|------|
+| MySQL | database | 连接测试 / 库表浏览 / 只读 SQL | password |
+| PostgreSQL | database | 连接测试 / 库表浏览 / 只读 SQL | password |
+| Redis | cache | 连接测试 / 白名单命令执行 | password, token |
+| RabbitMQ | mq | 连接测试 / 消息发送 | password |
+| Kafka | mq | 连接测试 / 消息发送 | password, token, sasl |
+| RocketMQ | mq | 连接测试 / 消息发送 | token, access_key_secret |
+
+---
+
+## 凭据体系
+
+为了适配不同中间件，凭据类型已经从单一密码模式扩展为以下几类：
+
+- `password`：用户名 + 密码，适用于 MySQL、PostgreSQL、RabbitMQ 等
+- `ssh_key`：SSH 私钥，适用于 Linux 服务器
+- `token`：单值 Token 或访问口令，适用于 Redis、RocketMQ 等
+- `access_key_secret`：AccessKey + SecretKey，适用于 RocketMQ ACL 等场景
+- `sasl`：SASL 用户名 + 密钥，适用于 Kafka SASL 认证
+
+资产绑定凭据时会按插件定义做兼容性校验，前端也会自动过滤不兼容凭据，减少配置错误。
+
+---
+
+## 审计覆盖
+
+当前已经接入的审计内容包括：
+
+- 资产创建、更新、删除
+- 凭据创建、更新、删除、明文查看
+- 连接器连接测试
+- SQL 执行、Redis 命令执行、MQ 消息发送
+
+审计日志支持桌面模式和服务端模式统一查询，前端页面位于 `操作审计`。
+
+---
+
 ## 项目结构
 
 ```
@@ -142,7 +199,7 @@ EnvPilot/
 │   ├── plugin/              # 插件注册表（资产类型定义）
 │   │   ├── definition.go    # PluginDef、ConfigField 结构
 │   │   ├── registry.go      # Register / Get / List
-│   │   └── builtin/         # 8 种内置插件（linux_server / mysql / redis 等）
+│   │   └── builtin/         # 8 种内置插件目录（按 <type>/definition.go + connector.go 组织）
 │   ├── asset/               # 资产管理（环境/分组/资产/凭据）
 │   │   ├── api/             # Wails 绑定层（桌面专用）
 │   │   ├── model/           # 数据模型（Asset / Credential / Environment / Group）

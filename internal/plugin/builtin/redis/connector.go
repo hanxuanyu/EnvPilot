@@ -66,18 +66,14 @@ func parseConfig(target *connector.Target) (redisConfig, error) {
 		SentinelAddrs: addrs,
 		MasterName:    target.ExtConfig.GetString("master_name"),
 	}
-
 	if target.Credential != nil {
 		result.Username = target.Credential.Username
 		result.Password = target.Credential.Secret
 	}
-
 	return result, nil
 }
 
-func (c *redisConnector) TypeID() string {
-	return c.target.PluginType
-}
+func (c *redisConnector) TypeID() string { return c.target.PluginType }
 
 func (c *redisConnector) Connect(ctx context.Context) error {
 	_, err := c.ensureClient(ctx)
@@ -117,11 +113,7 @@ func (c *redisConnector) Command(ctx context.Context, command string, args ...st
 	if err != nil {
 		return nil, fmt.Errorf("执行 Redis 命令失败: %w", err)
 	}
-
-	return &connector.CommandResult{
-		Command: strings.ToUpper(command),
-		Result:  connector.NormalizeValue(result),
-	}, nil
+	return &connector.CommandResult{Command: strings.ToUpper(command), Result: connector.NormalizeValue(result)}, nil
 }
 
 func (c *redisConnector) ensureClient(ctx context.Context) (redisv9.UniversalClient, error) {
@@ -158,6 +150,5 @@ func (c *redisConnector) ensureClient(ctx context.Context) (redisv9.UniversalCli
 		c.client = nil
 		return nil, fmt.Errorf("连接 Redis 失败: %w", err)
 	}
-
 	return c.client, nil
 }

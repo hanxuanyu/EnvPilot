@@ -59,7 +59,6 @@ func parseConfig(target *connector.Target) (postgresqlConfig, error) {
 	if schema == "" {
 		schema = "public"
 	}
-
 	sslMode := target.ExtConfig.GetString("ssl_mode")
 	if sslMode == "" {
 		sslMode = "disable"
@@ -76,9 +75,7 @@ func parseConfig(target *connector.Target) (postgresqlConfig, error) {
 	}, nil
 }
 
-func (c *postgresqlConnector) TypeID() string {
-	return c.target.PluginType
-}
+func (c *postgresqlConnector) TypeID() string { return c.target.PluginType }
 
 func (c *postgresqlConnector) Connect(ctx context.Context) error {
 	_, err := c.ensureDB(ctx, "")
@@ -108,13 +105,7 @@ func (c *postgresqlConnector) ListDatabases(ctx context.Context) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-
-	rows, err := db.QueryContext(ctx, `
-		SELECT datname
-		FROM pg_database
-		WHERE datistemplate = false
-		ORDER BY datname ASC
-	`)
+	rows, err := db.QueryContext(ctx, `SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("查询数据库列表失败: %w", err)
 	}
@@ -131,7 +122,6 @@ func (c *postgresqlConnector) ListDatabases(ctx context.Context) ([]string, erro
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("读取数据库列表失败: %w", err)
 	}
-
 	return items, nil
 }
 
@@ -140,13 +130,7 @@ func (c *postgresqlConnector) ListTables(ctx context.Context, database string) (
 	if err != nil {
 		return nil, err
 	}
-
-	rows, err := db.QueryContext(ctx, `
-		SELECT table_name
-		FROM information_schema.tables
-		WHERE table_schema = $1
-		ORDER BY table_name ASC
-	`, c.cfg.Schema)
+	rows, err := db.QueryContext(ctx, `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name ASC`, c.cfg.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("查询数据表列表失败: %w", err)
 	}
@@ -163,7 +147,6 @@ func (c *postgresqlConnector) ListTables(ctx context.Context, database string) (
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("读取数据表列表失败: %w", err)
 	}
-
 	return items, nil
 }
 
@@ -201,11 +184,9 @@ func (c *postgresqlConnector) ensureDB(ctx context.Context, database string) (*s
 	if wantedDB == "" {
 		wantedDB = "postgres"
 	}
-
 	if c.db != nil && c.currentDB == wantedDB {
 		return c.db, nil
 	}
-
 	if c.db != nil {
 		_ = c.db.Close()
 		c.db = nil

@@ -551,6 +551,69 @@ export namespace assetapi {
 
 }
 
+export namespace auditapi {
+	
+	export class ListAuditLogsReq {
+	    module: string;
+	    action: string;
+	    plugin_type: string;
+	    success?: boolean;
+	    keyword: string;
+	    limit: number;
+	    offset: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListAuditLogsReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.module = source["module"];
+	        this.action = source["action"];
+	        this.plugin_type = source["plugin_type"];
+	        this.success = source["success"];
+	        this.keyword = source["keyword"];
+	        this.limit = source["limit"];
+	        this.offset = source["offset"];
+	    }
+	}
+	export class Result__EnvPilot_internal_audit_service_ListResult_ {
+	    success: boolean;
+	    data?: service.ListResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_audit_service_ListResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.ListResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace connector {
 	
 	export class CommandResult {
@@ -565,6 +628,30 @@ export namespace connector {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.command = source["command"];
 	        this.result = source["result"];
+	    }
+	}
+	export class Message {
+	    topic?: string;
+	    tag?: string;
+	    exchange?: string;
+	    routing_key?: string;
+	    key?: string;
+	    headers?: Record<string, string>;
+	    body: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Message(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.topic = source["topic"];
+	        this.tag = source["tag"];
+	        this.exchange = source["exchange"];
+	        this.routing_key = source["routing_key"];
+	        this.key = source["key"];
+	        this.headers = source["headers"];
+	        this.body = source["body"];
 	    }
 	}
 	export class QueryColumn {
@@ -616,6 +703,22 @@ export namespace connector {
 		    }
 		    return a;
 		}
+	}
+	export class SendResult {
+	    success: boolean;
+	    message_id?: string;
+	    detail?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message_id = source["message_id"];
+	        this.detail = source["detail"];
+	    }
 	}
 
 }
@@ -683,6 +786,40 @@ export namespace connectorapi {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], connector.QueryResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_connector_SendResult_ {
+	    success: boolean;
+	    data?: connector.SendResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_connector_SendResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], connector.SendResult);
 	        this.message = source["message"];
 	    }
 	
@@ -1262,6 +1399,61 @@ export namespace model {
 		    return a;
 		}
 	}
+	export class AuditLog {
+	    id: number;
+	    module: string;
+	    action: string;
+	    resource_type: string;
+	    resource_id?: number;
+	    resource_name?: string;
+	    plugin_type?: string;
+	    operator?: string;
+	    success: boolean;
+	    detail?: string;
+	    request_data?: string;
+	    result_data?: string;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuditLog(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.module = source["module"];
+	        this.action = source["action"];
+	        this.resource_type = source["resource_type"];
+	        this.resource_id = source["resource_id"];
+	        this.resource_name = source["resource_name"];
+	        this.plugin_type = source["plugin_type"];
+	        this.operator = source["operator"];
+	        this.success = source["success"];
+	        this.detail = source["detail"];
+	        this.request_data = source["request_data"];
+	        this.result_data = source["result_data"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	
 	
 	export class Execution {
@@ -1390,6 +1582,10 @@ export namespace plugin {
 	    category: string;
 	    icon_name: string;
 	    config_schema: ConfigField[];
+	    credential_required?: boolean;
+	    credential_types?: string[];
+	    capabilities?: string[];
+	    integration_guide?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new PluginDef(source);
@@ -1402,6 +1598,10 @@ export namespace plugin {
 	        this.category = source["category"];
 	        this.icon_name = source["icon_name"];
 	        this.config_schema = this.convertValues(source["config_schema"], ConfigField);
+	        this.credential_required = source["credential_required"];
+	        this.credential_types = source["credential_types"];
+	        this.capabilities = source["capabilities"];
+	        this.integration_guide = source["integration_guide"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1460,6 +1660,70 @@ export namespace service {
 	        this.query = source["query"];
 	        this.limit = source["limit"];
 	    }
+	}
+	export class ListResult {
+	    items: model.AuditLog[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], model.AuditLog);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SendMQMessageRequest {
+	    asset_id: number;
+	    message: connector.Message;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendMQMessageRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.message = this.convertValues(source["message"], connector.Message);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }

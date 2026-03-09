@@ -4,10 +4,20 @@ import "EnvPilot/internal/plugin"
 
 func init() {
 	plugin.Register(&plugin.PluginDef{
-		TypeID:      "windows_server",
-		DisplayName: "Windows 服务器",
-		Category:    plugin.CategoryServer,
-		IconName:    "monitor",
+		TypeID:             "windows_server",
+		DisplayName:        "Windows 服务器",
+		Category:           plugin.CategoryServer,
+		IconName:           "monitor",
+		CredentialRequired: true,
+		CredentialTypes: []plugin.CredentialKind{
+			plugin.CredentialKindPassword,
+		},
+		Capabilities: []plugin.Capability{
+			plugin.CapabilityRemoteCommand,
+		},
+		IntegrationGuide: []string{
+			"补充协议字段并在执行模块中实现对应远程连接方式",
+		},
 		ConfigSchema: []plugin.ConfigField{
 			{
 				Key: "host", Label: "主机地址", Type: plugin.FieldTypeText,

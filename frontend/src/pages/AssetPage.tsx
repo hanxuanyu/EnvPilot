@@ -24,6 +24,7 @@ import type {
 } from '@/types/asset'
 import {
   CATEGORY_LABELS, CATEGORY_COLORS, ASSET_STATUS_LABELS, ASSET_STATUS_COLORS,
+  CREDENTIAL_TYPE_LABELS,
   getAssetAddress,
 } from '@/types/asset'
 
@@ -340,7 +341,7 @@ export default function AssetPage() {
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="secondary">
-                      {cred.type === 'password' ? '密码' : cred.type === 'ssh_key' ? 'SSH 密钥' : 'Token'}
+                      {CREDENTIAL_TYPE_LABELS[cred.type]}
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-sm text-foreground">{cred.username || '—'}</td>
@@ -443,6 +444,21 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
 
   // 当前选中的插件定义
   const selectedPlugin = plugins.find(p => p.type_id === pluginType)
+  const compatibleCredentials = credentials.filter((credential) => {
+    const supported = selectedPlugin?.credential_types ?? []
+    if (!selectedPlugin || supported.length === 0) return true
+    return supported.includes(credential.type) || credential.id.toString() === credId
+  })
+
+  useEffect(() => {
+    if (!credId || !selectedPlugin) return
+    const supported = selectedPlugin.credential_types ?? []
+    if (supported.length === 0) return
+    const current = credentials.find(item => item.id.toString() === credId)
+    if (current && !supported.includes(current.type)) {
+      setCredId('')
+    }
+  }, [credId, credentials, selectedPlugin])
 
   // 按类别过滤插件
   const categoryPlugins = plugins.filter(p => p.category === category)
@@ -625,16 +641,24 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
             <SelectTrigger><SelectValue placeholder="不绑定凭据" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__none__">不绑定凭据</SelectItem>
-              {credentials.map(c => (
+              {compatibleCredentials.map(c => (
                 <SelectItem key={c.id} value={c.id.toString()}>
                   <span className="flex items-center gap-2">
                     <KeyRound className="w-3 h-3" />
-                    {c.name}
+                    {c.name} · {CREDENTIAL_TYPE_LABELS[c.type]}
                   </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {selectedPlugin && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selectedPlugin.credential_required ? '当前插件要求绑定凭据。' : '当前插件可选绑定凭据。'}
+              {selectedPlugin.credential_types && selectedPlugin.credential_types.length > 0
+                ? ` 支持类型：${selectedPlugin.credential_types.map(type => CREDENTIAL_TYPE_LABELS[type]).join('、')}`
+                : ' 支持任意凭据类型。'}
+            </p>
+          )}
         </FormField>
 
         <FormField label="标签（逗号分隔）">
@@ -692,9 +716,23 @@ function CredFormModal({ open, cred, onClose, onSave }: {
     }
   }
 
-  const secretLabel = cred
-    ? `${type === 'ssh_key' ? 'SSH 私钥' : '密码/Token'}（留空则不修改）`
-    : `${type === 'ssh_key' ? 'SSH 私钥' : '密码/Token'}`
+  const needsIdentity = type === 'password' || type === 'access_key_secret' || type === 'sasl'
+  const secretLabelBase = (() => {
+    switch (type) {
+      case 'ssh_key':
+        return 'SSH 私钥'
+      case 'token':
+        return 'Token / 密钥'
+      case 'access_key_secret':
+        return 'SecretKey'
+      case 'sasl':
+        return 'SASL 密钥'
+      default:
+        return '密码'
+    }
+  })()
+
+  const secretLabel = cred ? `${secretLabelBase}（留空则不修改）` : secretLabelBase
 
   return (
     <Modal
@@ -723,15 +761,17 @@ function CredFormModal({ open, cred, onClose, onSave }: {
               <SelectItem value="password">用户名 + 密码</SelectItem>
               <SelectItem value="ssh_key">SSH 私钥</SelectItem>
               <SelectItem value="token">Token / 访问密钥</SelectItem>
+              <SelectItem value="access_key_secret">AccessKey + SecretKey</SelectItem>
+              <SelectItem value="sasl">SASL 用户名 + 密钥</SelectItem>
             </SelectContent>
           </Select>
         </FormField>
-        {type !== 'token' && (
+        {needsIdentity && (
           <FormField label="用户名">
             <Input
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="root / admin"
+              placeholder={type === 'access_key_secret' ? 'AccessKey' : type === 'sasl' ? 'SASL 用户名' : 'root / admin'}
             />
           </FormField>
         )}
@@ -743,7 +783,17 @@ function CredFormModal({ open, cred, onClose, onSave }: {
           <Textarea
             value={secret}
             onChange={e => setSecret(e.target.value)}
-            placeholder={type === 'ssh_key' ? '-----BEGIN RSA PRIVATE KEY-----\n...' : '••••••••'}
+            placeholder={
+              type === 'ssh_key'
+                ? '-----BEGIN RSA PRIVATE KEY-----\n...'
+                : type === 'token'
+                  ? 'token-xxxx'
+                  : type === 'access_key_secret'
+                    ? 'SecretKey'
+                    : type === 'sasl'
+                      ? 'SASL password or secret'
+                      : '••••••••'
+            }
             rows={type === 'ssh_key' ? 5 : 1}
             className="font-mono"
           />

@@ -15,12 +15,12 @@ import (
 	assetAPI "EnvPilot/internal/asset/api"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
+	auditAPI "EnvPilot/internal/audit/api"
+	auditRepo "EnvPilot/internal/audit/repository"
+	auditSvc "EnvPilot/internal/audit/service"
 	configModel "EnvPilot/internal/config/model"
 	configService "EnvPilot/internal/config/service"
 	connectorAPI "EnvPilot/internal/connector/api"
-	_ "EnvPilot/internal/connector/impl/mysql"
-	_ "EnvPilot/internal/connector/impl/postgresql"
-	_ "EnvPilot/internal/connector/impl/redis"
 	connectorSvc "EnvPilot/internal/connector/service"
 	executorAPI "EnvPilot/internal/executor/api"
 	executorRepo "EnvPilot/internal/executor/repository"
@@ -48,9 +48,11 @@ type Container struct {
 	TermSvc  *executorSvc.TerminalService
 	Pool     *sshPool.Pool
 	Config   *configService.ConfigService
+	AuditSvc *auditSvc.AuditService
 
 	// ── Wails 绑定层（桌面模式 App 使用）──
 	AssetAPI     *assetAPI.AssetAPI
+	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 
@@ -140,16 +142,19 @@ func Bootstrap() (*Container, error) {
 	// ── 6. 业务模块 ───────────────────────────────────────────────
 	sharedAssetRepo := assetRepo.NewAssetRepo(db)
 	sharedCredRepo := assetRepo.NewCredentialRepo(db)
-	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, cipher)
+	auditRepoInst := auditRepo.NewAuditRepo(db)
+	auditSvcInst := auditSvc.NewAuditService(auditRepoInst)
+	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, cipher, auditSvcInst)
 
 	envRepo := assetRepo.NewEnvironmentRepo(db)
 	grpRepo := assetRepo.NewGroupRepo(db)
 	envSvc := assetSvc.NewEnvironmentService(envRepo)
 	grpSvc := assetSvc.NewGroupService(grpRepo, envRepo)
-	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo)
-	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc)
+	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo, sharedCredRepo, auditSvcInst)
+	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc, auditSvcInst)
 
 	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc)
+	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst)
 	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
@@ -168,7 +173,9 @@ func Bootstrap() (*Container, error) {
 		TermSvc:      termSvc,
 		Pool:         pool,
 		Config:       cfgSvc,
+		AuditSvc:     auditSvcInst,
 		AssetAPI:     assetAPIInst,
+		AuditAPI:     auditAPIInst,
 		ConnectorAPI: connectorAPIInst,
 		ExecutorAPI:  execAPIInst,
 		db:           db,

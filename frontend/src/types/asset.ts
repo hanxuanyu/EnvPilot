@@ -30,7 +30,17 @@ export interface Group {
   environment?: Environment
 }
 
-export type CredentialType = 'password' | 'ssh_key' | 'token'
+export type CredentialType = 'password' | 'ssh_key' | 'token' | 'access_key_secret' | 'sasl'
+
+export type PluginCapability =
+  | 'test_connection'
+  | 'list_databases'
+  | 'list_tables'
+  | 'execute_sql'
+  | 'execute_cache_command'
+  | 'send_mq_message'
+  | 'remote_command'
+  | 'interactive_shell'
 
 export interface Credential {
   id: number
@@ -77,6 +87,10 @@ export interface PluginDef {
   category: AssetCategory
   icon_name: string
   config_schema: ConfigField[]
+  credential_required?: boolean
+  credential_types?: CredentialType[]
+  capabilities?: PluginCapability[]
+  integration_guide?: string[]
 }
 
 // ── 资产 ──
@@ -180,6 +194,14 @@ export const CATEGORY_LABELS: Record<AssetCategory, string> = {
   cache: '缓存',
   mq: '消息队列',
   other: '其他',
+}
+
+export const CREDENTIAL_TYPE_LABELS: Record<CredentialType, string> = {
+  password: '用户名 + 密码',
+  ssh_key: 'SSH 私钥',
+  token: 'Token / 单值密钥',
+  access_key_secret: 'AccessKey + SecretKey',
+  sasl: 'SASL 用户名 + 密钥',
 }
 
 export const CATEGORY_COLORS: Record<AssetCategory, string> = {

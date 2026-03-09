@@ -1,5 +1,5 @@
 import { IS_SERVER_MODE, http } from '@/lib/apiClient'
-import type { CommandResult, QueryResult } from '@/types/connector'
+import type { CommandResult, MQMessage, QueryResult, SendResult } from '@/types/connector'
 
 interface WailsResult<T> {
   success: boolean
@@ -53,5 +53,13 @@ export const connectorService = {
   }) => {
     if (IS_SERVER_MODE) return http.post<CommandResult>('/api/connectors/redis', req)
     return unwrap<CommandResult>(await getDesktopAPI().ExecuteRedisCmd(req))
+  },
+
+  sendMQMessage: async (req: {
+    asset_id: number
+    message: MQMessage
+  }) => {
+    if (IS_SERVER_MODE) return http.post<SendResult>('/api/connectors/mq', req)
+    return unwrap<SendResult>(await getDesktopAPI().SendMQMessage(req))
   },
 }

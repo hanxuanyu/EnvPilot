@@ -12,6 +12,8 @@ export function ListDatabases(arg1:number):Promise<connectorapi.Result___string_
 
 export function ListTables(arg1:connectorapi.ListTablesReq):Promise<connectorapi.Result___string_>;
 
+export function SendMQMessage(arg1:service.SendMQMessageRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_SendResult_>;
+
 export function SetContext(arg1:context.Context):Promise<void>;
 
 export function TestConnection(arg1:number):Promise<connectorapi.Result_bool_>;

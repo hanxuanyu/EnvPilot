@@ -68,10 +68,13 @@ type CommandResult struct {
 }
 
 type Message struct {
-	Topic   string            `json:"topic"`
-	Key     string            `json:"key,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    string            `json:"body"`
+	Topic      string            `json:"topic,omitempty"`
+	Tag        string            `json:"tag,omitempty"`
+	Exchange   string            `json:"exchange,omitempty"`
+	RoutingKey string            `json:"routing_key,omitempty"`
+	Key        string            `json:"key,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"`
+	Body       string            `json:"body"`
 }
 
 type SendResult struct {

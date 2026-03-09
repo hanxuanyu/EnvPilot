@@ -18,6 +18,10 @@ export function ListTables(arg1) {
   return window['go']['connectorapi']['ConnectorAPI']['ListTables'](arg1);
 }
 
+export function SendMQMessage(arg1) {
+  return window['go']['connectorapi']['ConnectorAPI']['SendMQMessage'](arg1);
+}
+
 export function SetContext(arg1) {
   return window['go']['connectorapi']['ConnectorAPI']['SetContext'](arg1);
 }

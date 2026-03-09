@@ -4,10 +4,23 @@ import "EnvPilot/internal/plugin"
 
 func init() {
 	plugin.Register(&plugin.PluginDef{
-		TypeID:      "linux_server",
-		DisplayName: "Linux 服务器",
-		Category:    plugin.CategoryServer,
-		IconName:    "server",
+		TypeID:             "linux_server",
+		DisplayName:        "Linux 服务器",
+		Category:           plugin.CategoryServer,
+		IconName:           "server",
+		CredentialRequired: true,
+		CredentialTypes: []plugin.CredentialKind{
+			plugin.CredentialKindPassword,
+			plugin.CredentialKindSSHKey,
+		},
+		Capabilities: []plugin.Capability{
+			plugin.CapabilityRemoteCommand,
+			plugin.CapabilityInteractiveShell,
+		},
+		IntegrationGuide: []string{
+			"在 builtin 中注册插件定义并声明连接配置字段",
+			"在具体模块中实现连接能力并接入容器",
+		},
 		ConfigSchema: []plugin.ConfigField{
 			{
 				Key: "host", Label: "主机地址", Type: plugin.FieldTypeText,

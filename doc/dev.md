@@ -36,7 +36,7 @@ internal/
 ├── plugin/      插件注册表（PluginDef / Registry）
 ├── asset/       资产管理（环境/分组/资产/凭据）
 ├── executor/    SSH 命令执行 + 在线终端
-├── connector/   中间件连接器（插件化，待实现）
+├── connector/   中间件连接器抽象、工厂与服务编排
 ├── dns/         内置 DNS 服务（待实现）
 ├── health/      健康检查（待实现）
 ├── audit/       操作审计（待实现）
@@ -165,7 +165,7 @@ m.add("004_dns", migrateDNS)
 | 阶段 3 | 服务器执行系统 | ✅ 完成 | SSH 命令执行 + 在线终端 |
 | **阶段 2R** | **资产管理重构** | ✅ 完成 | 插件化架构 + 新数据模型 |
 | **阶段 D** | **双模式部署支持** | ✅ 完成 | 桌面（Wails）+ 服务端（HTTP）双模式 |
-| 阶段 4 | 中间件连接器 | ⬜ 待开始 | 依赖阶段 2R 完成 |
+| 阶段 4 | 中间件连接器 | 🟡 进行中 | 核心连接器、MQ 接入与前端分栏页面已落地 |
 | 阶段 5 | DNS 服务 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 6 | 健康检查 | ⬜ 待开始 | 依赖阶段 2R 完成 |
 | 阶段 7 | 审计系统 | ⬜ 待开始 | 依赖阶段 2R 完成 |
@@ -424,7 +424,7 @@ internal/asset/      internal/executor/
 
 ---
 
-## 阶段 4：中间件连接器 ⬜
+## 阶段 4：中间件连接器 🟡
 
 **目标**：统一的插件化中间件连接接口，支持数据库查询、缓存操作、MQ 消息发送
 
@@ -443,6 +443,17 @@ MQConnector        // SendMessage(msg)
 
 ### 任务拆解
 
+### 当前进度
+
+- 已完成连接器抽象、工厂注册和 SQL 扫描辅助
+- 已接入 MySQL、PostgreSQL、Redis、RabbitMQ、Kafka、RocketMQ
+- 已打通 Wails API 与 HTTP API 的统一连接器调用链路
+- 已将前端页面拆分为数据库、缓存、消息队列三类标签，并为不同中间件提供独立面板
+- 已引入插件元信息扩展：`credential_types`、`capabilities`、`integration_guide`
+- 已扩展凭据类型：password、ssh_key、token、access_key_secret、sasl
+- 连接器行为已接入审计记录，连接器扩展流程已沉淀在 `internal/connector/README.md`
+- 内置中间件目录已集中到 `internal/plugin/builtin/<type>/`，并拆分为 `definition.go` 与 `connector.go`
+
 - [ ] Task 4.1 — 定义连接器接口（`internal/connector/connector.go`）
   - 通用 Connector 接口（Connect/Ping/Close/TypeID）
   - DatabaseConnector 接口（Execute/ListDatabases/ListTables）
@@ -453,14 +464,14 @@ MQConnector        // SendMessage(msg)
 - [ ] Task 4.2 — 连接器工厂注册表（`internal/connector/factory.go`）
   - RegisterFactory / NewConnector 实现
 
-- [ ] Task 4.3 — MySQL 连接器实现（`internal/connector/impl/mysql/`）
+- [ ] Task 4.3 — MySQL 连接器实现（`internal/plugin/builtin/mysql/connector.go`）
   - 从 ExtConfig 解析连接参数
   - 从 Credential 解析用户名+密码
   - 实现 DatabaseConnector 接口（支持只读限制）
 
 - [ ] Task 4.4 — PostgreSQL 连接器实现
 
-- [ ] Task 4.5 — Redis 连接器实现（`internal/connector/impl/redis/`）
+- [ ] Task 4.5 — Redis 连接器实现（`internal/plugin/builtin/redis/connector.go`）
   - 支持单机模式和 Sentinel 模式
   - 命令白名单控制
 

@@ -39,6 +39,7 @@ func main() {
 		Bind: []interface{}{
 			app,
 			app.AssetAPI,
+			app.AuditAPI,
 			app.ConnectorAPI,
 			app.ExecutorAPI,
 		},

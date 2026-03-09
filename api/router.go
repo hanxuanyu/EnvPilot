@@ -20,6 +20,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	bus := NewEventBus()
 
 	assetH := NewAssetHandler(c.EnvSvc, c.GrpSvc, c.AssetSvc, c.CredSvc)
+	auditH := NewAuditHandler(c.AuditSvc)
 	connH := NewConnectorHandler(c.ConnSvc)
 	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.Pool, bus)
 
@@ -70,6 +71,8 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("GET /api/connectors/{id}/tables", connH.ListTables)
 	mux.HandleFunc("POST /api/connectors/sql", connH.ExecuteSQL)
 	mux.HandleFunc("POST /api/connectors/redis", connH.ExecuteRedisCmd)
+	mux.HandleFunc("POST /api/connectors/mq", connH.SendMQMessage)
+	mux.HandleFunc("GET /api/audits", auditH.ListAuditLogs)
 
 	// ── 命令执行 ──────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/executions", execH.ExecuteCommand)

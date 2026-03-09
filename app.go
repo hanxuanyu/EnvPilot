@@ -10,6 +10,7 @@ import (
 
 	"EnvPilot/internal/app"
 	assetAPI "EnvPilot/internal/asset/api"
+	auditAPI "EnvPilot/internal/audit/api"
 	connectorAPI "EnvPilot/internal/connector/api"
 	executorAPI "EnvPilot/internal/executor/api"
 
@@ -24,6 +25,7 @@ type App struct {
 	ctx          context.Context
 	container    *app.Container
 	AssetAPI     *assetAPI.AssetAPI
+	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 }
@@ -37,6 +39,7 @@ func NewApp() (*App, error) {
 	return &App{
 		container:    c,
 		AssetAPI:     c.AssetAPI,
+		AuditAPI:     c.AuditAPI,
 		ConnectorAPI: c.ConnectorAPI,
 		ExecutorAPI:  c.ExecutorAPI,
 	}, nil
