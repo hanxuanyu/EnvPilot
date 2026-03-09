@@ -48,7 +48,7 @@ export function Layout() {
       <Sidebar />
 
       {/* 主内容区域 */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* 顶部标题栏 */}
         <div
           className="flex h-[var(--layout-header-height)] items-center gap-4 border-b px-6"
@@ -112,8 +112,10 @@ export function Layout() {
         </div>
 
         {/* 页面内容区，支持滚动 */}
-        <div className="flex-1 overflow-auto p-6">
-          <Outlet />
+        <div className="flex-1 min-h-0 min-w-0 overflow-auto p-6">
+          <div className="h-full min-w-0">
+            <Outlet />
+          </div>
         </div>
       </main>
 

@@ -619,12 +619,12 @@ export default function ExecutorPage() {
       {activeTab === 'history' && (
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           {/* 过滤栏 */}
-          <div className="flex items-center gap-3">
+          <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[minmax(0,1fr)_auto]">
             <Select
               value={String(historyAssetId)}
               onValueChange={v => setHistoryAssetId(Number(v))}
             >
-              <SelectTrigger className="w-[220px]">
+              <SelectTrigger className="w-full lg:max-w-[320px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -641,6 +641,7 @@ export default function ExecutorPage() {
               size="sm"
               onClick={handleHistoryLoad}
               disabled={loading}
+              className="w-full lg:w-auto lg:justify-self-end"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               刷新

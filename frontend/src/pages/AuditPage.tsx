@@ -83,7 +83,7 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in-0 duration-200">
+    <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">操作审计</h1>
@@ -97,32 +97,36 @@ export default function AuditPage() {
         </Button>
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_180px_minmax(0,1fr)_120px]">
-        <Select value={moduleFilter} onValueChange={(value) => {
-          setModuleFilter(value)
-          setPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="模块" /></SelectTrigger>
-          <SelectContent>
-            {MODULE_OPTIONS.map(option => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={moduleFilter} onValueChange={(value) => {
+            setModuleFilter(value)
+            setPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="模块" /></SelectTrigger>
+            <SelectContent>
+              {MODULE_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select value={statusFilter} onValueChange={(value) => {
-          setStatusFilter(value)
-          setPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="状态" /></SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map(option => (
-              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={statusFilter} onValueChange={(value) => {
+            setStatusFilter(value)
+            setPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="状态" /></SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <div className="flex items-center gap-2 rounded-md border border-border px-3">
+        <div className="flex min-w-[240px] flex-1 basis-[320px] items-center gap-2 rounded-md border border-border px-3">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             value={keyword}
@@ -133,16 +137,16 @@ export default function AuditPage() {
           />
         </div>
 
-        <Button onClick={handleSearch} loading={loading}>查询</Button>
+        <Button onClick={handleSearch} loading={loading} className="w-full sm:w-auto shrink-0">查询</Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
           <span className="text-muted-foreground">共 {total} 条审计记录</span>
           <span className="text-muted-foreground">第 {page} / {totalPages} 页，当前 {logs.length} 条</span>
         </div>
         <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[1280px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
                 {['时间', '模块', '动作', '资源', '状态', '详情', '请求/结果摘要'].map((header) => (

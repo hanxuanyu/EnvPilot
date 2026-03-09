@@ -52,7 +52,7 @@ build-desktop:
 	@echo ">>> 桌面版构建完成：build/bin/$(APP_NAME)"
 
 # ── 服务端版构建（HTTP）─────────────────────────────────────────
-# 流程：npm run build:server → 复制到 cmd/server/dist → go build
+# 流程：npm run build:server → 复制 frontend/dist-server 到 cmd/server/dist → go build
 build-server:
 	@echo ">>> [1/3] 构建前端（服务端模式）..."
 	npm run build:server --prefix $(FRONTEND)

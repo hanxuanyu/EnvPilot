@@ -57,7 +57,7 @@ export function RedisConnectorPanel({ asset }: { asset: Asset }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
@@ -101,7 +101,10 @@ export function RedisConnectorPanel({ asset }: { asset: Asset }) {
             执行命令
           </Button>
         </div>
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+        >
           <Input value={command} onChange={(e) => setCommand(e.target.value.toUpperCase())} placeholder="GET" />
           <Input value={argsText} onChange={(e) => setArgsText(e.target.value)} placeholder="key 或多参数，使用空格分隔" />
         </div>

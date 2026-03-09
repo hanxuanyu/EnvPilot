@@ -20,8 +20,8 @@ export function ConnectorAssetSidebar({
   onSelect: (assetId: number) => void
 }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+    <div className="w-full min-w-0 space-y-4">
+      <div className="w-full min-w-0 rounded-xl border border-border bg-card p-4 space-y-3">
         <div className="text-sm font-medium text-foreground">{title}</div>
         <Input
           value={keyword}
@@ -30,7 +30,7 @@ export function ConnectorAssetSidebar({
         />
       </div>
 
-      <div className="rounded-xl border border-border bg-card p-3">
+      <div className="w-full min-w-0 rounded-xl border border-border bg-card p-3">
         <div className="mb-3 flex items-center justify-between">
           <div className="text-sm font-medium text-foreground">可用资产</div>
           <Badge variant="outline">{assets.length}</Badge>
@@ -44,14 +44,14 @@ export function ConnectorAssetSidebar({
             <button
               key={asset.id}
               onClick={() => onSelect(asset.id)}
-              className={`w-full rounded-xl border p-4 text-left transition-colors ${
+              className={`w-full min-w-0 rounded-xl border p-4 text-left transition-colors ${
                 asset.id === selectedAssetId ? 'border-primary bg-primary/5' : 'border-border bg-card hover:bg-accent/40'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium text-foreground">{asset.name}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{safeAddress(asset)}</div>
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">{asset.name}</div>
+                  <div className="mt-1 truncate text-xs text-muted-foreground">{safeAddress(asset)}</div>
                 </div>
                 <Badge variant="outline">{asset.plugin_type}</Badge>
               </div>

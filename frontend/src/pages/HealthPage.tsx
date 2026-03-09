@@ -128,7 +128,7 @@ export default function HealthPage() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in-0 duration-200">
+    <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">健康检查</h1>
@@ -145,7 +145,7 @@ export default function HealthPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border border-border bg-card p-4"><div className="text-xs text-muted-foreground">总资产</div><div className="mt-2 text-2xl font-semibold text-foreground">{summary?.total ?? 0}</div></div>
         <div className="rounded-xl border border-border bg-card p-4"><div className="text-xs text-muted-foreground">健康</div><div className="mt-2 text-2xl font-semibold text-emerald-500">{summary?.healthy ?? 0}</div></div>
         <div className="rounded-xl border border-border bg-card p-4"><div className="text-xs text-muted-foreground">告警</div><div className="mt-2 text-2xl font-semibold text-amber-500">{summary?.warning ?? 0}</div></div>
@@ -153,45 +153,51 @@ export default function HealthPage() {
         <div className="rounded-xl border border-border bg-card p-4"><div className="text-xs text-muted-foreground">不可达</div><div className="mt-2 text-2xl font-semibold text-rose-500">{summary?.unreachable ?? 0}</div></div>
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_180px_180px_minmax(0,1fr)_120px]">
-        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
-          setSelectedEnv(value === '__all__' ? 'all' : Number(value))
-          setPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部环境</SelectItem>
-            {environments.map((env) => <SelectItem key={env.id} value={String(env.id)}>{env.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
+            setSelectedEnv(value === '__all__' ? 'all' : Number(value))
+            setPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部环境</SelectItem>
+              {environments.map((env) => <SelectItem key={env.id} value={String(env.id)}>{env.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select value={category || '__all__'} onValueChange={(value) => {
-          setCategory(value === '__all__' ? '' : value as AssetCategory)
-          setPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="全部类别" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部类别</SelectItem>
-            {(Object.entries(CATEGORY_LABELS) as [AssetCategory, string][]).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={category || '__all__'} onValueChange={(value) => {
+            setCategory(value === '__all__' ? '' : value as AssetCategory)
+            setPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="全部类别" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部类别</SelectItem>
+              {(Object.entries(CATEGORY_LABELS) as [AssetCategory, string][]).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select value={status || '__all__'} onValueChange={(value) => {
-          setStatus(value === '__all__' ? '' : value as HealthStatus)
-          setPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            {(Object.entries(HEALTH_STATUS_LABELS) as [HealthStatus, string][]).map(([key, label]) => (
-              <SelectItem key={key} value={key}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={status || '__all__'} onValueChange={(value) => {
+            setStatus(value === '__all__' ? '' : value as HealthStatus)
+            setPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部状态</SelectItem>
+              {(Object.entries(HEALTH_STATUS_LABELS) as [HealthStatus, string][]).map(([key, label]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <div className="flex items-center gap-2 rounded-md border border-border px-3">
+        <div className="flex min-w-[240px] flex-1 basis-[320px] items-center gap-2 rounded-md border border-border px-3">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             value={keyword}
@@ -202,16 +208,16 @@ export default function HealthPage() {
           />
         </div>
 
-        <Button onClick={handleSearch} loading={loading}>查询</Button>
+        <Button onClick={handleSearch} loading={loading} className="w-full sm:w-auto shrink-0">查询</Button>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
           <span className="text-muted-foreground">共 {total} 条最新健康快照</span>
           <span className="text-muted-foreground">第 {page} / {totalPages} 页</span>
         </div>
         <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[1100px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
                 {['资产', '环境', '检查', '状态', 'RTT', '指标', '时间', '操作'].map((header) => (

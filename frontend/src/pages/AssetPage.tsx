@@ -234,9 +234,9 @@ export default function AssetPage() {
   }, [credentialKeyword, credentials])
 
   return (
-    <div className="space-y-5 animate-in fade-in-0 duration-200">
+    <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       {/* 顶部 Tab + 操作按钮 */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary">
           {(['assets', 'credentials'] as TabType[]).map(t => (
             <button
@@ -252,7 +252,7 @@ export default function AssetPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -282,61 +282,67 @@ export default function AssetPage() {
       {tab === 'assets' && (
         <>
           {/* 筛选栏 */}
-          <div className="flex gap-2">
-            <Select
-              value={selectedEnvId?.toString() ?? '__all__'}
-              onValueChange={v => setSelectedEnv(v === '__all__' ? null : Number(v))}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="全部环境" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部环境</SelectItem>
-                {environments.map(e => (
-                  <SelectItem key={e.id} value={e.id.toString()}>
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.color }} />
-                      {e.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
+            <div className="w-full sm:w-[170px] lg:w-[180px]">
+              <Select
+                value={selectedEnvId?.toString() ?? '__all__'}
+                onValueChange={v => setSelectedEnv(v === '__all__' ? null : Number(v))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="全部环境" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部环境</SelectItem>
+                  {environments.map(e => (
+                    <SelectItem key={e.id} value={e.id.toString()}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: e.color }} />
+                        {e.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={categoryFilter || '__all__'}
-              onValueChange={v => {
-                setCategoryFilter(v === '__all__' ? '' : v as AssetCategory)
-                setPluginFilter('')
-              }}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue placeholder="全部类别" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部类别</SelectItem>
-                {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map(k => (
-                  <SelectItem key={k} value={k}>{CATEGORY_LABELS[k]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full sm:w-[150px] lg:w-[160px]">
+              <Select
+                value={categoryFilter || '__all__'}
+                onValueChange={v => {
+                  setCategoryFilter(v === '__all__' ? '' : v as AssetCategory)
+                  setPluginFilter('')
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="全部类别" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部类别</SelectItem>
+                  {(Object.keys(CATEGORY_LABELS) as AssetCategory[]).map(k => (
+                    <SelectItem key={k} value={k}>{CATEGORY_LABELS[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <Select
-              value={pluginFilter || '__all__'}
-              onValueChange={v => setPluginFilter(v === '__all__' ? '' : v)}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="全部类型" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部类型</SelectItem>
-                {filteredPlugins.map(p => (
-                  <SelectItem key={p.type_id} value={p.type_id}>{p.display_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="w-full sm:w-[170px] lg:w-[180px]">
+              <Select
+                value={pluginFilter || '__all__'}
+                onValueChange={v => setPluginFilter(v === '__all__' ? '' : v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="全部类型" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部类型</SelectItem>
+                  {filteredPlugins.map(p => (
+                    <SelectItem key={p.type_id} value={p.type_id}>{p.display_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            <div className="flex-1 flex items-center gap-2 px-3 rounded-md border bg-card border-border">
+            <div className="flex min-w-[220px] flex-1 basis-[260px] items-center gap-2 rounded-md border border-border bg-background px-3">
               <Search className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
               <input
                 value={keyword}
@@ -346,12 +352,12 @@ export default function AssetPage() {
                 className="flex-1 py-2 text-sm outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
               />
             </div>
-            <Button variant="secondary" onClick={handleSearch}>搜索</Button>
+            <Button variant="secondary" onClick={handleSearch} className="w-full sm:w-auto shrink-0">搜索</Button>
           </div>
 
           {/* 资产表格 */}
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="min-w-[1120px] w-full text-sm">
               <thead>
                 <tr className="bg-secondary border-b border-border">
                   {['资产名称', '类型', '连接地址', '环境', '状态', '健康', '操作'].map(h => (
@@ -460,8 +466,8 @@ export default function AssetPage() {
             />
           </div>
 
-          <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="bg-secondary border-b border-border">
                 {['名称', '类型', '用户名', '密钥', '操作'].map(h => (

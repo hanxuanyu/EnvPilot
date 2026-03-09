@@ -321,7 +321,7 @@ export default function DnsPage() {
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in-0 duration-200">
+    <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">DNS 管理</h1>
@@ -341,33 +341,37 @@ export default function DnsPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_160px_minmax(0,1fr)_120px]">
-        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
-          setSelectedEnv(value === '__all__' ? 'all' : Number(value))
-          setLogPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部环境</SelectItem>
-            {environments.map(env => (
-              <SelectItem key={env.id} value={String(env.id)}>{env.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
+        <div className="w-full sm:w-[170px] lg:w-[180px]">
+          <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
+            setSelectedEnv(value === '__all__' ? 'all' : Number(value))
+            setLogPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部环境</SelectItem>
+              {environments.map(env => (
+                <SelectItem key={env.id} value={String(env.id)}>{env.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <Select value={statusFilter} onValueChange={(value) => {
-          setStatusFilter(value as FilterStatus)
-          setLogPage(1)
-        }}>
-          <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">全部状态</SelectItem>
-            <SelectItem value="enabled">启用中</SelectItem>
-            <SelectItem value="disabled">已停用</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-[150px] lg:w-[160px]">
+          <Select value={statusFilter} onValueChange={(value) => {
+            setStatusFilter(value as FilterStatus)
+            setLogPage(1)
+          }}>
+            <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部状态</SelectItem>
+              <SelectItem value="enabled">启用中</SelectItem>
+              <SelectItem value="disabled">已停用</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        <div className="flex items-center gap-2 rounded-md border border-border px-3">
+        <div className="flex min-w-[240px] flex-1 basis-[320px] items-center gap-2 rounded-md border border-border px-3">
           <Search className="h-4 w-4 text-muted-foreground" />
           <input
             value={keyword}
@@ -378,7 +382,7 @@ export default function DnsPage() {
           />
         </div>
 
-        <Button onClick={handleSearch} loading={loading || logLoading}>查询</Button>
+        <Button onClick={handleSearch} loading={loading || logLoading} className="w-full sm:w-auto shrink-0">查询</Button>
       </div>
 
       <div className="grid gap-3 md:grid-cols-4">
@@ -408,13 +412,13 @@ export default function DnsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
           <span className="text-muted-foreground">共 {records.length} 条 DNS 记录</span>
           <span className="text-muted-foreground">当前支持 A / CNAME</span>
         </div>
         <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[980px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
                 {['域名', '环境', '类型', '目标值', 'TTL', '状态', '操作'].map((header) => (
@@ -489,13 +493,13 @@ export default function DnsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="overflow-x-auto rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
           <span className="text-muted-foreground">共 {queryLogTotal} 条 DNS 查询日志</span>
           <span className="text-muted-foreground">默认 TTL {runtimeStatus?.default_ttl ?? '—'}</span>
         </div>
         <div className="overflow-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-[1040px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
                 {['时间', '域名', '环境', '类型', '来源', '响应', '耗时'].map((header) => (

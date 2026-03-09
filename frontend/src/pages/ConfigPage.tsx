@@ -91,6 +91,33 @@ function summarizeHotReload(result?: CurrentConfigResult['hot_reload']) {
   return parts.join('，')
 }
 
+function hotReloadSummaryTone(hotReload: ReturnType<typeof getHotReloadState>) {
+  if (hotReload.restart_required.length > 0) {
+    return {
+      border: 'color-mix(in srgb, #f59e0b 28%, var(--color-border))',
+      background: 'color-mix(in srgb, #f59e0b 10%, var(--color-card))',
+      title: 'color-mix(in srgb, #b45309 72%, var(--color-foreground))',
+      body: 'color-mix(in srgb, #92400e 56%, var(--color-foreground))',
+    }
+  }
+
+  if (hotReload.applied.length > 0) {
+    return {
+      border: 'color-mix(in srgb, #10b981 24%, var(--color-border))',
+      background: 'color-mix(in srgb, #10b981 9%, var(--color-card))',
+      title: 'color-mix(in srgb, #047857 72%, var(--color-foreground))',
+      body: 'color-mix(in srgb, #065f46 54%, var(--color-foreground))',
+    }
+  }
+
+  return {
+    border: 'var(--color-border)',
+    background: 'color-mix(in srgb, var(--color-secondary) 48%, transparent)',
+    title: 'var(--color-foreground)',
+    body: 'var(--color-muted-foreground)',
+  }
+}
+
 function FieldBlock({
   label,
   hint,
@@ -152,6 +179,7 @@ export default function ConfigPage() {
   const [showSaltFile, setShowSaltFile] = useState(false)
 
   const hotReload = getHotReloadState(current?.hot_reload)
+  const hotReloadTone = useMemo(() => hotReloadSummaryTone(hotReload), [hotReload])
 
   const loadData = async (preserveSelection = true) => {
     setLoading(true)
@@ -302,8 +330,15 @@ export default function ConfigPage() {
                 placeholder="填写本次配置修改说明，便于审计与版本回溯"
                 className="min-h-[78px]"
               />
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/8 p-3 text-xs leading-6 text-amber-100">
-                <div className="flex items-center gap-2 font-medium text-amber-50">
+              <div
+                className="rounded-lg border p-3 text-xs leading-6"
+                style={{
+                  borderColor: hotReloadTone.border,
+                  backgroundColor: hotReloadTone.background,
+                  color: hotReloadTone.body,
+                }}
+              >
+                <div className="flex items-center gap-2 font-medium" style={{ color: hotReloadTone.title }}>
                   <AlertTriangle className="h-4 w-4" />
                   热更新摘要
                 </div>

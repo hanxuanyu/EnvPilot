@@ -180,7 +180,7 @@ export function SQLConnectorPanel({ asset }: { asset: Asset }) {
         )}
       </div>
 
-      <div className="grid gap-4 2xl:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(300px,0.95fr)_minmax(0,1.65fr)] 2xl:grid-cols-[minmax(320px,1fr)_minmax(0,1.8fr)]">
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <div className="text-sm font-medium text-foreground">连接上下文</div>
@@ -213,7 +213,7 @@ export function SQLConnectorPanel({ asset }: { asset: Asset }) {
           </div>
         </div>
 
-        <div className="space-y-4 min-w-0">
+        <div className="w-full min-w-0 space-y-4">
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>

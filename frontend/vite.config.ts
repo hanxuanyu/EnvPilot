@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+const MODERN_CSS_TARGET = ['chrome120', 'edge120', 'firefox121', 'safari17']
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const isServer = mode === 'server'
@@ -22,28 +24,20 @@ export default defineConfig(({ mode }) => {
       __API_BASE__: JSON.stringify(isServer ? '' : ''),
     },
     build: {
-      // 桌面模式输出到 dist（Wails 内嵌），服务端模式输出到 dist-server
+      // 桌面模式输出到 dist，服务端模式输出到 dist-server，便于两套产物并存
       outDir: isServer ? 'dist-server' : 'dist',
+      // 当前 Vite 3 + TailwindCSS v4 组合在 esbuild 压缩阶段会错误改写
+      // 响应式工具类，直接导致服务端产物布局异常，因此先关闭压缩。
+      minify: false,
+      // TailwindCSS v4 会生成现代 CSS（嵌套、color-mix 等），旧默认目标会让 esbuild
+      // 在压缩时错误改写响应式工具类，导致服务端产物布局错乱。
+      cssTarget: MODERN_CSS_TARGET,
       rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('@xterm')) return 'vendor-xterm'
-              if (id.includes('@radix-ui') || id.includes('sonner')) return 'vendor-ui'
-              if (id.includes('react-router')) return 'vendor-router'
-              if (id.includes('react-dom') || /node_modules\/react\//.test(id)) return 'vendor-react'
-              if (id.includes('zustand')) return 'vendor-state'
-              if (id.includes('lucide-react')) return 'vendor-icons'
-              return 'vendor-misc'
-            }
-
-            if (id.includes('/src/pages/TerminalPage')) return 'page-terminal'
-            if (id.includes('/src/pages/ConnectorPage')) return 'page-connector'
-            if (id.includes('/src/pages/ConfigPage')) return 'page-config'
-            if (id.includes('/src/pages/AssetPage') || id.includes('/src/pages/EnvironmentPage')) return 'page-assets'
-            if (id.includes('/src/pages/DnsPage') || id.includes('/src/pages/HealthPage')) return 'page-infra'
-            if (id.includes('/src/pages/ExecutorPage') || id.includes('/src/pages/AuditPage')) return 'page-ops'
-          },
+        onwarn(warning, warn) {
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.message.includes(`'use client'`)) {
+            return
+          }
+          warn(warning)
         },
       },
     },

@@ -281,7 +281,7 @@ export default function Dashboard() {
   ]
 
   return (
-    <div className="space-y-6" style={{ animation: 'var(--animate-fade-in)' }}>
+    <div className="w-full space-y-6 2xl:space-y-7" style={{ animation: 'var(--animate-fade-in)' }}>
       <section>
         <div
           className="rounded-2xl border p-6"
@@ -331,7 +331,10 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            className="mt-5 grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+          >
             {heroSignals.map((signal) => (
               <div
                 key={signal.title}
@@ -353,7 +356,10 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+      <section
+        className="grid gap-4"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}
+      >
         <div className="grid min-w-[220px] gap-2 rounded-2xl border p-4 text-sm" style={{ backgroundColor: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
           <InfoRow label="版本" value={versionInfo?.version ?? 'dev'} />
           <InfoRow label="Commit" value={versionInfo?.commit ?? 'unknown'} mono />
@@ -399,7 +405,10 @@ export default function Dashboard() {
         </Panel>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+      <section
+        className="grid gap-3"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
+      >
         {statCards.map((card) => (
           <div key={card.title} className="rounded-2xl border p-4" style={{ backgroundColor: 'var(--color-card)', borderColor: 'var(--color-border)' }}>
             <div className="flex items-center justify-between">
@@ -412,10 +421,16 @@ export default function Dashboard() {
         ))}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+      <section
+        className="grid gap-4"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}
+      >
         <div className="grid gap-4">
           <Panel title="资产分布" action={{ to: '/assets', label: '查看资产' }}>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
+            >
               {(['server', 'database', 'cache', 'mq', 'other'] as const).map((category) => {
                 const count = assets.filter((asset) => asset.category === category).length
                 const percent = assets.length ? Math.round((count / assets.length) * 100) : 0
@@ -462,7 +477,10 @@ export default function Dashboard() {
             {loading && assets.length === 0 ? (
               <GridSkeleton count={4} />
             ) : (
-              <div className="grid gap-2 md:grid-cols-2">
+              <div
+                className="grid gap-2"
+                style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+              >
                 {quickActions.map((item) => (
                   <Link
                     key={item.to}

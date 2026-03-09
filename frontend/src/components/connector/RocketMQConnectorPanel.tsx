@@ -78,7 +78,7 @@ export function RocketMQConnectorPanel({ asset }: { asset: Asset }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
@@ -108,8 +108,8 @@ export function RocketMQConnectorPanel({ asset }: { asset: Asset }) {
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(320px,1.15fr)_minmax(280px,0.85fr)] 2xl:grid-cols-[minmax(360px,1.2fr)_minmax(320px,0.8fr)]">
+        <div className="w-full min-w-0 rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium text-foreground">发送消息</div>
@@ -129,7 +129,7 @@ export function RocketMQConnectorPanel({ asset }: { asset: Asset }) {
           <Textarea value={body} onChange={(e) => setBody(e.target.value)} className="min-h-[220px] font-mono text-sm" />
         </div>
 
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="w-full min-w-0 rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="text-sm font-medium text-foreground">发送历史</div>
           <div className="space-y-3 max-h-[640px] overflow-auto">
             {history.length === 0 ? (

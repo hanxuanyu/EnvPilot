@@ -23,7 +23,7 @@ EnvPilot 支持两种独立的部署模式，共享全部业务逻辑：
 | 入口 | `main.go` + `app.go` | `cmd/server/main.go` |
 | 前端通信 | Wails IPC（原生 WebView 桥接） | REST API + SSE + WebSocket |
 | 实时事件 | `wailsruntime.EventsEmit` | `EventBus` → SSE / WebSocket |
-| 前端构建 | `npm run build`（`dist/`） | `npm run build:server`（`dist-server/`） |
+| 前端构建 | `npm run build`（`dist/`） | `npm run build:server`（`dist/`） |
 | 二进制产物 | `envpilot`（含 WebView） | `envpilot-server`（含嵌入静态资源） |
 | 构建命令 | `make build-desktop` | `make build-server` |
 
