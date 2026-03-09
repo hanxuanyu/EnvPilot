@@ -26,9 +26,6 @@ export default defineConfig(({ mode }) => {
     build: {
       // 桌面模式输出到 dist，服务端模式输出到 dist-server，便于两套产物并存
       outDir: isServer ? 'dist-server' : 'dist',
-      // 当前 Vite 3 + TailwindCSS v4 组合在 esbuild 压缩阶段会错误改写
-      // 响应式工具类，直接导致服务端产物布局异常，因此先关闭压缩。
-      minify: false,
       // TailwindCSS v4 会生成现代 CSS（嵌套、color-mix 等），旧默认目标会让 esbuild
       // 在压缩时错误改写响应式工具类，导致服务端产物布局错乱。
       cssTarget: MODERN_CSS_TARGET,
