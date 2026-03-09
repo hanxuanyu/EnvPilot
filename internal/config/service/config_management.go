@@ -19,12 +19,12 @@ import (
 )
 
 type CurrentConfigResult struct {
-	Config          configModel.AppConfig          `json:"config"`
-	YAML            string                         `json:"yaml"`
-	ConfigPath      string                         `json:"config_path"`
-	RequiresRestart bool                           `json:"requires_restart"`
-	HotReload       HotReloadResult                `json:"hot_reload"`
-	LatestSnapshot  *configModel.ConfigSnapshot    `json:"latest_snapshot,omitempty"`
+	Config          configModel.AppConfig       `json:"config"`
+	YAML            string                      `json:"yaml"`
+	ConfigPath      string                      `json:"config_path"`
+	RequiresRestart bool                        `json:"requires_restart"`
+	HotReload       HotReloadResult             `json:"hot_reload"`
+	LatestSnapshot  *configModel.ConfigSnapshot `json:"latest_snapshot,omitempty"`
 }
 
 type UpdateRawConfigRequest struct {

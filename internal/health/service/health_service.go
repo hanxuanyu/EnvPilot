@@ -63,7 +63,7 @@ type HealthService struct {
 	pool      *sshpkg.Pool
 	cfg       configModel.HealthSection
 	log       *zap.Logger
-	cfgMu      sync.RWMutex
+	cfgMu     sync.RWMutex
 
 	schedulerMu     sync.Mutex
 	schedulerCancel context.CancelFunc

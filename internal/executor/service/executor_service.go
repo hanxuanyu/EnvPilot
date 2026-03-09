@@ -54,7 +54,7 @@ type ExecuteRequest struct {
 
 // ExecuteResult 执行结果
 type ExecuteResult struct {
-	Dangerous bool                 `json:"dangerous"`            // 是否触发危险命令检测
+	Dangerous bool                 `json:"dangerous"`           // 是否触发危险命令检测
 	Execution *execModel.Execution `json:"execution,omitempty"` // 执行记录（Dangerous=true 时为 nil）
 }
 

@@ -31,22 +31,22 @@ type TerminalSession struct {
 
 // TerminalService 在线终端会话管理服务
 type TerminalService struct {
-	mu       sync.Mutex
-	sessions map[string]*TerminalSession
-	pool     *sshpkg.Pool
+	mu        sync.Mutex
+	sessions  map[string]*TerminalSession
+	pool      *sshpkg.Pool
 	assetRepo *assetRepo.AssetRepo
-	audit    *auditSvc.AuditService
-	log      *zap.Logger
+	audit     *auditSvc.AuditService
+	log       *zap.Logger
 }
 
 // NewTerminalService 创建终端服务
 func NewTerminalService(pool *sshpkg.Pool, assetRepo *assetRepo.AssetRepo, audit *auditSvc.AuditService) *TerminalService {
 	return &TerminalService{
-		sessions: make(map[string]*TerminalSession),
-		pool:     pool,
+		sessions:  make(map[string]*TerminalSession),
+		pool:      pool,
 		assetRepo: assetRepo,
-		audit:    audit,
-		log:      logger.Named("terminal"),
+		audit:     audit,
+		log:       logger.Named("terminal"),
 	}
 }
 
@@ -248,4 +248,3 @@ func (s *TerminalService) recordAssetAudit(assetID uint, action string, success 
 	}
 	s.audit.RecordBestEffort(input)
 }
-

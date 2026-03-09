@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	auditSvc "EnvPilot/internal/audit/service"
 	"EnvPilot/internal/config/model"
 	configRepo "EnvPilot/internal/config/repository"
-	auditSvc "EnvPilot/internal/audit/service"
 
 	"gopkg.in/yaml.v3"
 )
@@ -38,11 +38,11 @@ type ConfigService struct {
 	// config 当前生效的配置（只读，通过 Get() 访问）
 	config *model.AppConfig
 	// mu 读写锁，保证并发安全
-	mu sync.RWMutex
-	snapshotRepo *configRepo.ConfigSnapshotRepo
-	audit       *auditSvc.AuditService
+	mu             sync.RWMutex
+	snapshotRepo   *configRepo.ConfigSnapshotRepo
+	audit          *auditSvc.AuditService
 	runtimeApplier RuntimeApplier
-	lastHotReload HotReloadResult
+	lastHotReload  HotReloadResult
 }
 
 type HotReloadResult struct {
