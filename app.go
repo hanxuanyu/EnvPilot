@@ -12,6 +12,7 @@ import (
 	assetAPI "EnvPilot/internal/asset/api"
 	auditAPI "EnvPilot/internal/audit/api"
 	connectorAPI "EnvPilot/internal/connector/api"
+	dnsAPI "EnvPilot/internal/dns/api"
 	executorAPI "EnvPilot/internal/executor/api"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -27,6 +28,7 @@ type App struct {
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
+	DNSAPI       *dnsAPI.DNSAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 }
 
@@ -41,6 +43,7 @@ func NewApp() (*App, error) {
 		AssetAPI:     c.AssetAPI,
 		AuditAPI:     c.AuditAPI,
 		ConnectorAPI: c.ConnectorAPI,
+		DNSAPI:       c.DNSAPI,
 		ExecutorAPI:  c.ExecutorAPI,
 	}, nil
 }

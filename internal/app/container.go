@@ -22,6 +22,9 @@ import (
 	configService "EnvPilot/internal/config/service"
 	connectorAPI "EnvPilot/internal/connector/api"
 	connectorSvc "EnvPilot/internal/connector/service"
+	dnsAPI "EnvPilot/internal/dns/api"
+	dnsRepo "EnvPilot/internal/dns/repository"
+	dnsSvc "EnvPilot/internal/dns/service"
 	executorAPI "EnvPilot/internal/executor/api"
 	executorRepo "EnvPilot/internal/executor/repository"
 	executorSvc "EnvPilot/internal/executor/service"
@@ -44,6 +47,7 @@ type Container struct {
 	AssetSvc *assetSvc.AssetService
 	CredSvc  *assetSvc.CredentialService
 	ConnSvc  *connectorSvc.ConnectorService
+	DNSSvc   *dnsSvc.DNSService
 	ExecSvc  *executorSvc.ExecutorService
 	TermSvc  *executorSvc.TerminalService
 	Pool     *sshPool.Pool
@@ -54,6 +58,7 @@ type Container struct {
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
+	DNSAPI       *dnsAPI.DNSAPI
 	ExecutorAPI  *executorAPI.ExecutorAPI
 
 	db *gorm.DB
@@ -63,6 +68,9 @@ type Container struct {
 func (c *Container) Cleanup() {
 	if c.ExecutorAPI != nil {
 		c.ExecutorAPI.Cleanup()
+	}
+	if c.DNSSvc != nil {
+		_ = c.DNSSvc.StopRuntime()
 	}
 	if c.db != nil {
 		if sqlDB, err := c.db.DB(); err == nil {
@@ -150,12 +158,21 @@ func Bootstrap() (*Container, error) {
 	grpRepo := assetRepo.NewGroupRepo(db)
 	envSvc := assetSvc.NewEnvironmentService(envRepo)
 	grpSvc := assetSvc.NewGroupService(grpRepo, envRepo)
-	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo, sharedCredRepo, auditSvcInst)
+	dnsRepoInst := dnsRepo.NewDNSRepo(db)
+	dnsQueryLogRepoInst := dnsRepo.NewDNSQueryLogRepo(db)
+	dnsSvcInst := dnsSvc.NewDNSService(dnsRepoInst, dnsQueryLogRepoInst, envRepo, sharedAssetRepo, auditSvcInst)
+	dnsRuntime := dnsSvc.NewServerRuntime(cfg.DNS, dnsSvcInst)
+	dnsSvcInst.AttachRuntime(dnsRuntime)
+	if err := dnsRuntime.Start(); err != nil {
+		return nil, fmt.Errorf("DNS 服务启动失败: %w", err)
+	}
+	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo, sharedCredRepo, dnsSvcInst, auditSvcInst)
 	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc, auditSvcInst)
 
 	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc)
 	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst)
 	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc)
+	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
 	execRepo := executorRepo.NewExecutionRepo(db)
@@ -169,6 +186,7 @@ func Bootstrap() (*Container, error) {
 		AssetSvc:     astSvc,
 		CredSvc:      sharedCredSvc,
 		ConnSvc:      connSvc,
+		DNSSvc:       dnsSvcInst,
 		ExecSvc:      execSvc,
 		TermSvc:      termSvc,
 		Pool:         pool,
@@ -177,6 +195,7 @@ func Bootstrap() (*Container, error) {
 		AssetAPI:     assetAPIInst,
 		AuditAPI:     auditAPIInst,
 		ConnectorAPI: connectorAPIInst,
+		DNSAPI:       dnsAPIInst,
 		ExecutorAPI:  execAPIInst,
 		db:           db,
 	}, nil

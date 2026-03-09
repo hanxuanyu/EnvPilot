@@ -93,8 +93,8 @@ func Default() *AppConfig {
 			DangerousCommands:     []string{"rm -rf", "DROP", "DELETE", "TRUNCATE", "FORMAT"},
 		},
 		DNS: DNSSection{
-			Enabled:    false,
-			ListenAddr: "127.0.0.1:5353",
+			Enabled:    true,
+			ListenAddr: "127.0.0.1:53",
 			Upstream:   "8.8.8.8:53",
 			DefaultTTL: 300,
 		},

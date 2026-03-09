@@ -19,9 +19,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { assetService, credentialService } from '@/services/assetService'
+import { dnsService } from '@/services/dnsService'
 import type {
-  Asset, Credential, AssetCategory, CredentialType, PluginDef,
+  Asset, Credential, AssetCategory, CredentialType, PluginDef, Environment,
 } from '@/types/asset'
+import type { DNSRecord } from '@/types/dns'
 import {
   CATEGORY_LABELS, CATEGORY_COLORS, ASSET_STATUS_LABELS, ASSET_STATUS_COLORS,
   CREDENTIAL_TYPE_LABELS,
@@ -426,7 +428,7 @@ export default function AssetPage() {
 function AssetFormModal({ open, asset, environments, credentials, plugins, onClose, onSave }: {
   open: boolean
   asset: Asset | null
-  environments: any[]
+  environments: Environment[]
   credentials: Credential[]
   plugins: PluginDef[]
   onClose: () => void
@@ -440,10 +442,19 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   const [tagInput, setTagInput] = useState('')
   const [credId, setCredId] = useState<string>('')
   const [extConfig, setExtConfig] = useState<Record<string, unknown>>({})
+  const [dnsEnabled, setDnsEnabled] = useState(true)
+  const [dnsDomain, setDnsDomain] = useState('')
+  const [dnsTTL, setDnsTTL] = useState(300)
+  const [dnsDomainTouched, setDnsDomainTouched] = useState(false)
+  const [linkedDNSRecord, setLinkedDNSRecord] = useState<DNSRecord | null>(null)
+  const [dnsLoading, setDnsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   // 当前选中的插件定义
   const selectedPlugin = plugins.find(p => p.type_id === pluginType)
+  const dnsSupported = supportsAutoDNSForPlugin(selectedPlugin)
+  const selectedEnvironment = environments.find(item => item.id.toString() === envId)
+  const recommendedDNSDomain = recommendAssetDNSDomain(name, pluginType, selectedEnvironment?.name)
   const compatibleCredentials = credentials.filter((credential) => {
     const supported = selectedPlugin?.credential_types ?? []
     if (!selectedPlugin || supported.length === 0) return true
@@ -474,6 +485,11 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       setTagInput(asset.tags?.join(', ') ?? '')
       setCredId(asset.credential_id?.toString() ?? '')
       setExtConfig(asset.ext_config ?? {})
+      setDnsEnabled(false)
+      setDnsDomain(recommendAssetDNSDomain(asset.name, asset.plugin_type, environments.find(item => item.id === asset.environment_id)?.name))
+      setDnsTTL(300)
+      setDnsDomainTouched(false)
+      setLinkedDNSRecord(null)
     } else {
       setEnvId(environments[0]?.id?.toString() ?? '')
       setCategory('server')
@@ -483,8 +499,56 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       setTagInput('')
       setCredId('')
       setExtConfig(buildDefaultConfig(plugins, 'linux_server'))
+      setDnsEnabled(true)
+      setDnsTTL(300)
+      setDnsDomainTouched(false)
+      setDnsDomain(recommendAssetDNSDomain('', 'linux_server', environments[0]?.name))
+      setLinkedDNSRecord(null)
     }
   }, [open, asset, environments, plugins])
+
+  useEffect(() => {
+  if (!open || !asset) return
+  let cancelled = false
+  setDnsLoading(true)
+  dnsService.getByAssetId(asset.id)
+    .then((record) => {
+      if (cancelled) return
+      setLinkedDNSRecord(record)
+      if (record) {
+        setDnsEnabled(record.enabled)
+        setDnsDomain(record.domain)
+        setDnsTTL(record.ttl)
+        setDnsDomainTouched(false)
+      } else {
+        setDnsEnabled(dnsSupported)
+        setDnsDomain(recommendAssetDNSDomain(asset.name, asset.plugin_type, selectedEnvironment?.name))
+        setDnsTTL(300)
+        setDnsDomainTouched(false)
+      }
+    })
+    .catch((error: any) => {
+      if (cancelled) return
+      toast.error('加载资产关联 DNS 失败', { description: error.message })
+    })
+    .finally(() => {
+      if (!cancelled) setDnsLoading(false)
+    })
+  return () => {
+    cancelled = true
+  }
+  }, [open, asset, dnsSupported, selectedEnvironment?.name])
+
+  useEffect(() => {
+    if (!open || asset) return
+    if (!dnsSupported) {
+      setDnsEnabled(false)
+      return
+    }
+    if (!dnsDomainTouched) {
+      setDnsDomain(recommendedDNSDomain)
+    }
+  }, [open, asset, dnsSupported, dnsDomainTouched, recommendedDNSDomain])
 
   // 切换类别时重置插件类型和 extConfig
   const handleCategoryChange = (cat: AssetCategory) => {
@@ -493,12 +557,14 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
     if (firstPlugin) {
       setPluginType(firstPlugin.type_id)
       setExtConfig(buildDefaultConfig(plugins, firstPlugin.type_id))
+      setDnsDomainTouched(false)
     }
   }
 
   // 切换插件类型时重置 extConfig 的默认值（保留已填内容）
   const handlePluginChange = (typeId: string) => {
     setPluginType(typeId)
+    setDnsDomainTouched(false)
     setExtConfig(prev => {
       const defaults = buildDefaultConfig(plugins, typeId)
       // 对于新插件，用默认值初始化；已有值保留
@@ -522,6 +588,11 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
         tags,
         credential_id: credId ? Number(credId) : undefined,
         ext_config: extConfig,
+        dns_config: {
+          enabled: dnsSupported ? dnsEnabled : false,
+          domain: dnsSupported && dnsEnabled ? dnsDomain.trim() : '',
+          ttl: dnsTTL,
+        },
       })
     } finally {
       setSaving(false)
@@ -677,6 +748,100 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
           />
         </FormField>
 
+            <div className="relative py-1">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-card px-2 text-muted-foreground">DNS 联动</span>
+              </div>
+            </div>
+
+            <>
+              {asset && (
+                <p className="text-xs text-muted-foreground">
+                  编辑资产时会同步维护关联 A 记录。关闭开关将删除当前资产绑定的 DNS 记录。
+                </p>
+              )}
+
+                <FormField label="自动创建 DNS 解析">
+                  <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
+                    <div>
+                      <p className="text-sm text-foreground">{asset ? '维护关联 DNS 记录' : '创建资产时同步添加 DNS 记录'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {dnsSupported
+                          ? '将创建 A 记录，并自动绑定当前资产的 host 地址。'
+                          : '当前资产类型没有 host 字段，暂不支持自动生成关联 DNS。'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={dnsSupported && dnsEnabled}
+                      disabled={!dnsSupported}
+                      onClick={() => dnsSupported && setDnsEnabled(prev => !prev)}
+                      className={[
+                        'relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus-visible:outline-none',
+                        !dnsSupported ? 'cursor-not-allowed opacity-50 bg-input' : (dnsEnabled ? 'bg-primary' : 'bg-input'),
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'pointer-events-none inline-block h-4 w-4 rounded-full bg-background shadow-lg transition-transform',
+                          dnsSupported && dnsEnabled ? 'translate-x-4' : 'translate-x-0.5',
+                        ].join(' ')}
+                      />
+                    </button>
+                  </div>
+                </FormField>
+
+                {dnsSupported && dnsEnabled && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <FormField label="推荐域名" required className="col-span-2">
+                      <Input
+                        value={dnsDomain}
+                        onChange={e => {
+                          setDnsDomain(e.target.value)
+                          setDnsDomainTouched(true)
+                        }}
+                        placeholder="例如 web-01.linux-server.dev.local"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        默认根据环境名、资产类型和资产名称生成，可手动调整。
+                      </p>
+                    </FormField>
+
+                    <FormField label="TTL（秒）" required>
+                      <Input
+                        type="number"
+                        min={30}
+                        max={86400}
+                        value={dnsTTL}
+                        onChange={e => setDnsTTL(Number(e.target.value) || 300)}
+                      />
+                    </FormField>
+
+                    <FormField label="解析目标">
+                      <Input
+                        value={String(extConfig.host ?? '')}
+                        disabled
+                        placeholder="请先填写 host"
+                      />
+                    </FormField>
+
+                    {asset && (
+                      <div className="col-span-2 rounded-lg border border-dashed border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+                        {dnsLoading
+                          ? '正在读取当前关联 DNS...'
+                          : linkedDNSRecord
+                            ? `当前已绑定域名：${linkedDNSRecord.domain}，TTL ${linkedDNSRecord.ttl}s`
+                            : '当前资产尚未绑定 DNS 记录，保存后会按当前配置创建。'}
+                      </div>
+                    )}
+                  </div>
+                )}
+            </>
+
       </div>
     </Modal>
   )
@@ -818,4 +983,23 @@ function buildDefaultConfig(plugins: PluginDef[], typeId: string): Record<string
     }
   }
   return result
+}
+
+function supportsAutoDNSForPlugin(plugin?: PluginDef): boolean {
+  return Boolean(plugin?.config_schema?.some(field => field.key === 'host'))
+}
+
+function recommendAssetDNSDomain(assetName: string, pluginType: string, environmentName?: string): string {
+  const assetPart = slugDomainLabel(assetName) || 'asset'
+  const pluginPart = slugDomainLabel(pluginType) || 'service'
+  const envPart = slugDomainLabel(environmentName || '') || 'env'
+  return `${assetPart}.${pluginPart}.${envPart}.local`
+}
+
+function slugDomainLabel(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }

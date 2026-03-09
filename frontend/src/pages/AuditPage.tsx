@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
+
 const MODULE_OPTIONS = [
   { value: '__all__', label: '全部模块' },
   { value: 'asset', label: '资产管理' },
@@ -38,6 +40,11 @@ export default function AuditPage() {
   const [moduleFilter, setModuleFilter] = useState('__all__')
   const [statusFilter, setStatusFilter] = useState('__all__')
   const [keyword, setKeyword] = useState('')
+  const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const loadLogs = async () => {
     setLoading(true)
@@ -45,9 +52,9 @@ export default function AuditPage() {
       const result = await auditService.list({
         module: moduleFilter === '__all__' ? undefined : moduleFilter,
         success: statusFilter === '__all__' ? undefined : statusFilter === 'true',
-        keyword: keyword || undefined,
-        limit: 100,
-        offset: 0,
+        keyword: appliedKeyword || undefined,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       })
       setLogs(result.items)
       setTotal(result.total)
@@ -60,7 +67,20 @@ export default function AuditPage() {
 
   useEffect(() => {
     loadLogs()
-  }, [])
+  }, [page, pageSize, appliedKeyword])
+
+  const handleSearch = async () => {
+    const nextKeyword = keyword.trim()
+    const changed = nextKeyword !== appliedKeyword
+    setAppliedKeyword(nextKeyword)
+    if (page !== 1) {
+      setPage(1)
+      return
+    }
+    if (!changed) {
+      await loadLogs()
+    }
+  }
 
   return (
     <div className="space-y-5 animate-in fade-in-0 duration-200">
@@ -101,19 +121,19 @@ export default function AuditPage() {
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && loadLogs()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="搜索资源名、错误信息或结果摘要"
             className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
 
-        <Button onClick={loadLogs} loading={loading}>查询</Button>
+        <Button onClick={handleSearch} loading={loading}>查询</Button>
       </div>
 
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm">
           <span className="text-muted-foreground">共 {total} 条审计记录</span>
-          <span className="text-muted-foreground">当前展示最近 {logs.length} 条</span>
+          <span className="text-muted-foreground">第 {page} / {totalPages} 页，当前 {logs.length} 条</span>
         </div>
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
@@ -162,6 +182,34 @@ export default function AuditPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-border px-4 py-3 text-sm md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <span>每页</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value))
+                setPage(1)
+              }}
+            >
+              <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <SelectItem key={size} value={String(size)}>{size} 条</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setPage((current) => Math.max(1, current - 1))}>
+              上一页
+            </Button>
+            <span className="min-w-24 text-center text-muted-foreground">{page} / {totalPages}</span>
+            <Button variant="outline" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+              下一页
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -41,6 +41,7 @@ func main() {
 			app.AssetAPI,
 			app.AuditAPI,
 			app.ConnectorAPI,
+			app.DNSAPI,
 			app.ExecutorAPI,
 		},
 		Windows: &windows.Options{

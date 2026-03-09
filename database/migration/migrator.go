@@ -62,6 +62,10 @@ func (m *Migrator) register() {
 	m.add("003_executor", migrateExecutor)
 	// 阶段4：审计日志表
 	m.add("004_audit", migrateAudit)
+	// 阶段5：DNS 记录表
+	m.add("005_dns", migrateDNS)
+	// 阶段5：DNS 查询日志表
+	m.add("006_dns_query_log", migrateDNSQueryLog)
 }
 
 // add 添加一个迁移项

@@ -1,6 +1,6 @@
 // assetService.ts — 资产管理模块后端调用封装（桌面 / 服务端双模式）
 import { IS_SERVER_MODE, http, unwrapResult } from '@/lib/apiClient'
-import type { PluginDef } from '@/types/asset'
+import type { AssetDNSConfig, PluginDef } from '@/types/asset'
 
 // ── 桌面模式：Wails 绑定 ──────────────────────────────────────────
 import * as AssetAPIJs from '@wailsjs/go/assetapi/AssetAPI'
@@ -97,6 +97,7 @@ export const assetService = {
     tags: string[]
     credential_id?: number
     ext_config: Record<string, unknown>
+    dns_config?: AssetDNSConfig
   }) => {
     if (IS_SERVER_MODE) return http.post<any>('/api/assets', req)
     const r = await AssetAPIJs.CreateAsset(req as any)
@@ -110,6 +111,7 @@ export const assetService = {
     tags: string[]
     credential_id?: number
     ext_config: Record<string, unknown>
+    dns_config?: AssetDNSConfig
   }) => {
     if (IS_SERVER_MODE) return http.put<any>(`/api/assets/${req.id}`, req)
     const r = await AssetAPIJs.UpdateAsset(req as any)

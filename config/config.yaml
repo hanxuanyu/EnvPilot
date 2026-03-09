@@ -48,9 +48,9 @@ security:
 
 dns:
   # 是否启用内置 DNS 服务
-  enabled: false
+  enabled: true
   # DNS 监听地址
-  listen_addr: "127.0.0.1:5353"
+  listen_addr: "127.0.0.1:53"
   # 上游 DNS 服务器（未命中本地记录时转发）
   upstream: "8.8.8.8:53"
   # 默认 TTL（秒）

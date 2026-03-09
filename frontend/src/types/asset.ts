@@ -117,6 +117,12 @@ export interface Asset {
   credential?: Credential
 }
 
+export interface AssetDNSConfig {
+  enabled: boolean
+  domain: string
+  ttl: number
+}
+
 // ── 请求体类型 ──
 
 export interface CreateEnvironmentReq {
@@ -151,6 +157,7 @@ export interface CreateAssetReq {
   tags: string[]
   credential_id?: number
   ext_config: Record<string, unknown>
+  dns_config?: AssetDNSConfig
 }
 
 export interface UpdateAssetReq {
@@ -161,6 +168,7 @@ export interface UpdateAssetReq {
   tags: string[]
   credential_id?: number
   ext_config: Record<string, unknown>
+  dns_config?: AssetDNSConfig
 }
 
 export interface ListAssetsReq {

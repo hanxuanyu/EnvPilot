@@ -22,6 +22,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	assetH := NewAssetHandler(c.EnvSvc, c.GrpSvc, c.AssetSvc, c.CredSvc)
 	auditH := NewAuditHandler(c.AuditSvc)
 	connH := NewConnectorHandler(c.ConnSvc)
+	dnsH := NewDNSHandler(c.DNSSvc)
 	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.Pool, bus)
 
 	mux := http.NewServeMux()
@@ -73,6 +74,14 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/connectors/redis", connH.ExecuteRedisCmd)
 	mux.HandleFunc("POST /api/connectors/mq", connH.SendMQMessage)
 	mux.HandleFunc("GET /api/audits", auditH.ListAuditLogs)
+	mux.HandleFunc("GET /api/dns/records", dnsH.ListRecords)
+	mux.HandleFunc("GET /api/dns/records/by-asset/{asset_id}", dnsH.GetRecordByAssetID)
+	mux.HandleFunc("POST /api/dns/records", dnsH.CreateRecord)
+	mux.HandleFunc("PUT /api/dns/records/{id}", dnsH.UpdateRecord)
+	mux.HandleFunc("DELETE /api/dns/records/{id}", dnsH.DeleteRecord)
+	mux.HandleFunc("POST /api/dns/records/{id}/enabled", dnsH.SetRecordEnabled)
+	mux.HandleFunc("GET /api/dns/logs", dnsH.ListQueryLogs)
+	mux.HandleFunc("GET /api/dns/status", dnsH.GetStatus)
 
 	// ── 命令执行 ──────────────────────────────────────────────────
 	mux.HandleFunc("POST /api/executions", execH.ExecuteCommand)

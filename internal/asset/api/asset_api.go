@@ -146,15 +146,16 @@ func (a *AssetAPI) ListGroupsByEnvironment(envID uint) Result[[]model.Group] {
 // ── 资产管理 ──
 
 type CreateAssetReq struct {
-	EnvironmentID uint                 `json:"environment_id"`
-	GroupID       *uint                `json:"group_id"`
-	Category      plugin.AssetCategory `json:"category"`
-	PluginType    string               `json:"plugin_type"`
-	Name          string               `json:"name"`
-	Description   string               `json:"description"`
-	Tags          model.Tags           `json:"tags"`
-	CredentialID  *uint                `json:"credential_id"`
-	ExtConfig     model.ExtConfig      `json:"ext_config"`
+	EnvironmentID uint                    `json:"environment_id"`
+	GroupID       *uint                   `json:"group_id"`
+	Category      plugin.AssetCategory    `json:"category"`
+	PluginType    string                  `json:"plugin_type"`
+	Name          string                  `json:"name"`
+	Description   string                  `json:"description"`
+	Tags          model.Tags              `json:"tags"`
+	CredentialID  *uint                   `json:"credential_id"`
+	ExtConfig     model.ExtConfig         `json:"ext_config"`
+	DNSConfig     *service.AssetDNSConfig `json:"dns_config,omitempty"`
 }
 
 func (a *AssetAPI) CreateAsset(req CreateAssetReq) Result[*model.Asset] {
@@ -168,6 +169,7 @@ func (a *AssetAPI) CreateAsset(req CreateAssetReq) Result[*model.Asset] {
 		Tags:          req.Tags,
 		CredentialID:  req.CredentialID,
 		ExtConfig:     req.ExtConfig,
+		DNSConfig:     req.DNSConfig,
 	})
 	if err != nil {
 		return Fail[*model.Asset](err.Error())
@@ -176,13 +178,14 @@ func (a *AssetAPI) CreateAsset(req CreateAssetReq) Result[*model.Asset] {
 }
 
 type UpdateAssetReq struct {
-	ID           uint            `json:"id"`
-	GroupID      *uint           `json:"group_id"`
-	Name         string          `json:"name"`
-	Description  string          `json:"description"`
-	Tags         model.Tags      `json:"tags"`
-	CredentialID *uint           `json:"credential_id"`
-	ExtConfig    model.ExtConfig `json:"ext_config"`
+	ID           uint                    `json:"id"`
+	GroupID      *uint                   `json:"group_id"`
+	Name         string                  `json:"name"`
+	Description  string                  `json:"description"`
+	Tags         model.Tags              `json:"tags"`
+	CredentialID *uint                   `json:"credential_id"`
+	ExtConfig    model.ExtConfig         `json:"ext_config"`
+	DNSConfig    *service.AssetDNSConfig `json:"dns_config,omitempty"`
 }
 
 func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
@@ -194,6 +197,7 @@ func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
 		Tags:         req.Tags,
 		CredentialID: req.CredentialID,
 		ExtConfig:    req.ExtConfig,
+		DNSConfig:    req.DNSConfig,
 	})
 	if err != nil {
 		return Fail[*model.Asset](err.Error())
