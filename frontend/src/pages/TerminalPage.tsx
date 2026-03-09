@@ -8,14 +8,14 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { executorService } from '@/services/executorService'
 import { IS_SERVER_MODE } from '@/lib/apiClient'
+import { useTheme } from '@/lib/theme'
 import { useAssetStore } from '@/store/assetStore'
 import { Button } from '@/components/ui/button'
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select'
 
-// xterm.js 深色主题配置
-const XTERM_THEME = {
+const XTERM_DARK_THEME = {
   background:    '#0d1117',
   foreground:    '#e6edf3',
   cursor:        '#58a6ff',
@@ -38,10 +38,34 @@ const XTERM_THEME = {
   brightWhite:   '#f0f6fc',
 }
 
+const XTERM_LIGHT_THEME = {
+  background:    '#f8fafc',
+  foreground:    '#0f172a',
+  cursor:        '#2563eb',
+  cursorAccent:  '#f8fafc',
+  black:         '#334155',
+  red:           '#dc2626',
+  green:         '#16a34a',
+  yellow:        '#ca8a04',
+  blue:          '#2563eb',
+  magenta:       '#9333ea',
+  cyan:          '#0891b2',
+  white:         '#cbd5e1',
+  brightBlack:   '#64748b',
+  brightRed:     '#ef4444',
+  brightGreen:   '#22c55e',
+  brightYellow:  '#eab308',
+  brightBlue:    '#3b82f6',
+  brightMagenta: '#a855f7',
+  brightCyan:    '#06b6d4',
+  brightWhite:   '#e2e8f0',
+}
+
 export default function TerminalPage() {
   const { assetId: paramAssetId } = useParams<{ assetId?: string }>()
   const navigate = useNavigate()
   const { assets, loadAssets } = useAssetStore()
+  const { resolvedTheme } = useTheme()
 
   // 只显示 server 类别资产
   const serverAssets = assets.filter(a => a.category === 'server')
@@ -79,7 +103,7 @@ export default function TerminalPage() {
     }
 
     const term = new XTerm({
-      theme: XTERM_THEME,
+      theme: resolvedTheme === 'dark' ? XTERM_DARK_THEME : XTERM_LIGHT_THEME,
       fontFamily: '"Cascadia Code", "Fira Code", "Consolas", "Courier New", monospace',
       fontSize: 14,
       lineHeight: 1.4,
@@ -108,7 +132,12 @@ export default function TerminalPage() {
     fitAddonRef.current = fitAddon
 
     return { term, fitAddon }
-  }, [])
+  }, [resolvedTheme])
+
+  useEffect(() => {
+    if (!xtermRef.current) return
+    xtermRef.current.options.theme = resolvedTheme === 'dark' ? XTERM_DARK_THEME : XTERM_LIGHT_THEME
+  }, [resolvedTheme])
 
   // 窗口大小变化时重新适应
   useEffect(() => {
@@ -343,7 +372,12 @@ export default function TerminalPage() {
       </div>
 
       {/* 终端容器 */}
-      <div className="terminal-wrapper flex-1 rounded-xl border border-border overflow-hidden bg-[#0d1117] min-h-0">
+      <div
+        className="terminal-wrapper flex-1 rounded-xl border border-border overflow-hidden min-h-0"
+        style={{
+          backgroundColor: resolvedTheme === 'dark' ? XTERM_DARK_THEME.background : XTERM_LIGHT_THEME.background,
+        }}
+      >
         {!connected && !connecting && (
           <div className="h-full flex flex-col items-center justify-center gap-4 text-muted-foreground">
             <Terminal className="w-12 h-12 opacity-20" />

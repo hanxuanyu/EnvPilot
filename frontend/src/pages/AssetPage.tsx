@@ -1,9 +1,10 @@
 // AssetPage.tsx — 资产列表页面
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Plus, Search, Server, Database, Zap, Send, Box,
   Trash2, Pencil, KeyRound, RefreshCw, type LucideProps,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAssetStore } from '@/store/assetStore'
 import { StatusBadge } from '@/components/common/StatusBadge'
@@ -48,6 +49,7 @@ type TabType = 'assets' | 'credentials'
 // ── 主页面 ──
 
 export default function AssetPage() {
+  const [searchParams] = useSearchParams()
   const {
     environments, assets, credentials, plugins,
     selectedEnvId, loading,
@@ -57,7 +59,17 @@ export default function AssetPage() {
 
   const handleRefresh = async () => {
     if (tab === 'assets') {
-      await Promise.all([loadEnvironments(), loadAssets(), loadCredentials(), loadPlugins()])
+      await Promise.all([
+        loadEnvironments(),
+        loadAssets({
+          environment_id: selectedEnvId ?? undefined,
+          category: categoryFilter || undefined,
+          plugin_type: pluginFilter || undefined,
+          keyword: appliedKeyword || undefined,
+        }),
+        loadCredentials(),
+        loadPlugins(),
+      ])
     } else {
       await loadCredentials()
     }
@@ -65,6 +77,8 @@ export default function AssetPage() {
 
   const [tab, setTab] = useState<TabType>('assets')
   const [keyword, setKeyword] = useState('')
+  const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [credentialKeyword, setCredentialKeyword] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | ''>('')
   const [pluginFilter, setPluginFilter] = useState('')
 
@@ -73,6 +87,8 @@ export default function AssetPage() {
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
   const [healthByAssetId, setHealthByAssetId] = useState<Record<number, HealthSnapshot>>({})
+  const highlightedAssetId = Number(searchParams.get('asset') || 0)
+  const highlightedCredentialId = Number(searchParams.get('credential') || 0)
 
   useEffect(() => {
     loadEnvironments()
@@ -80,6 +96,60 @@ export default function AssetPage() {
     loadCredentials()
     loadPlugins()
   }, [])
+
+  useEffect(() => {
+    const nextTab = searchParams.get('tab')
+    const nextKeyword = searchParams.get('keyword') ?? ''
+    const nextCategory = searchParams.get('category') as AssetCategory | null
+    const nextPlugin = searchParams.get('plugin') ?? ''
+    const nextEnv = searchParams.get('env')
+
+    if (nextTab === 'credentials') {
+      setTab('credentials')
+      setCredentialKeyword(nextKeyword)
+      return
+    }
+
+    setTab('assets')
+    setKeyword(nextKeyword)
+    setAppliedKeyword(nextKeyword)
+    setCategoryFilter(nextCategory ?? '')
+    setPluginFilter(nextPlugin)
+    setSelectedEnv(nextEnv ? Number(nextEnv) : null)
+
+    void loadAssets({
+      environment_id: nextEnv ? Number(nextEnv) : undefined,
+      category: nextCategory || undefined,
+      plugin_type: nextPlugin || undefined,
+      keyword: nextKeyword || undefined,
+    })
+  }, [searchParams])
+
+  useEffect(() => {
+    if (highlightedAssetId <= 0) return
+    const timer = window.setTimeout(() => {
+      document.getElementById(`asset-row-${highlightedAssetId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [highlightedAssetId, assets.length])
+
+  useEffect(() => {
+    if (highlightedCredentialId <= 0) return
+    const timer = window.setTimeout(() => {
+      document.getElementById(`credential-row-${highlightedCredentialId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [highlightedCredentialId, credentials.length])
+
+  useEffect(() => {
+    if (tab !== 'assets') return
+    loadAssets({
+      environment_id: selectedEnvId ?? undefined,
+      category: categoryFilter || undefined,
+      plugin_type: pluginFilter || undefined,
+      keyword: appliedKeyword || undefined,
+    })
+  }, [tab, selectedEnvId, categoryFilter, pluginFilter, appliedKeyword])
 
   useEffect(() => {
     if (tab !== 'assets') return
@@ -95,7 +165,7 @@ export default function AssetPage() {
         const result = await healthService.listSnapshots({
           environment_id: selectedEnvId ?? undefined,
           category: categoryFilter || undefined,
-          keyword: keyword || undefined,
+          keyword: appliedKeyword || undefined,
           limit: Math.max(assets.length * 3, 100),
           offset: 0,
         })
@@ -124,14 +194,9 @@ export default function AssetPage() {
     return () => {
       cancelled = true
     }
-  }, [tab, assets, selectedEnvId, categoryFilter, keyword])
+  }, [tab, assets, selectedEnvId, categoryFilter, appliedKeyword])
 
-  const handleSearch = () => loadAssets({
-    environment_id: selectedEnvId ?? undefined,
-    category: categoryFilter || undefined,
-    plugin_type: pluginFilter || undefined,
-    keyword: keyword || undefined,
-  })
+  const handleSearch = () => setAppliedKeyword(keyword.trim())
 
   const handleDeleteAsset = async (id: number, name: string) => {
     try {
@@ -157,6 +222,16 @@ export default function AssetPage() {
   const filteredPlugins = categoryFilter
     ? plugins.filter(p => p.category === categoryFilter)
     : plugins
+  const filteredCredentials = useMemo(() => {
+    const value = credentialKeyword.trim().toLowerCase()
+    if (!value) return credentials
+    return credentials.filter((credential) => {
+      const haystack = [credential.name, credential.username, credential.type, CREDENTIAL_TYPE_LABELS[credential.type], credential.secret_masked ?? '']
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(value)
+    })
+  }, [credentialKeyword, credentials])
 
   return (
     <div className="space-y-5 animate-in fade-in-0 duration-200">
@@ -297,7 +372,12 @@ export default function AssetPage() {
                   const color = CATEGORY_COLORS[cat] ?? '#6b7280'
                   const plugin = plugins.find(p => p.type_id === asset.plugin_type)
                   return (
-                    <tr key={asset.id} className="border-t border-border bg-card hover:bg-accent/30 transition-colors">
+                    <tr
+                      id={`asset-row-${asset.id}`}
+                      key={asset.id}
+                      className="border-t border-border bg-card hover:bg-accent/30 transition-colors"
+                      style={highlightedAssetId === asset.id ? { backgroundColor: 'color-mix(in srgb, var(--color-primary) 9%, var(--color-card))' } : undefined}
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Icon className="w-4 h-4 flex-shrink-0" style={{ color }} />
@@ -369,7 +449,18 @@ export default function AssetPage() {
 
       {/* 凭据管理 Tab */}
       {tab === 'credentials' && (
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3">
+            <Search className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            <input
+              value={credentialKeyword}
+              onChange={(e) => setCredentialKeyword(e.target.value)}
+              placeholder="搜索凭据名称、用户名或类型"
+              className="h-10 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+
+          <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-secondary border-b border-border">
@@ -379,14 +470,19 @@ export default function AssetPage() {
               </tr>
             </thead>
             <tbody>
-              {credentials.length === 0 ? (
+              {filteredCredentials.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-16 text-center text-sm text-muted-foreground">
-                    暂无凭据，点击「添加凭据」开始
+                    暂无匹配凭据
                   </td>
                 </tr>
-              ) : credentials.map(cred => (
-                <tr key={cred.id} className="border-t border-border bg-card hover:bg-accent/30 transition-colors">
+              ) : filteredCredentials.map(cred => (
+                <tr
+                  id={`credential-row-${cred.id}`}
+                  key={cred.id}
+                  className="border-t border-border bg-card hover:bg-accent/30 transition-colors"
+                  style={highlightedCredentialId === cred.id ? { backgroundColor: 'color-mix(in srgb, var(--color-primary) 9%, var(--color-card))' } : undefined}
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <KeyRound className="w-4 h-4 text-blue-400" />
@@ -422,6 +518,7 @@ export default function AssetPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

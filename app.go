@@ -17,6 +17,7 @@ import (
 	executorAPI "EnvPilot/internal/executor/api"
 	healthAPI "EnvPilot/internal/health/api"
 	"EnvPilot/pkg/buildinfo"
+	"EnvPilot/pkg/hostinfo"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"go.uber.org/zap"
@@ -95,4 +96,9 @@ func (a *App) GetVersion() map[string]string {
 		"version": buildinfo.NormalizedVersion(),
 		"commit":  buildinfo.NormalizedCommit(),
 	}
+}
+
+// GetHostInfo 获取当前主机资源与平台信息
+func (a *App) GetHostInfo() hostinfo.Snapshot {
+	return hostinfo.Collect()
 }

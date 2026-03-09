@@ -2,6 +2,9 @@ package repository
 
 import (
 	"EnvPilot/internal/asset/model"
+	dnsModel "EnvPilot/internal/dns/model"
+	execModel "EnvPilot/internal/executor/model"
+	healthModel "EnvPilot/internal/health/model"
 	"EnvPilot/internal/plugin"
 	"time"
 
@@ -35,7 +38,18 @@ func (r *AssetRepo) Update(a *model.Asset) error {
 }
 
 func (r *AssetRepo) Delete(id uint) error {
-	return r.db.Delete(&model.Asset{}, id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("asset_id = ?", id).Delete(&dnsModel.DNSRecord{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("asset_id = ?", id).Delete(&healthModel.HealthSnapshot{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("asset_id = ?", id).Delete(&execModel.Execution{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Asset{}, id).Error
+	})
 }
 
 func (r *AssetRepo) FindByID(id uint) (*model.Asset, error) {

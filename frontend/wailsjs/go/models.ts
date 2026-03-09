@@ -1809,6 +1809,57 @@ export namespace healthapi {
 
 }
 
+export namespace hostinfo {
+	
+	export class Snapshot {
+	    hostname: string;
+	    platform: string;
+	    platform_version: string;
+	    kernel_version: string;
+	    architecture: string;
+	    uptime_seconds: number;
+	    boot_time_unix: number;
+	    cpu_cores: number;
+	    cpu_percent: number;
+	    memory_total: number;
+	    memory_used: number;
+	    memory_percent: number;
+	    disk_path: string;
+	    disk_total: number;
+	    disk_used: number;
+	    disk_percent: number;
+	    executable: string;
+	    sampled_at_unix: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Snapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hostname = source["hostname"];
+	        this.platform = source["platform"];
+	        this.platform_version = source["platform_version"];
+	        this.kernel_version = source["kernel_version"];
+	        this.architecture = source["architecture"];
+	        this.uptime_seconds = source["uptime_seconds"];
+	        this.boot_time_unix = source["boot_time_unix"];
+	        this.cpu_cores = source["cpu_cores"];
+	        this.cpu_percent = source["cpu_percent"];
+	        this.memory_total = source["memory_total"];
+	        this.memory_used = source["memory_used"];
+	        this.memory_percent = source["memory_percent"];
+	        this.disk_path = source["disk_path"];
+	        this.disk_total = source["disk_total"];
+	        this.disk_used = source["disk_used"];
+	        this.disk_percent = source["disk_percent"];
+	        this.executable = source["executable"];
+	        this.sampled_at_unix = source["sampled_at_unix"];
+	    }
+	}
+
+}
+
 export namespace model {
 	
 	export class HealthSection {

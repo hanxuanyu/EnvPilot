@@ -67,7 +67,7 @@ export default function AuditPage() {
 
   useEffect(() => {
     loadLogs()
-  }, [page, pageSize, appliedKeyword])
+  }, [page, pageSize, appliedKeyword, moduleFilter, statusFilter])
 
   const handleSearch = async () => {
     const nextKeyword = keyword.trim()
@@ -98,7 +98,10 @@ export default function AuditPage() {
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_180px_minmax(0,1fr)_120px]">
-        <Select value={moduleFilter} onValueChange={setModuleFilter}>
+        <Select value={moduleFilter} onValueChange={(value) => {
+          setModuleFilter(value)
+          setPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="模块" /></SelectTrigger>
           <SelectContent>
             {MODULE_OPTIONS.map(option => (
@@ -107,7 +110,10 @@ export default function AuditPage() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(value) => {
+          setStatusFilter(value)
+          setPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="状态" /></SelectTrigger>
           <SelectContent>
             {STATUS_OPTIONS.map(option => (

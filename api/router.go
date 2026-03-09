@@ -11,6 +11,7 @@ import (
 
 	"EnvPilot/internal/app"
 	"EnvPilot/pkg/buildinfo"
+	"EnvPilot/pkg/hostinfo"
 )
 
 // NewRouter 创建 HTTP 路由。
@@ -41,6 +42,9 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 			"version": buildinfo.NormalizedVersion(),
 			"commit":  buildinfo.NormalizedCommit(),
 		})
+	})
+	mux.HandleFunc("GET /api/host/info", func(w http.ResponseWriter, r *http.Request) {
+		writeOK(w, hostinfo.Collect())
 	})
 
 	// ── 插件 ──────────────────────────────────────────────────────

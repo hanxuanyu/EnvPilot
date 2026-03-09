@@ -440,6 +440,11 @@ export default function ExecutorPage() {
     await loadExecutions({ asset_id: historyAssetId, page: historyPage, page_size: 20 })
   }
 
+  useEffect(() => {
+    if (activeTab !== 'history') return
+    handleHistoryLoad()
+  }, [activeTab, historyAssetId])
+
   // 从历史记录查看执行详情
   const handleViewExecution = (exec: Execution) => {
     const tab: ResultTab = {

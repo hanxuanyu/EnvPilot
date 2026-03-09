@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { Globe, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Badge } from '@/components/ui/badge'
@@ -54,6 +55,7 @@ function recordTarget(record: DNSRecord): string {
 }
 
 export default function DnsPage() {
+  const [searchParams] = useSearchParams()
   const [records, setRecords] = useState<DNSRecord[]>([])
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
@@ -74,6 +76,7 @@ export default function DnsPage() {
   const [targetMode, setTargetMode] = useState<TargetMode>('manual')
   const [logPage, setLogPage] = useState(1)
   const [logPageSize, setLogPageSize] = useState(20)
+  const highlightedRecordId = Number(searchParams.get('record') || 0)
 
   const selectedEnvId = selectedEnv === 'all' ? undefined : selectedEnv
   const logTotalPages = Math.max(1, Math.ceil(queryLogTotal / logPageSize))
@@ -160,6 +163,26 @@ export default function DnsPage() {
     }
     bootstrap()
   }, [])
+
+  useEffect(() => {
+    const nextKeyword = searchParams.get('keyword') ?? ''
+    const nextEnv = searchParams.get('env')
+    const nextStatus = searchParams.get('status') as FilterStatus | null
+
+    setKeyword(nextKeyword)
+    setAppliedKeyword(nextKeyword)
+    setSelectedEnv(nextEnv ? Number(nextEnv) : 'all')
+    setStatusFilter(nextStatus === 'enabled' || nextStatus === 'disabled' ? nextStatus : '__all__')
+    setLogPage(1)
+  }, [searchParams])
+
+  useEffect(() => {
+    if (highlightedRecordId <= 0) return
+    const timer = window.setTimeout(() => {
+      document.getElementById(`dns-record-${highlightedRecordId}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [highlightedRecordId, records.length])
 
   useEffect(() => {
     loadRecords()
@@ -319,7 +342,10 @@ export default function DnsPage() {
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_160px_minmax(0,1fr)_120px]">
-        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => setSelectedEnv(value === '__all__' ? 'all' : Number(value))}>
+        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
+          setSelectedEnv(value === '__all__' ? 'all' : Number(value))
+          setLogPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部环境</SelectItem>
@@ -329,7 +355,10 @@ export default function DnsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as FilterStatus)}>
+        <Select value={statusFilter} onValueChange={(value) => {
+          setStatusFilter(value as FilterStatus)
+          setLogPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部状态</SelectItem>
@@ -401,7 +430,12 @@ export default function DnsPage() {
                   </td>
                 </tr>
               ) : records.map(record => (
-                <tr key={record.id} className="border-t border-border align-top">
+                <tr
+                  id={`dns-record-${record.id}`}
+                  key={record.id}
+                  className="border-t border-border align-top"
+                  style={highlightedRecordId === record.id ? { backgroundColor: 'color-mix(in srgb, var(--color-primary) 9%, var(--color-card))' } : undefined}
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2 font-medium text-foreground">
                       <Globe className="h-4 w-4 text-primary" />

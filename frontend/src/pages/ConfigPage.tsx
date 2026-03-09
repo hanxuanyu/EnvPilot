@@ -5,7 +5,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Modal } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Modal,
+} from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -134,7 +144,9 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [rollingBack, setRollingBack] = useState(false)
+  const [loadingSnapshot, setLoadingSnapshot] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
+  const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false)
   const [comment, setComment] = useState('')
   const [rollbackComment, setRollbackComment] = useState('')
   const [showSaltFile, setShowSaltFile] = useState(false)
@@ -179,8 +191,20 @@ export default function ConfigPage() {
 
   const diffRows = useMemo(() => {
     if (!current || !selectedSnapshot) return []
-    return buildDiffRows(selectedSnapshot.content, current.yaml)
+    return buildDiffRows(current.yaml, selectedSnapshot.content)
   }, [current, selectedSnapshot])
+
+  const handleSnapshotChange = async (snapshotID: string) => {
+    setLoadingSnapshot(true)
+    try {
+      const detail = await configService.getSnapshot(Number(snapshotID))
+      setSelectedSnapshot(detail.snapshot)
+    } catch (error: any) {
+      toast.error('加载快照详情失败', { description: error.message })
+    } finally {
+      setLoadingSnapshot(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!draft) return
@@ -214,6 +238,7 @@ export default function ConfigPage() {
         description: summarizeHotReload(result.hot_reload) || undefined,
       })
       setRollbackComment('')
+      setRollbackConfirmOpen(false)
       setCompareOpen(false)
       await loadData(false)
     } catch (error: any) {
@@ -252,8 +277,7 @@ export default function ConfigPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_340px]">
-        <div className="space-y-4">
+      <div className="space-y-4">
           <div className="rounded-xl border border-border bg-card p-4 space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <Badge variant="outline">{current.config_path}</Badge>
@@ -290,6 +314,25 @@ export default function ConfigPage() {
               </div>
             </div>
           </div>
+
+          <section className="rounded-xl border border-border bg-card p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">配置快照</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  快照管理已移入模态框，支持下拉选择历史版本、实时 diff 与二次确认回滚。
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">共 {snapshots.length} 条</Badge>
+                {selectedSnapshot ? <Badge variant="outline">当前选择 v{selectedSnapshot.version}</Badge> : null}
+                <Button variant="outline" onClick={() => setCompareOpen(true)} disabled={snapshots.length === 0}>
+                  <History className="h-4 w-4" />
+                  快照与回滚
+                </Button>
+              </div>
+            </div>
+          </section>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <section className="rounded-xl border border-border bg-card p-4 space-y-4">
@@ -426,87 +469,17 @@ export default function ConfigPage() {
               </div>
             </section>
           </div>
-        </div>
-
-        <div className="space-y-4">
-          <section className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <History className="h-4 w-4" />
-                版本快照
-              </div>
-              <span className="text-xs text-muted-foreground">最近 {snapshots.length} 条</span>
-            </div>
-            <div className="max-h-[420px] overflow-auto p-2">
-              {snapshots.length === 0 ? (
-                <div className="px-3 py-8 text-center text-sm text-muted-foreground">暂无配置快照</div>
-              ) : snapshots.map((snapshot) => (
-                <button
-                  key={snapshot.id}
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      const detail = await configService.getSnapshot(snapshot.id)
-                      setSelectedSnapshot(detail.snapshot)
-                    } catch (error: any) {
-                      toast.error('加载快照详情失败', { description: error.message })
-                    }
-                  }}
-                  className={`mb-2 w-full rounded-lg border px-3 py-3 text-left transition-colors ${selectedSnapshot?.id === snapshot.id ? 'border-primary bg-primary/5' : 'border-border bg-background/40 hover:bg-accent/40'}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-foreground">v{snapshot.version}</div>
-                      <div className="mt-1 text-xs leading-5 text-muted-foreground">{formatSnapshotComment(snapshot)}</div>
-                    </div>
-                    <Badge variant="outline">{snapshot.created_by || 'system'}</Badge>
-                  </div>
-                  <div className="mt-2 text-[11px] text-muted-foreground">{new Date(snapshot.created_at).toLocaleString('zh-CN')}</div>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-border bg-card p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-foreground">快照操作</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  选中快照后在弹窗查看 diff，并可附带说明执行回滚。
-                </p>
-              </div>
-              {selectedSnapshot ? <Badge variant="outline">v{selectedSnapshot.version}</Badge> : null}
-            </div>
-            {selectedSnapshot ? (
-              <>
-                <div className="rounded-lg border border-border bg-background/60 px-3 py-3 text-xs leading-6 text-muted-foreground">
-                  <div>备注：{formatSnapshotComment(selectedSnapshot)}</div>
-                  <div>创建人：{selectedSnapshot.created_by || 'system'}</div>
-                  <div>时间：{new Date(selectedSnapshot.created_at).toLocaleString('zh-CN')}</div>
-                </div>
-                <Button variant="outline" onClick={() => setCompareOpen(true)}>
-                  <History className="h-4 w-4" />
-                  打开对比与回滚
-                </Button>
-              </>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                选择一个快照后即可打开对比弹窗。
-              </div>
-            )}
-          </section>
-        </div>
       </div>
 
       <Modal
         open={compareOpen && !!selectedSnapshot}
         onClose={() => setCompareOpen(false)}
-        title={selectedSnapshot ? `配置快照 v${selectedSnapshot.version}` : '配置快照'}
+        title="配置快照与回滚"
         className="max-w-6xl"
         footer={selectedSnapshot ? (
           <>
             <Button variant="outline" onClick={() => setCompareOpen(false)}>关闭</Button>
-            <Button variant="outline" onClick={handleRollback} loading={rollingBack}>
+            <Button variant="outline" onClick={() => setRollbackConfirmOpen(true)} disabled={loadingSnapshot || rollingBack}>
               <RotateCcw className="h-4 w-4" />
               回滚到此版本
             </Button>
@@ -515,29 +488,82 @@ export default function ConfigPage() {
       >
         {selectedSnapshot ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-[1fr_1fr] gap-3 text-[11px] text-muted-foreground">
-              <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">快照 v{selectedSnapshot.version}</div>
-              <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">当前配置</div>
-            </div>
-            <div className="max-h-[58vh] overflow-auto rounded-lg border border-border bg-background/50">
-              <div className="grid grid-cols-2 text-xs font-mono">
-                {diffRows.map((row, index) => (
-                  <div key={`row-${index}`} className="contents">
-                    <div key={`left-${index}`} className={`border-b border-r border-border px-3 py-1.5 whitespace-pre-wrap break-all ${diffToneClass(row.status)}`}>{row.left ?? ''}</div>
-                    <div key={`right-${index}`} className={`border-b border-border px-3 py-1.5 whitespace-pre-wrap break-all ${diffToneClass(row.status)}`}>{row.right ?? ''}</div>
+            <div className="space-y-3 rounded-xl border border-border bg-background/40 p-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-foreground">实时差异对比</div>
+                  <div className="text-xs text-muted-foreground">左侧是当前配置，右侧是选中的历史快照；变更会在下方实时展开。</div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    {current.latest_snapshot ? <Badge variant="outline">当前 v{current.latest_snapshot.version}</Badge> : <Badge variant="outline">当前配置</Badge>}
+                    <Badge variant="outline">对比 v{selectedSnapshot.version}</Badge>
+                    <Badge variant="outline">{selectedSnapshot.created_by || 'system'}</Badge>
+                    <Badge variant="outline">{new Date(selectedSnapshot.created_at).toLocaleString('zh-CN')}</Badge>
+                    <Badge variant="outline">{formatSnapshotComment(selectedSnapshot)}</Badge>
+                    {loadingSnapshot ? <Badge variant="outline">加载中</Badge> : null}
                   </div>
-                ))}
+                </div>
+                <div className="w-full xl:w-80">
+                  <div className="mb-1 text-[11px] text-muted-foreground">切换对比快照</div>
+                  <Select value={String(selectedSnapshot.id)} onValueChange={handleSnapshotChange}>
+                    <SelectTrigger disabled={loadingSnapshot}>
+                      <SelectValue placeholder="选择快照版本" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {snapshots.map((snapshot) => (
+                        <SelectItem key={snapshot.id} value={String(snapshot.id)}>
+                          {`v${snapshot.version} · ${formatSnapshotComment(snapshot)}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-[1fr_1fr] gap-3 text-[11px] text-muted-foreground">
+                <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">当前配置</div>
+                <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">快照 v{selectedSnapshot.version}</div>
+              </div>
+              <div className="max-h-[56vh] overflow-auto rounded-lg border border-border bg-background/50">
+                <div className="grid grid-cols-2 text-xs font-mono">
+                  {diffRows.map((row, index) => (
+                    <div key={`row-${index}`} className="contents">
+                      <div className={`border-b border-r border-border px-3 py-1.5 whitespace-pre-wrap break-all ${diffToneClass(row.status)}`}>{row.left ?? ''}</div>
+                      <div className={`border-b border-border px-3 py-1.5 whitespace-pre-wrap break-all ${diffToneClass(row.status)}`}>{row.right ?? ''}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <Textarea
-              value={rollbackComment}
-              onChange={(event) => setRollbackComment(event.target.value)}
-              placeholder={`填写回滚到 v${selectedSnapshot.version} 的原因`}
-              className="min-h-[88px]"
-            />
           </div>
         ) : null}
       </Modal>
+
+      <AlertDialog open={rollbackConfirmOpen} onOpenChange={setRollbackConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认回滚配置？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {selectedSnapshot
+                ? `将把当前配置回滚到 v${selectedSnapshot.version}，并基于回滚结果再生成一条新的快照记录，而不是直接切换当前指针。`
+                : '将把当前配置回滚到所选快照，并生成新的快照记录。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <div className="text-xs text-muted-foreground">回滚备注</div>
+            <Textarea
+              value={rollbackComment}
+              onChange={(event) => setRollbackComment(event.target.value)}
+              placeholder={selectedSnapshot ? `填写回滚到 v${selectedSnapshot.version} 后生成新快照的原因` : '填写回滚原因'}
+              className="min-h-[92px]"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rollingBack}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRollback} disabled={rollingBack || rollbackComment.trim() === ''}>
+              {rollingBack ? '回滚中...' : '确认回滚'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

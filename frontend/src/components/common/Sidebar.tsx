@@ -1,60 +1,42 @@
 // Sidebar.tsx 主导航侧边栏
 // 包含所有功能模块的导航入口，使用 react-router-dom 管理激活状态
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { getVersion, type VersionInfo } from '@/services/backendService'
+import { IS_SERVER_MODE } from '@/lib/apiClient'
+import { navGroups } from './navigation'
 import {
-  LayoutDashboard,
-  Server,
-  Terminal,
-  Database,
+  GitCommitHorizontal,
   Wifi,
-  Activity,
-  ClipboardList,
-  Settings,
-  Globe,
-  Layers,
 } from 'lucide-react'
 
-// 导航分组与页面路由定义
-const navItems = [
-  {
-    group: '概览',
-    items: [
-      { path: '/', label: '仪表盘', icon: LayoutDashboard },
-    ],
-  },
-  {
-    group: '资产管理',
-    items: [
-      { path: '/assets', label: '资产列表', icon: Server },
-      { path: '/environments', label: '环境管理', icon: Layers },
-    ],
-  },
-  {
-    group: '运维操作',
-    items: [
-      { path: '/executor', label: '命令执行', icon: Terminal },
-      { path: '/terminal', label: '在线终端', icon: Terminal },
-      { path: '/connector', label: '中间件', icon: Database },
-    ],
-  },
-  {
-    group: '基础设施',
-    items: [
-      { path: '/dns', label: 'DNS 管理', icon: Globe },
-      { path: '/health', label: '健康检查', icon: Activity },
-    ],
-  },
-  {
-    group: '系统',
-    items: [
-      { path: '/audit', label: '操作审计', icon: ClipboardList },
-      { path: '/config', label: '系统配置', icon: Settings },
-    ],
-  },
-]
-
 export function Sidebar() {
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null)
+  const shortCommit = versionInfo?.commit ? versionInfo.commit.slice(0, 7) : 'unknown'
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadVersion = async () => {
+      try {
+        const version = await getVersion()
+        if (!cancelled) {
+          setVersionInfo(version)
+        }
+      } catch {
+        if (!cancelled) {
+          setVersionInfo(null)
+        }
+      }
+    }
+
+    loadVersion()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return (
     <aside
       className="flex flex-col w-56 h-full border-r select-none"
@@ -65,7 +47,7 @@ export function Sidebar() {
     >
       {/* Logo 区域 */}
       <div
-        className="flex items-center gap-2 px-4 py-4 border-b"
+        className="flex h-[var(--layout-header-height)] items-center gap-2 border-b px-4"
         style={{ borderColor: 'var(--color-sidebar-border)' }}
       >
         <div
@@ -86,7 +68,7 @@ export function Sidebar() {
 
       {/* 导航菜单 */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navItems.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.group} className="mb-1">
             {/* 分组标题 */}
             <div
@@ -125,13 +107,29 @@ export function Sidebar() {
 
       {/* 底部版本信息 */}
       <div
-        className="px-4 py-3 border-t"
+        className="px-4 py-2.5 border-t"
         style={{
           borderColor: 'var(--color-sidebar-border)',
           color: 'var(--color-muted-foreground)',
         }}
       >
-        <div className="text-[10px]">v0.1.0 · 本地运行</div>
+        <div className="flex items-center justify-between gap-2 text-[10px]" style={{ color: 'var(--color-sidebar-foreground)' }}>
+          <div className="flex min-w-0 items-center gap-1.5 font-medium">
+            <GitCommitHorizontal className="h-3 w-3 shrink-0" />
+            <span className="shrink-0">{versionInfo?.version ?? 'dev'}</span>
+            <span className="opacity-45">·</span>
+            <span className="truncate font-mono opacity-75">{shortCommit}</span>
+          </div>
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--color-sidebar-accent) 88%, transparent)',
+              color: 'var(--color-sidebar-foreground)',
+            }}
+          >
+            {IS_SERVER_MODE ? 'srv' : 'desk'}
+          </span>
+        </div>
       </div>
     </aside>
   )

@@ -154,7 +154,10 @@ export default function HealthPage() {
       </div>
 
       <div className="grid gap-3 rounded-xl border border-border bg-card p-4 lg:grid-cols-[180px_180px_180px_minmax(0,1fr)_120px]">
-        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => setSelectedEnv(value === '__all__' ? 'all' : Number(value))}>
+        <Select value={selectedEnv === 'all' ? '__all__' : String(selectedEnv)} onValueChange={(value) => {
+          setSelectedEnv(value === '__all__' ? 'all' : Number(value))
+          setPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="全部环境" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部环境</SelectItem>
@@ -162,7 +165,10 @@ export default function HealthPage() {
           </SelectContent>
         </Select>
 
-        <Select value={category || '__all__'} onValueChange={(value) => setCategory(value === '__all__' ? '' : value as AssetCategory)}>
+        <Select value={category || '__all__'} onValueChange={(value) => {
+          setCategory(value === '__all__' ? '' : value as AssetCategory)
+          setPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="全部类别" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部类别</SelectItem>
@@ -172,7 +178,10 @@ export default function HealthPage() {
           </SelectContent>
         </Select>
 
-        <Select value={status || '__all__'} onValueChange={(value) => setStatus(value === '__all__' ? '' : value as HealthStatus)}>
+        <Select value={status || '__all__'} onValueChange={(value) => {
+          setStatus(value === '__all__' ? '' : value as HealthStatus)
+          setPage(1)
+        }}>
           <SelectTrigger><SelectValue placeholder="全部状态" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">全部状态</SelectItem>
