@@ -101,6 +101,12 @@ make build-all
 
 > 服务端版前端以静态资源形式内嵌到二进制文件，无需单独部署 Web 服务器。
 
+## CI / Release
+
+- `main` / `master` 分支提交或合并请求会触发 GitHub Actions 构建校验，覆盖 `make build-server`、`make build-server-linux`、`go test ./...` 和 macOS 下的 `make build-desktop`
+- 推送 `v` 开头的 tag（例如 `v0.0.1`）会触发 Release 工作流，自动构建 Linux 服务端包（amd64、arm64，优先采用 musl 静态链接以降低 GLIBC 兼容风险）、macOS 通用桌面包（Intel + Apple Silicon）和 Windows 桌面包（amd64、arm64）并发布到 GitHub Releases
+- 本地可使用 `./scripts/release.sh v0.0.1` 自动切换到发布分支、同步远端、创建 annotated tag 并推送到远端；脚本会优先使用 `master`，不存在时回落到远端默认分支
+
 ---
 
 ## 文档
