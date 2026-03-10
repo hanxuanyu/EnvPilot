@@ -206,7 +206,7 @@ jobs:
         run: |
           $shortSha = $env:GITHUB_SHA.Substring(0, 7)
           npm run build --prefix frontend
-          wails build -ldflags "-s -w -X EnvPilot/pkg/buildinfo.Version=$env:TAG_NAME -X EnvPilot/pkg/buildinfo.Commit=$shortSha" -o EnvPilot -platform windows/${{ matrix.arch }}
+          wails build -ldflags "-s -w -X EnvPilot/pkg/buildinfo.Version=$env:TAG_NAME -X EnvPilot/pkg/buildinfo.Commit=$shortSha" -o EnvPilot-${{ matrix.arch }} -platform windows/${{ matrix.arch }}
 
       - name: Package Windows desktop artifact
         shell: pwsh
@@ -214,13 +214,16 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
           ARCH: ${{ matrix.arch }}
         run: |
-          $exePath = 'build/bin/EnvPilot.exe'
-          if (-not (Test-Path $exePath)) {
-            throw "missing desktop executable: $exePath"
+          $exe = Get-ChildItem -Path build/bin -Filter "EnvPilot-$env:ARCH*.exe" -Recurse -File | Select-Object -First 1
+          if (-not $exe) {
+            $exe = Get-ChildItem -Path build/bin -Filter "EnvPilot*.exe" -Recurse -File | Select-Object -First 1
+          }
+          if (-not $exe) {
+            throw "missing desktop executable under build/bin"
           }
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $archive = "release/EnvPilot-$env:TAG_NAME-windows-$env:ARCH.zip"
-          Compress-Archive -Path $exePath -DestinationPath $archive -Force
+          Compress-Archive -Path $exe.FullName -DestinationPath $archive -Force
           $hash = (Get-FileHash -Algorithm SHA256 -Path $archive).Hash.ToLowerInvariant()
           Set-Content -Path "$archive.sha256" -Value "$hash  $(Split-Path -Leaf $archive)"
 
