@@ -10,7 +10,7 @@ import (
 )
 
 type HealthAPI struct {
-	svc *healthSvc.HealthService
+	svc  *healthSvc.HealthService
 	auth *authSvc.Service
 }
 

@@ -9,9 +9,9 @@ import (
 	"context"
 
 	"EnvPilot/internal/app"
-	authAPI "EnvPilot/internal/auth/api"
 	assetAPI "EnvPilot/internal/asset/api"
 	auditAPI "EnvPilot/internal/audit/api"
+	authAPI "EnvPilot/internal/auth/api"
 	configAPI "EnvPilot/internal/config/api"
 	connectorAPI "EnvPilot/internal/connector/api"
 	dnsAPI "EnvPilot/internal/dns/api"

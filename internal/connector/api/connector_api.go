@@ -12,17 +12,17 @@ import (
 )
 
 type ConnectorAPI struct {
-	ctx context.Context
-	svc *connectorSvc.ConnectorService
+	ctx  context.Context
+	svc  *connectorSvc.ConnectorService
 	auth *authSvc.Service
-	log *zap.Logger
+	log  *zap.Logger
 }
 
 func NewConnectorAPI(svc *connectorSvc.ConnectorService, auth *authSvc.Service) *ConnectorAPI {
 	return &ConnectorAPI{
-		svc: svc,
+		svc:  svc,
 		auth: auth,
-		log: logger.Named("connector_api"),
+		log:  logger.Named("connector_api"),
 	}
 }
 

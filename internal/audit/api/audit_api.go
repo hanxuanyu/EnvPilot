@@ -1,10 +1,12 @@
 package auditapi
 
-import authSvc "EnvPilot/internal/auth/service"
-import auditSvc "EnvPilot/internal/audit/service"
+import (
+	auditSvc "EnvPilot/internal/audit/service"
+	authSvc "EnvPilot/internal/auth/service"
+)
 
 type AuditAPI struct {
-	svc *auditSvc.AuditService
+	svc  *auditSvc.AuditService
 	auth *authSvc.Service
 }
 

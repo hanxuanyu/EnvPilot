@@ -26,11 +26,11 @@ const (
 )
 
 var (
-	ErrAuthRequired          = errors.New("需要输入主密码后才能执行该操作")
+	ErrAuthRequired           = errors.New("需要输入主密码后才能执行该操作")
 	ErrPasswordNotInitialized = errors.New("主密码尚未初始化，请先设置主密码")
-	ErrInvalidPassword       = errors.New("主密码错误")
-	ErrWeakPassword          = errors.New("主密码至少需要 8 个字符")
-	ErrPasswordAlreadyExists = errors.New("主密码已设置，请使用修改密码")
+	ErrInvalidPassword        = errors.New("主密码错误")
+	ErrWeakPassword           = errors.New("主密码至少需要 8 个字符")
+	ErrPasswordAlreadyExists  = errors.New("主密码已设置，请使用修改密码")
 )
 
 type PasswordState struct {
@@ -92,7 +92,7 @@ func (s *Service) Setup(sessionID, password string) (Status, error) {
 	}
 	s.markUnlocked(sessionID)
 	return s.GetStatus(sessionID), nil
-	}
+}
 
 func (s *Service) ChangePassword(sessionID, currentPassword, newPassword string) (Status, error) {
 	if !s.isInitialized() {
@@ -109,7 +109,7 @@ func (s *Service) ChangePassword(sessionID, currentPassword, newPassword string)
 	}
 	s.markUnlocked(sessionID)
 	return s.GetStatus(sessionID), nil
-	}
+}
 
 func (s *Service) Unlock(sessionID, password string) (Status, error) {
 	if !s.isEnabled() {

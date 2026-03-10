@@ -1,11 +1,13 @@
 package configapi
 
-import configSvc "EnvPilot/internal/config/service"
+import (
+	configSvc "EnvPilot/internal/config/service"
 
-import authSvc "EnvPilot/internal/auth/service"
+	authSvc "EnvPilot/internal/auth/service"
+)
 
 type ConfigAPI struct {
-	svc *configSvc.ConfigService
+	svc  *configSvc.ConfigService
 	auth *authSvc.Service
 }
 

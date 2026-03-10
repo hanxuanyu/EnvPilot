@@ -10,7 +10,7 @@ import (
 )
 
 type DNSAPI struct {
-	svc *service.DNSService
+	svc  *service.DNSService
 	auth *authSvc.Service
 }
 
