@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import {
   ChevronDown,
@@ -183,6 +183,50 @@ function summarizeResult(result: QueryResult) {
   return `${result.summary || 'SQL 执行成功'}，影响 ${result.affected} 行，耗时 ${result.duration_ms}ms`
 }
 
+function getCellText(value: unknown) {
+  return prettyValue(value)
+}
+
+function getCellKind(columnType?: string) {
+  const normalizedType = (columnType || '').toLowerCase()
+  if (!normalizedType) return 'text'
+  if (/(int|decimal|numeric|float|double|real|serial|number)/.test(normalizedType)) return 'number'
+  if (/(bool|bit)/.test(normalizedType)) return 'boolean'
+  if (/(date|time|year)/.test(normalizedType)) return 'temporal'
+  if (/(json|jsonb)/.test(normalizedType)) return 'json'
+  return 'text'
+}
+
+function renderResultCell(value: unknown, columnType?: string) {
+  if (value === null || value === undefined) {
+    return <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">NULL</Badge>
+  }
+
+  if (typeof value === 'boolean') {
+    return <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{value ? 'TRUE' : 'FALSE'}</Badge>
+  }
+
+  const text = getCellText(value)
+  const kind = getCellKind(columnType)
+
+  if (kind === 'json' || typeof value === 'object') {
+    return (
+      <pre className="max-w-[520px] overflow-hidden rounded-md bg-secondary/50 px-2 py-1.5 font-mono text-[11px] leading-4 text-foreground whitespace-pre-wrap break-all">
+        {text}
+      </pre>
+    )
+  }
+
+  return (
+    <span
+      className={kind === 'number' || kind === 'temporal' ? 'font-mono text-xs leading-4 text-foreground' : 'text-xs leading-4 text-foreground'}
+      title={text}
+    >
+      {text}
+    </span>
+  )
+}
+
 function buildTableKey(databaseName: string, tableName: string) {
   return `${databaseName}.${tableName}`
 }
@@ -327,75 +371,138 @@ function SearchableAssetSelect({ assets, selectedAsset, onSelect }: SearchableAs
   )
 }
 
-function ResultTable({ result }: { result: QueryResult | null }) {
+function ResultTable({ result, actions }: { result: QueryResult | null, actions?: ReactNode }) {
   if (!result) {
     return (
-      <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
-        在上方输入 SQL 脚本后，执行结果会以表格形式展示在这里
+      <div className="flex h-full min-h-[240px] flex-col overflow-hidden rounded-2xl border border-dashed border-border bg-card/60">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/80 px-4 py-2.5">
+          <div className="text-sm text-muted-foreground">查询结果</div>
+          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        </div>
+        <div className="flex flex-1 items-center justify-center p-10 text-center text-sm text-muted-foreground">
+          在上方输入 SQL 脚本后，执行结果会以表格形式展示在这里
+        </div>
       </div>
     )
   }
 
   if (result.columns.length === 0) {
     return (
-      <div className="h-full overflow-auto rounded-2xl border border-border bg-card shadow-sm">
-        <table className="min-w-full text-sm">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/35 px-4 py-2.5">
+          <div className="text-sm text-muted-foreground">{summarizeResult(result)}</div>
+          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <table className="min-w-full text-sm">
           <thead>
             <tr className="sticky top-0 z-[1] border-b border-border bg-secondary/90 backdrop-blur">
-              <th className="px-4 py-3 text-left font-medium text-foreground">指标</th>
-              <th className="px-4 py-3 text-left font-medium text-foreground">结果</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-foreground">指标</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-foreground">结果</th>
             </tr>
           </thead>
           <tbody>
             <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
-              <td className="px-4 py-3 text-muted-foreground">执行摘要</td>
-              <td className="px-4 py-3 text-foreground">{result.summary || 'SQL 执行成功'}</td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">执行摘要</td>
+              <td className="px-3 py-2 text-xs text-foreground">{result.summary || 'SQL 执行成功'}</td>
             </tr>
             <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
-              <td className="px-4 py-3 text-muted-foreground">影响行数</td>
-              <td className="px-4 py-3 text-foreground">{result.affected}</td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">影响行数</td>
+              <td className="px-3 py-2 text-xs text-foreground">{result.affected}</td>
             </tr>
             <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
-              <td className="px-4 py-3 text-muted-foreground">耗时</td>
-              <td className="px-4 py-3 text-foreground">{result.duration_ms}ms</td>
+              <td className="px-3 py-2 text-xs text-muted-foreground">耗时</td>
+              <td className="px-3 py-2 text-xs text-foreground">{result.duration_ms}ms</td>
             </tr>
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full overflow-auto rounded-2xl border border-border bg-card shadow-sm">
-      <table className="min-w-[720px] text-sm">
-        <thead>
-          <tr className="sticky top-0 z-[1] border-b border-border bg-secondary/90 backdrop-blur">
-            {result.columns.map((column) => (
-              <th key={column.name} className="px-4 py-3 text-left font-medium text-foreground">
-                <div>{column.name}</div>
-                <div className="text-xs font-normal text-muted-foreground">{column.type || 'UNKNOWN'}</div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-secondary/35 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{result.rows.length} 行</Badge>
+          <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{result.columns.length} 列</Badge>
+          <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{result.duration_ms}ms</Badge>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background/80 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                aria-label="查看结果表格说明"
+              >
+                <CircleAlert className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end">
+              <div className="text-xs">单击单元格可复制内容，行号与表头已固定</div>
+            </TooltipContent>
+          </Tooltip>
+          {actions ? <div className="flex flex-wrap gap-1.5">{actions}</div> : null}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="min-w-[820px] border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr className="sticky top-0 z-[2]">
+              <th className="sticky left-0 z-[3] w-12 border-b border-r border-border bg-secondary/95 px-2 py-2 text-center text-[11px] font-semibold leading-4 text-muted-foreground backdrop-blur">
+                #
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result.rows.length === 0 ? (
-            <tr>
-              <td colSpan={Math.max(result.columns.length, 1)} className="px-4 py-8 text-center text-muted-foreground">
-                查询成功，但没有返回数据
-              </td>
-            </tr>
-          ) : result.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-t border-border align-top odd:bg-background even:bg-secondary/20 hover:bg-accent/30">
               {result.columns.map((column) => (
-                <td key={column.name} className="px-4 py-3 text-foreground">
-                  <pre className="whitespace-pre-wrap break-all font-sans">{prettyValue(row[column.name])}</pre>
-                </td>
+                <th key={column.name} className="border-b border-border bg-secondary/95 px-3 py-2 text-left align-bottom font-medium text-foreground backdrop-blur">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="max-w-[280px] cursor-help truncate text-xs font-semibold leading-4">
+                        {column.name}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start">
+                      <div className="text-xs">字段类型：{column.type || 'UNKNOWN'}</div>
+                    </TooltipContent>
+                  </Tooltip>
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.rows.length === 0 ? (
+              <tr>
+                <td colSpan={Math.max(result.columns.length + 1, 1)} className="px-4 py-10 text-center text-muted-foreground">
+                  查询成功，但没有返回数据
+                </td>
+              </tr>
+            ) : result.rows.map((row, rowIndex) => (
+              <tr key={rowIndex} className="group">
+                <td className="sticky left-0 z-[1] border-b border-r border-border bg-card px-2 py-2 text-center font-mono text-[11px] leading-4 text-muted-foreground transition group-hover:bg-accent/20">
+                  {rowIndex + 1}
+                </td>
+                {result.columns.map((column) => {
+                  const cellText = getCellText(row[column.name])
+                  return (
+                    <td key={column.name} className="border-b border-border px-3 py-2 align-top transition group-hover:bg-accent/20">
+                      <button
+                        type="button"
+                        onClick={() => copyText(cellText, '单元格内容')}
+                        className="block w-full min-w-[160px] max-w-[520px] text-left"
+                        title="单击复制单元格内容"
+                      >
+                        {renderResultCell(row[column.name], column.type)}
+                      </button>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -1192,27 +1299,26 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-                <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-                  <div className="text-sm text-muted-foreground">
-                    {result ? summarizeResult(result) : '查询结果'}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => { void handleExportResult('csv') }} disabled={!result || !!exportingFormat}>
-                      <Download className="h-4 w-4" />
-                      CSV
-                    </Button>
-                    <Button variant="outline" onClick={() => { void handleExportResult('json') }} disabled={!result || !!exportingFormat}>
-                      <Download className="h-4 w-4" />
-                      JSON
-                    </Button>
-                    <Button variant="outline" onClick={() => { void handleExportResult('xlsx') }} disabled={!result || !!exportingFormat} loading={exportingFormat === 'xlsx'}>
-                      <Download className="h-4 w-4" />
-                      Excel
-                    </Button>
-                  </div>
-                </div>
                 <div className="min-h-0 flex-1 overflow-hidden">
-                  <ResultTable result={result} />
+                  <ResultTable
+                    result={result}
+                    actions={(
+                      <>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { void handleExportResult('csv') }} disabled={!result || !!exportingFormat}>
+                          <Download className="h-3.5 w-3.5" />
+                          CSV
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { void handleExportResult('json') }} disabled={!result || !!exportingFormat}>
+                          <Download className="h-3.5 w-3.5" />
+                          JSON
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => { void handleExportResult('xlsx') }} disabled={!result || !!exportingFormat} loading={exportingFormat === 'xlsx'}>
+                          <Download className="h-3.5 w-3.5" />
+                          Excel
+                        </Button>
+                      </>
+                    )}
+                  />
                 </div>
               </div>
             </div>
