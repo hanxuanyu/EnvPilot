@@ -13,3 +13,7 @@ export function GetVersion() {
 export function Ping() {
   return window['go']['main']['App']['Ping']();
 }
+
+export function SaveExportFile(arg1) {
+  return window['go']['main']['App']['SaveExportFile'](arg1);
+}

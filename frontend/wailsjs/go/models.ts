@@ -1941,6 +1941,31 @@ export namespace hostinfo {
 
 }
 
+export namespace main {
+	
+	export class SaveExportFileReq {
+	    filename: string;
+	    data_base64: string;
+	    title: string;
+	    filter_display_name: string;
+	    filter_pattern: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveExportFileReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	        this.data_base64 = source["data_base64"];
+	        this.title = source["title"];
+	        this.filter_display_name = source["filter_display_name"];
+	        this.filter_pattern = source["filter_pattern"];
+	    }
+	}
+
+}
+
 export namespace model {
 	
 	export class HealthSection {

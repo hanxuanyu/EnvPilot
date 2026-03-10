@@ -31,4 +31,4 @@ dns:
 health:
     check_interval: 60
     timeout: 10
-    auto_check: true
+    auto_check: false

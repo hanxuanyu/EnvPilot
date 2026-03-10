@@ -7,6 +7,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"EnvPilot/internal/app"
 	assetAPI "EnvPilot/internal/asset/api"
@@ -104,4 +108,60 @@ func (a *App) GetVersion() map[string]string {
 // GetHostInfo 获取当前主机资源与平台信息
 func (a *App) GetHostInfo() hostinfo.Snapshot {
 	return hostinfo.Collect()
+}
+
+type SaveExportFileReq struct {
+	Filename          string `json:"filename"`
+	DataBase64        string `json:"data_base64"`
+	Title             string `json:"title"`
+	FilterDisplayName string `json:"filter_display_name"`
+	FilterPattern     string `json:"filter_pattern"`
+}
+
+// SaveExportFile 在桌面模式下弹出原生保存对话框并写入导出文件。
+func (a *App) SaveExportFile(req SaveExportFileReq) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("应用上下文未初始化")
+	}
+	if req.Filename == "" {
+		return "", fmt.Errorf("文件名不能为空")
+	}
+	if req.DataBase64 == "" {
+		return "", fmt.Errorf("导出内容不能为空")
+	}
+
+	content, err := base64.StdEncoding.DecodeString(req.DataBase64)
+	if err != nil {
+		return "", fmt.Errorf("导出内容解码失败: %w", err)
+	}
+
+	options := wailsruntime.SaveDialogOptions{
+		Title:                req.Title,
+		DefaultFilename:      req.Filename,
+		CanCreateDirectories: true,
+	}
+	if req.FilterDisplayName != "" && req.FilterPattern != "" {
+		options.Filters = []wailsruntime.FileFilter{{
+			DisplayName: req.FilterDisplayName,
+			Pattern:     req.FilterPattern,
+		}}
+	}
+
+	targetPath, err := wailsruntime.SaveFileDialog(a.ctx, options)
+	if err != nil {
+		return "", fmt.Errorf("打开保存对话框失败: %w", err)
+	}
+	if targetPath == "" {
+		return "", nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		return "", fmt.Errorf("创建导出目录失败: %w", err)
+	}
+	if err := os.WriteFile(targetPath, content, 0644); err != nil {
+		return "", fmt.Errorf("写入导出文件失败: %w", err)
+	}
+
+	logger.Info("导出文件已保存", zap.String("path", targetPath))
+	return targetPath, nil
 }

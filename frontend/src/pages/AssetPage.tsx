@@ -1,8 +1,8 @@
 // AssetPage.tsx — 资产列表页面
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   Plus, Search, Server, Database, Zap, Send, Box,
-  Trash2, Pencil, KeyRound, RefreshCw, type LucideProps,
+  Trash2, Pencil, KeyRound, RefreshCw, Download, Upload, type LucideProps,
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -18,14 +18,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Modal, FormField } from '@/components/ui/dialog'
+import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { assetService, credentialService } from '@/services/assetService'
+import { assetService, credentialService, groupService } from '@/services/assetService'
 import { dnsService } from '@/services/dnsService'
 import { healthService } from '@/services/healthService'
 import type {
-  Asset, Credential, AssetCategory, CredentialType, PluginDef, Environment,
+  Asset, Credential, AssetCategory, CredentialType, PluginDef, Environment, Group,
 } from '@/types/asset'
 import type { DNSRecord } from '@/types/dns'
 import type { HealthSnapshot } from '@/types/health'
@@ -34,6 +35,7 @@ import {
   CREDENTIAL_TYPE_LABELS,
   getAssetAddress,
 } from '@/types/asset'
+import type { AssetExportMode } from '@/lib/assetWorkbook'
 
 // ── 图标映射 ──
 
@@ -50,8 +52,9 @@ type TabType = 'assets' | 'credentials'
 // ── 主页面 ──
 
 export default function AssetPage() {
-  const { isReadOnly, promptUnlock } = useAuth()
+  const { isReadOnly, promptUnlock, status } = useAuth()
   const [searchParams] = useSearchParams()
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const {
     environments, assets, credentials, plugins,
     selectedEnvId, loading,
@@ -86,8 +89,13 @@ export default function AssetPage() {
 
   const [showAssetForm, setShowAssetForm] = useState(false)
   const [showCredForm, setShowCredForm] = useState(false)
+  const [showExportModal, setShowExportModal] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [exporting, setExporting] = useState(false)
+  const [includeSensitive, setIncludeSensitive] = useState(false)
+  const [exportMode, setExportMode] = useState<AssetExportMode>('current')
   const [healthByAssetId, setHealthByAssetId] = useState<Record<number, HealthSnapshot>>({})
   const highlightedAssetId = Number(searchParams.get('asset') || 0)
   const highlightedCredentialId = Number(searchParams.get('credential') || 0)
@@ -228,6 +236,189 @@ export default function AssetPage() {
     }
   }
 
+  const canIncludeSensitive = !status?.enabled || !isReadOnly || !!status?.unlocked
+  const selectedEnvironment = environments.find((environment) => environment.id === selectedEnvId) ?? null
+
+  const handleExportAssets = async () => {
+    if (assets.length === 0) {
+      toast.info('当前筛选条件下没有可导出的资源')
+      return
+    }
+
+    if (includeSensitive && !canIncludeSensitive) {
+      promptUnlock('解锁后才能导出包含用户名和明文凭据的资源清单。')
+      return
+    }
+
+    if (exportMode === 'selected-environment' && !selectedEnvironment) {
+      toast.info('请先在资产列表顶部选择一个环境，再导出当前环境资源')
+      return
+    }
+
+    const targetAssets = exportMode === 'middleware'
+      ? assets.filter((asset) => asset.category !== 'server')
+      : exportMode === 'selected-environment' && selectedEnvironment
+        ? assets.filter((asset) => asset.environment_id === selectedEnvironment.id)
+      : assets
+
+    if (targetAssets.length === 0) {
+      toast.info(
+        exportMode === 'middleware'
+          ? '当前筛选条件下没有可导出的中间件资源'
+          : exportMode === 'selected-environment'
+            ? '当前环境下没有可导出的资源'
+            : '当前筛选条件下没有可导出的资源',
+      )
+      return
+    }
+
+    setExporting(true)
+    try {
+      const { downloadAssetsWorkbook, makeWorkbookFileName } = await import('@/lib/assetWorkbook')
+      const secretsByCredentialId: Record<number, string> = {}
+
+      if (includeSensitive) {
+        const credentialIDs = Array.from(new Set(targetAssets
+          .map((asset) => asset.credential_id)
+          .filter((value): value is number => !!value)))
+
+        for (const credentialID of credentialIDs) {
+          secretsByCredentialId[credentialID] = await credentialService.reveal(credentialID)
+        }
+      }
+
+      const saved = await downloadAssetsWorkbook({
+        fileName: makeWorkbookFileName(
+          exportMode === 'environment'
+            ? '资产列表-按环境'
+            : exportMode === 'selected-environment'
+              ? `资产列表-${selectedEnvironment?.name ?? '当前环境'}`
+            : exportMode === 'middleware'
+              ? '资产列表-按中间件类型'
+              : '资产列表',
+        ),
+        assets: targetAssets,
+        credentials,
+        environments,
+        plugins,
+        includeSensitive,
+        secretsByCredentialId,
+        exportMode,
+        selectedEnvironmentId: selectedEnvironment?.id,
+        selectedEnvironmentName: selectedEnvironment?.name,
+        sheetName: '当前列表',
+      })
+      if (saved) {
+        setShowExportModal(false)
+        toast.success(`已导出 ${targetAssets.length} 条资源`)
+      }
+    } catch (error: any) {
+      toast.error('导出失败', { description: error.message })
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleImportAssets = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    if (isReadOnly) {
+      promptUnlock('当前为只读模式，解锁后才能批量导入资源。')
+      return
+    }
+
+    setImporting(true)
+    try {
+      const { parseAssetImportFile } = await import('@/lib/assetWorkbook')
+      const rows = await parseAssetImportFile(file)
+      if (rows.length === 0) {
+        toast.info('导入文件中没有可处理的资源行')
+        return
+      }
+
+      const normalize = (value: string) => value.trim().toLowerCase()
+      const envMap = new Map(environments.map((environment) => [normalize(environment.name), environment]))
+      const credentialMap = new Map(credentials.map((credential) => [normalize(credential.name), credential]))
+      const pluginMap = new Map(plugins.map((plugin) => [plugin.type_id, plugin]))
+      const groupCache = new Map<number, Group[]>()
+      const failures: string[] = []
+      let successCount = 0
+
+      const loadGroupsByEnvironment = async (environmentID: number) => {
+        if (groupCache.has(environmentID)) return groupCache.get(environmentID) ?? []
+        const groups = await groupService.listByEnvironment(environmentID) as Group[]
+        groupCache.set(environmentID, groups)
+        return groups
+      }
+
+      for (const row of rows) {
+        try {
+          const environment = envMap.get(normalize(row.environmentName))
+          if (!environment) throw new Error(`环境「${row.environmentName}」不存在`)
+
+          const plugin = pluginMap.get(row.pluginType)
+          if (!plugin) throw new Error(`插件类型「${row.pluginType}」不存在`)
+          if (plugin.category !== row.category) {
+            throw new Error(`类别与插件类型不匹配，期望 ${plugin.category}`)
+          }
+
+          let groupID: number | undefined
+          if (row.groupName) {
+            const groups = await loadGroupsByEnvironment(environment.id)
+            const group = groups.find((item) => normalize(item.name) === normalize(row.groupName))
+            if (!group) throw new Error(`分组「${row.groupName}」不存在于环境「${environment.name}」`) 
+            groupID = group.id
+          }
+
+          let credentialID: number | undefined
+          if (row.credentialName) {
+            const credential = credentialMap.get(normalize(row.credentialName))
+            if (!credential) throw new Error(`凭据「${row.credentialName}」不存在`)
+            credentialID = credential.id
+          }
+
+          await assetService.create({
+            environment_id: environment.id,
+            group_id: groupID,
+            category: row.category,
+            plugin_type: row.pluginType,
+            name: row.assetName,
+            description: row.description,
+            tags: row.tags,
+            credential_id: credentialID,
+            ext_config: row.extConfig,
+            dns_config: {
+              enabled: row.dnsEnabled,
+              domain: row.dnsEnabled ? row.dnsDomain : '',
+              ttl: row.dnsTTL,
+            },
+          })
+          successCount += 1
+        } catch (error: any) {
+          failures.push(`第 ${row.rowNumber} 行：${error.message}`)
+        }
+      }
+
+      if (successCount > 0) {
+        await handleRefresh()
+      }
+
+      if (failures.length === 0) {
+        toast.success(`批量导入完成，共导入 ${successCount} 条资源`)
+      } else {
+        toast.warning(`批量导入完成，成功 ${successCount} 条，失败 ${failures.length} 条`, {
+          description: failures.slice(0, 3).join('；'),
+        })
+      }
+    } catch (error: any) {
+      toast.error('导入失败', { description: error.message })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   // 按 category 过滤可用插件
   const filteredPlugins = categoryFilter
     ? plugins.filter(p => p.category === categoryFilter)
@@ -269,6 +460,30 @@ export default function AssetPage() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {tab === 'assets' ? (
+            <>
+              <Button variant="outline" size="sm" onClick={async () => {
+                const { downloadAssetImportTemplate } = await import('@/lib/assetWorkbook')
+              const saved = await downloadAssetImportTemplate()
+              if (saved) {
+                toast.success('资源导入模板已保存')
+              }
+              }}>
+                <Download className="w-3.5 h-3.5" />
+                下载模板
+              </Button>
+              {!isReadOnly ? (
+                <Button variant="outline" size="sm" onClick={() => importInputRef.current?.click()} disabled={importing}>
+                  <Upload className="w-3.5 h-3.5" />
+                  {importing ? '导入中...' : '批量导入'}
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)} disabled={exporting}>
+                <Download className="w-3.5 h-3.5" />
+                导出列表
+              </Button>
+            </>
+          ) : null}
           <Button
             variant="outline"
             size="sm"
@@ -299,6 +514,14 @@ export default function AssetPage() {
       {/* 资产列表 Tab */}
       {tab === 'assets' && (
         <>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+            onChange={handleImportAssets}
+          />
+
           {/* 筛选栏 */}
           <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
             <div className="w-full sm:w-[170px] lg:w-[180px]">
@@ -549,6 +772,72 @@ export default function AssetPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        title="导出资产列表"
+        className="max-w-lg"
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setShowExportModal(false)}>取消</Button>
+            <Button onClick={() => void handleExportAssets()} loading={exporting}>开始导出</Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-background/60 p-3 text-sm text-muted-foreground">
+            当前会基于资产列表页的筛选结果导出数据。可选择单表导出、仅导出当前环境、按环境分 sheet，或按中间件类型分 sheet。
+          </div>
+
+          <FormField label="导出方式">
+            <Select value={exportMode} onValueChange={(value) => setExportMode(value as AssetExportMode)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="current">当前列表单 Sheet</SelectItem>
+                <SelectItem value="selected-environment" disabled={!selectedEnvironment}>只导出当前环境</SelectItem>
+                <SelectItem value="environment">按环境分 Sheet</SelectItem>
+                <SelectItem value="middleware">按中间件类型分 Sheet</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-xs text-muted-foreground">
+              {exportMode === 'current' ? '适合快速导出当前筛选结果。' : null}
+              {exportMode === 'selected-environment'
+                ? selectedEnvironment
+                  ? `仅导出当前选中的环境「${selectedEnvironment.name}」，适合单环境排障或交付。`
+                  : '请先在列表顶部选择一个环境，再使用当前环境导出。'
+                : null}
+              {exportMode === 'environment' ? '每个环境单独一个 sheet，便于按环境交付。' : null}
+              {exportMode === 'middleware' ? '仅导出当前筛选结果中的中间件资源，每个中间件类型一个 sheet，并拆开展示连接字段。' : null}
+            </div>
+          </FormField>
+
+          <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-foreground">包含具体凭据内容</div>
+              <div className="text-xs text-muted-foreground">导出用户名与明文密码/密钥等敏感字段，仅在已解锁时允许</div>
+            </div>
+            <Switch
+              checked={includeSensitive}
+              onCheckedChange={(checked) => {
+                if (checked && !canIncludeSensitive) {
+                  promptUnlock('解锁后才能导出包含用户名和明文凭据的资源清单。')
+                  return
+                }
+                setIncludeSensitive(checked)
+              }}
+            />
+          </div>
+
+          {includeSensitive ? (
+            <div className="rounded-lg border border-amber-300/40 bg-amber-500/5 px-4 py-3 text-sm text-amber-700">
+              导出文件将包含敏感信息，请仅在可信环境下使用，并注意妥善保管。
+            </div>
+          ) : null}
+        </div>
+      </Modal>
 
       {/* 资产表单弹窗 */}
       <AssetFormModal
