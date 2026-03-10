@@ -21,7 +21,8 @@ DESKTOP_PLATFORM ?=
 DESKTOP_OUTPUT   ?= $(APP_NAME)
 SERVER_OUTPUT    ?= $(SERVER_NAME)
 EXTRA_GO_LDFLAGS ?=
-BUILD_META_CMD := go run ./cmd/buildmeta
+HOST_GO_RUN := GOOS= GOARCH= CGO_ENABLED= go run
+BUILD_META_CMD := $(HOST_GO_RUN) ./cmd/buildmeta
 GIT_COMMIT  := $(shell $(BUILD_META_CMD) -mode commit 2>/dev/null || echo unknown)
 APP_VERSION := $(shell $(BUILD_META_CMD) -mode version 2>/dev/null || echo dev)
 LDFLAGS     := -s -w
