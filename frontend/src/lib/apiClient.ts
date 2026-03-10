@@ -7,6 +7,8 @@
  * 两种模式对外暴露相同的接口形状，调用方（services/*.ts）无需感知差异。
  */
 
+import { notifyAuthFailure } from '@/lib/authEvents'
+
 declare const __APP_MODE__: string
 declare const __API_BASE__: string
 
@@ -25,7 +27,10 @@ export interface ApiResult<T> {
 
 /** 解包 ApiResult，失败时抛出 Error */
 export function unwrapResult<T>(result: ApiResult<T>): T {
-  if (!result.success) throw new Error(result.message || '操作失败')
+  if (!result.success) {
+    notifyAuthFailure(result.message)
+    throw new Error(result.message || '操作失败')
+  }
   return result.data
 }
 
@@ -49,13 +54,25 @@ async function request<T>(
   const opts: RequestInit = {
     method,
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
   }
   if (body !== undefined) {
     opts.body = JSON.stringify(body)
   }
 
   const resp = await fetch(url.toString(), opts)
-  const json: ApiResult<T> = await resp.json()
+  const json = await resp.json().catch(() => null) as ApiResult<T> | null
+
+  if (!resp.ok) {
+    const message = json?.message || `请求失败 (${resp.status})`
+    notifyAuthFailure(message)
+    throw new Error(message)
+  }
+
+  if (!json) {
+    throw new Error('响应格式错误')
+  }
+
   return unwrapResult(json)
 }
 

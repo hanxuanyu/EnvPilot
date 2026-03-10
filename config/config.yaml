@@ -15,7 +15,7 @@ database:
     max_idle_conns: 2
     max_open_conns: 10
 security:
-    master_password_enabled: false
+    master_password_enabled: true
     salt_file: .salt
     dangerous_commands:
         - rm -rf

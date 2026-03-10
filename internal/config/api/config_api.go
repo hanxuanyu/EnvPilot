@@ -2,15 +2,35 @@ package configapi
 
 import configSvc "EnvPilot/internal/config/service"
 
+import authSvc "EnvPilot/internal/auth/service"
+
 type ConfigAPI struct {
 	svc *configSvc.ConfigService
+	auth *authSvc.Service
 }
 
-func NewConfigAPI(svc *configSvc.ConfigService) *ConfigAPI {
-	return &ConfigAPI{svc: svc}
+func NewConfigAPI(svc *configSvc.ConfigService, auth *authSvc.Service) *ConfigAPI {
+	return &ConfigAPI{svc: svc, auth: auth}
+}
+
+func (a *ConfigAPI) requireProtectedPage() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireProtectedPage("")
+}
+
+func (a *ConfigAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
 }
 
 func (a *ConfigAPI) GetCurrent() Result[*configSvc.CurrentConfigResult] {
+	if err := a.requireProtectedPage(); err != nil {
+		return Fail[*configSvc.CurrentConfigResult](err.Error())
+	}
 	result, err := a.svc.GetCurrent()
 	if err != nil {
 		return Fail[*configSvc.CurrentConfigResult](err.Error())
@@ -25,6 +45,9 @@ type UpdateConfigReq struct {
 }
 
 func (a *ConfigAPI) Update(req UpdateConfigReq) Result[*configSvc.CurrentConfigResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*configSvc.CurrentConfigResult](err.Error())
+	}
 	result, err := a.svc.UpdateRaw(configSvc.UpdateRawConfigRequest(req))
 	if err != nil {
 		return Fail[*configSvc.CurrentConfigResult](err.Error())
@@ -38,6 +61,9 @@ type ListSnapshotsReq struct {
 }
 
 func (a *ConfigAPI) ListSnapshots(req ListSnapshotsReq) Result[*configSvc.ListSnapshotsResult] {
+	if err := a.requireProtectedPage(); err != nil {
+		return Fail[*configSvc.ListSnapshotsResult](err.Error())
+	}
 	result, err := a.svc.ListSnapshots(configSvc.ListSnapshotsRequest(req))
 	if err != nil {
 		return Fail[*configSvc.ListSnapshotsResult](err.Error())
@@ -46,6 +72,9 @@ func (a *ConfigAPI) ListSnapshots(req ListSnapshotsReq) Result[*configSvc.ListSn
 }
 
 func (a *ConfigAPI) GetSnapshot(id uint) Result[*configSvc.SnapshotDetailResult] {
+	if err := a.requireProtectedPage(); err != nil {
+		return Fail[*configSvc.SnapshotDetailResult](err.Error())
+	}
 	result, err := a.svc.GetSnapshot(id)
 	if err != nil {
 		return Fail[*configSvc.SnapshotDetailResult](err.Error())
@@ -60,6 +89,9 @@ type RollbackConfigReq struct {
 }
 
 func (a *ConfigAPI) Rollback(req RollbackConfigReq) Result[*configSvc.CurrentConfigResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*configSvc.CurrentConfigResult](err.Error())
+	}
 	result, err := a.svc.Rollback(configSvc.RollbackConfigRequest(req))
 	if err != nil {
 		return Fail[*configSvc.CurrentConfigResult](err.Error())

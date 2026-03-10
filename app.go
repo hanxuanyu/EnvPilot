@@ -9,6 +9,7 @@ import (
 	"context"
 
 	"EnvPilot/internal/app"
+	authAPI "EnvPilot/internal/auth/api"
 	assetAPI "EnvPilot/internal/asset/api"
 	auditAPI "EnvPilot/internal/audit/api"
 	configAPI "EnvPilot/internal/config/api"
@@ -29,6 +30,7 @@ import (
 type App struct {
 	ctx          context.Context
 	container    *app.Container
+	AuthAPI      *authAPI.AuthAPI
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
 	ConfigAPI    *configAPI.ConfigAPI
@@ -46,6 +48,7 @@ func NewApp() (*App, error) {
 	}
 	return &App{
 		container:    c,
+		AuthAPI:      c.AuthAPI,
 		AssetAPI:     c.AssetAPI,
 		AuditAPI:     c.AuditAPI,
 		ConfigAPI:    c.ConfigAPI,

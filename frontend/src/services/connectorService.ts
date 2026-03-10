@@ -1,4 +1,5 @@
 import { IS_SERVER_MODE, http } from '@/lib/apiClient'
+import { notifyAuthFailure } from '@/lib/authEvents'
 import type { CommandResult, MQMessage, QueryResult, SendResult } from '@/types/connector'
 
 interface WailsResult<T> {
@@ -8,7 +9,10 @@ interface WailsResult<T> {
 }
 
 function unwrap<T>(result: WailsResult<T>): T {
-  if (!result.success) throw new Error(result.message || '操作失败')
+  if (!result.success) {
+    notifyAuthFailure(result.message)
+    throw new Error(result.message || '操作失败')
+  }
   return result.data
 }
 

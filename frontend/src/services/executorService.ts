@@ -1,5 +1,6 @@
 // executorService.ts — 命令执行 + 在线终端（桌面 / 服务端双模式）
 import { IS_SERVER_MODE, http, subscribeSSE, terminalWSManager } from '@/lib/apiClient'
+import { notifyAuthFailure } from '@/lib/authEvents'
 import { EventsOn, EventsOff } from '@/lib/wailsRuntime'
 import type { model } from '@wailsjs/go/models'
 
@@ -7,7 +8,10 @@ import type { model } from '@wailsjs/go/models'
 import * as ExecutorAPIJs from '@wailsjs/go/executorapi/ExecutorAPI'
 
 function wailsUnwrap<T>(result: { success: boolean; data: T; message: string }): T {
-  if (!result.success) throw new Error(result.message || '操作失败')
+  if (!result.success) {
+    notifyAuthFailure(result.message)
+    throw new Error(result.message || '操作失败')
+  }
   return result.data
 }
 

@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar'
 import { ThemeModeSwitch } from './ThemeModeSwitch'
 import { Button } from '@/components/ui/button'
 import { GlobalCommandPalette } from './GlobalCommandPalette'
+import { AuthStatusBadge } from './AuthProvider'
 import { findRouteMeta, getBreadcrumbs } from './navigation'
 
 export function Layout() {
@@ -78,6 +79,7 @@ export function Layout() {
 
           <div className="flex items-center gap-2">
             <ThemeModeSwitch />
+            <AuthStatusBadge />
 
             {routeMeta.actions.slice(0, 2).map((action) => (
               <Button key={action.to} asChild variant="outline" size="sm" className="hidden xl:inline-flex">

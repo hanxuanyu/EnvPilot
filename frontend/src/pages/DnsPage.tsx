@@ -2,6 +2,7 @@
 import { Globe, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useAuth } from '@/components/common/AuthProvider'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -55,6 +56,7 @@ function recordTarget(record: DNSRecord): string {
 }
 
 export default function DnsPage() {
+  const { isReadOnly } = useAuth()
   const [searchParams] = useSearchParams()
   const [records, setRecords] = useState<DNSRecord[]>([])
   const [environments, setEnvironments] = useState<Environment[]>([])
@@ -334,10 +336,12 @@ export default function DnsPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
-          <Button onClick={openCreateForm}>
-            <Plus className="h-4 w-4" />
-            新增记录
-          </Button>
+          {!isReadOnly ? (
+            <Button onClick={openCreateForm}>
+              <Plus className="h-4 w-4" />
+              新增记录
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -421,7 +425,7 @@ export default function DnsPage() {
           <table className="min-w-[980px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
-                {['域名', '环境', '类型', '目标值', 'TTL', '状态', '操作'].map((header) => (
+                {['域名', '环境', '类型', '目标值', 'TTL', '状态', ...(!isReadOnly ? ['操作'] : [])].map((header) => (
                   <th key={header} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{header}</th>
                 ))}
               </tr>
@@ -429,7 +433,7 @@ export default function DnsPage() {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                    <td colSpan={isReadOnly ? 6 : 7} className="px-4 py-16 text-center text-sm text-muted-foreground">
                     还没有 DNS 记录，点击「新增记录」开始维护。
                   </td>
                 </tr>
@@ -465,27 +469,33 @@ export default function DnsPage() {
                       {record.enabled ? '启用中' : '已停用'}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEditForm(record)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleToggle(record)}>
-                        {record.enabled ? '停用' : '启用'}
-                      </Button>
-                      <ConfirmDialog
-                        title="删除 DNS 记录"
-                        description={`确定要删除记录「${record.domain}」吗？此操作不可撤销。`}
-                        confirmText="删除"
-                        danger
-                        onConfirm={() => handleDelete(record)}
-                      >
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="h-3.5 w-3.5" />
+                  {!isReadOnly ? (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          void openEditForm(record)
+                        }}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                      </ConfirmDialog>
-                    </div>
-                  </td>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          void handleToggle(record)
+                        }}>
+                          {record.enabled ? '停用' : '启用'}
+                        </Button>
+                        <ConfirmDialog
+                          title="删除 DNS 记录"
+                          description={`确定要删除记录「${record.domain}」吗？此操作不可撤销。`}
+                          confirmText="删除"
+                          danger
+                          onConfirm={() => handleDelete(record)}
+                        >
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </ConfirmDialog>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

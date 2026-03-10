@@ -12,6 +12,8 @@ import (
 
 	"EnvPilot/database"
 	"EnvPilot/database/migration"
+	authAPI "EnvPilot/internal/auth/api"
+	authService "EnvPilot/internal/auth/service"
 	assetAPI "EnvPilot/internal/asset/api"
 	assetRepo "EnvPilot/internal/asset/repository"
 	assetSvc "EnvPilot/internal/asset/service"
@@ -60,8 +62,10 @@ type Container struct {
 	Pool      *sshPool.Pool
 	Config    *configService.ConfigService
 	AuditSvc  *auditSvc.AuditService
+	Auth      *authService.Service
 
 	// ── Wails 绑定层（桌面模式 App 使用）──
+	AuthAPI      *authAPI.AuthAPI
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
 	ConfigAPI    *configAPI.ConfigAPI
@@ -153,6 +157,7 @@ func Bootstrap() (*Container, error) {
 		return nil, fmt.Errorf("数据库迁移失败: %w", err)
 	}
 	logger.Info("数据库迁移完成")
+	authSvc := authService.NewService(cfgSvc, cfg.App.DataDir)
 
 	// ── 5. 加密 ───────────────────────────────────────────────────
 	cipher, err := initCipher(cfg.App.DataDir, cfg.Security.SaltFile)
@@ -191,21 +196,22 @@ func Bootstrap() (*Container, error) {
 	astSvc := assetSvc.NewAssetService(sharedAssetRepo, envRepo, sharedCredRepo, dnsSvcInst, auditSvcInst)
 	connSvc := connectorSvc.NewConnectorService(astSvc, sharedCredSvc, auditSvcInst)
 
-	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc)
-	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst)
-	configAPIInst := configAPI.NewConfigAPI(cfgSvc)
-	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc)
-	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst)
+	authAPIInst := authAPI.NewAuthAPI(authSvc)
+	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc, authSvc)
+	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst, authSvc)
+	configAPIInst := configAPI.NewConfigAPI(cfgSvc, authSvc)
+	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc, authSvc)
+	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst, authSvc)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
 	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, auditSvcInst, pool, cfg.Health)
 	healthSvcInst.StartScheduler()
 	cfgSvc.AttachRuntimeApplier(newConfigRuntimeApplier(dataBase, db, dnsRuntime, healthSvcInst))
-	healthAPIInst := healthAPI.NewHealthAPI(healthSvcInst)
+	healthAPIInst := healthAPI.NewHealthAPI(healthSvcInst, authSvc)
 	execRepo := executorRepo.NewExecutionRepo(db)
 	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo, auditSvcInst)
 	termSvc := executorSvc.NewTerminalService(pool, sharedAssetRepo, auditSvcInst)
-	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, pool)
+	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, pool, authSvc)
 
 	return &Container{
 		EnvSvc:       envSvc,
@@ -220,6 +226,8 @@ func Bootstrap() (*Container, error) {
 		Pool:         pool,
 		Config:       cfgSvc,
 		AuditSvc:     auditSvcInst,
+		Auth:         authSvc,
+		AuthAPI:      authAPIInst,
 		AssetAPI:     assetAPIInst,
 		AuditAPI:     auditAPIInst,
 		ConfigAPI:    configAPIInst,

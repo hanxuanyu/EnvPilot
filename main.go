@@ -38,6 +38,7 @@ func main() {
 		OnShutdown:       app.shutdown,
 		Bind: []interface{}{
 			app,
+			app.AuthAPI,
 			app.AssetAPI,
 			app.AuditAPI,
 			app.ConfigAPI,

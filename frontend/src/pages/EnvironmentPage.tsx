@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Layers, ChevronRight, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAssetStore } from '@/store/assetStore'
+import { useAuth } from '@/components/common/AuthProvider'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ const ENV_COLORS = [
 ]
 
 export default function EnvironmentPage() {
+  const { isReadOnly } = useAuth()
   const { environments, loading, loadEnvironments } = useAssetStore()
   const [selectedEnv, setSelectedEnv] = useState<Environment | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
@@ -78,9 +80,14 @@ export default function EnvironmentPage() {
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button size="sm" onClick={() => { setEditingEnv(null); setShowEnvForm(true) }}>
-              <Plus className="w-3.5 h-3.5" /> 新建环境
-            </Button>
+            {!isReadOnly ? (
+              <Button size="sm" onClick={() => {
+                setEditingEnv(null)
+                setShowEnvForm(true)
+              }}>
+                <Plus className="w-3.5 h-3.5" /> 新建环境
+              </Button>
+            ) : null}
           </div>
         </div>
         <div className="space-y-1.5">
@@ -105,29 +112,35 @@ export default function EnvironmentPage() {
                   <div className="text-xs truncate mt-0.5 text-muted-foreground">{env.description}</div>
                 )}
               </div>
-              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="ghost" size="icon"
-                  onClick={e => { e.stopPropagation(); setEditingEnv(env); setShowEnvForm(true) }}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-                <ConfirmDialog
-                  title="删除环境"
-                  description={`确定要删除环境「${env.name}」吗？此操作不可撤销。`}
-                  confirmText="删除"
-                  danger
-                  onConfirm={() => handleDeleteEnv(env.id)}
-                >
+              {!isReadOnly ? (
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost" size="icon"
-                    onClick={e => e.stopPropagation()}
-                    className="text-destructive hover:text-destructive"
+                    onClick={e => {
+                      e.stopPropagation()
+                      setEditingEnv(env)
+                      setShowEnvForm(true)
+                    }}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5" />
                   </Button>
-                </ConfirmDialog>
-              </div>
+                  <ConfirmDialog
+                    title="删除环境"
+                    description={`确定要删除环境「${env.name}」吗？此操作不可撤销。`}
+                    confirmText="删除"
+                    danger
+                    onConfirm={() => handleDeleteEnv(env.id)}
+                  >
+                    <Button
+                      variant="ghost" size="icon"
+                      onClick={e => e.stopPropagation()}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </ConfirmDialog>
+                </div>
+              ) : null}
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
             </div>
           ))}
@@ -144,9 +157,14 @@ export default function EnvironmentPage() {
                   {selectedEnv.name} · 分组
                 </h2>
               </div>
-              <Button variant="secondary" size="sm" onClick={() => { setEditingGroup(null); setShowGroupForm(true) }}>
-                <Plus className="w-3.5 h-3.5" /> 新建分组
-              </Button>
+              {!isReadOnly ? (
+                <Button variant="secondary" size="sm" onClick={() => {
+                  setEditingGroup(null)
+                  setShowGroupForm(true)
+                }}>
+                  <Plus className="w-3.5 h-3.5" /> 新建分组
+                </Button>
+              ) : null}
             </div>
             {groups.length === 0 ? (
               <div className="flex-1 flex items-center justify-center border border-dashed border-border rounded-lg text-sm text-muted-foreground">
@@ -163,21 +181,26 @@ export default function EnvironmentPage() {
                           <div className="text-xs mt-1 text-muted-foreground line-clamp-2">{g.description}</div>
                         )}
                       </div>
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                        <Button variant="ghost" size="icon"
-                          onClick={() => { setEditingGroup(g); setShowGroupForm(true) }}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <ConfirmDialog
-                          title="删除分组"
-                          description={`确定要删除分组「${g.name}」吗？`}
-                          confirmText="删除" danger onConfirm={() => handleDeleteGroup(g.id)}
-                        >
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
+                      {!isReadOnly ? (
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                          <Button variant="ghost" size="icon"
+                            onClick={() => {
+                              setEditingGroup(g)
+                              setShowGroupForm(true)
+                            }}>
+                            <Pencil className="w-3.5 h-3.5" />
                           </Button>
-                        </ConfirmDialog>
-                      </div>
+                          <ConfirmDialog
+                            title="删除分组"
+                            description={`确定要删除分组「${g.name}」吗？`}
+                            confirmText="删除" danger onConfirm={() => handleDeleteGroup(g.id)}
+                          >
+                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </ConfirmDialog>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}

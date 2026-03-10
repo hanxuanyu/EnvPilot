@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import { AlertTriangle, Clock3, GitCommitHorizontal, History, RefreshCw, RotateCcw, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import { useAuth } from '@/components/common/AuthProvider'
+import { authService } from '@/services/authService'
 import { getVersion, type VersionInfo } from '@/services/backendService'
 import { configService } from '@/services/configService'
 import type { AppConfig, ConfigSnapshot, CurrentConfigResult } from '@/types/config'
@@ -163,6 +165,7 @@ function SwitchRow({
 }
 
 export default function ConfigPage() {
+  const { status, refreshStatus, openUnlock } = useAuth()
   const [current, setCurrent] = useState<CurrentConfigResult | null>(null)
   const [draft, setDraft] = useState<AppConfig | null>(null)
   const [snapshots, setSnapshots] = useState<ConfigSnapshot[]>([])
@@ -177,6 +180,11 @@ export default function ConfigPage() {
   const [comment, setComment] = useState('')
   const [rollbackComment, setRollbackComment] = useState('')
   const [showSaltFile, setShowSaltFile] = useState(false)
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
 
   const hotReload = getHotReloadState(current?.hot_reload)
   const hotReloadTone = useMemo(() => hotReloadSummaryTone(hotReload), [hotReload])
@@ -274,6 +282,31 @@ export default function ConfigPage() {
     } finally {
       setRollingBack(false)
     }
+  }
+
+  const handleChangePassword = async () => {
+    setChangingPassword(true)
+    try {
+      await authService.changePassword(currentPassword, newPassword)
+      toast.success('主密码已更新')
+      setPasswordDialogOpen(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      await refreshStatus()
+    } catch (error: any) {
+      toast.error('修改主密码失败', { description: error.message })
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const passwordSubmitDisabled = !currentPassword || !newPassword || newPassword !== confirmPassword
+
+  const handlePasswordDialogKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || passwordSubmitDisabled || changingPassword) return
+    event.preventDefault()
+    void handleChangePassword()
   }
 
   if (!draft || !current) {
@@ -436,10 +469,25 @@ export default function ConfigPage() {
               <h2 className="text-sm font-semibold text-foreground">安全</h2>
               <SwitchRow
                 label="主密码保护"
-                hint="仅更新配置值，是否生效取决于后续安全链路实现"
+                hint="启用后系统默认进入只读模式，需要输入主密码才能进入管理员模式"
                 checked={draft.security.master_password_enabled}
                 onCheckedChange={(checked) => setDraft({ ...draft, security: { ...draft.security, master_password_enabled: checked } })}
               />
+              {draft.security.master_password_enabled ? (
+                <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground space-y-3">
+                  <div>当前状态：{status?.needs_setup ? '待初始化主密码' : status?.unlocked ? '已解锁' : '只读模式'}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {status?.needs_setup ? (
+                      <Button type="button" variant="outline" size="sm" onClick={openUnlock}>立即设置主密码</Button>
+                    ) : (
+                      <>
+                        <Button type="button" variant="outline" size="sm" onClick={openUnlock}>输入主密码</Button>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setPasswordDialogOpen(true)}>修改主密码</Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : null}
               <div className="flex gap-2">
                 <Input
                   type={showSaltFile ? 'text' : 'password'}
@@ -505,6 +553,25 @@ export default function ConfigPage() {
             </section>
           </div>
       </div>
+
+      <Modal
+        open={passwordDialogOpen}
+        onClose={() => setPasswordDialogOpen(false)}
+        title="修改主密码"
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setPasswordDialogOpen(false)}>取消</Button>
+            <Button onClick={handleChangePassword} loading={changingPassword} disabled={passwordSubmitDisabled}>保存</Button>
+          </>
+        )}
+      >
+        <div className="space-y-3">
+          <Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} onKeyDown={handlePasswordDialogKeyDown} placeholder="当前主密码" />
+          <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} onKeyDown={handlePasswordDialogKeyDown} placeholder="新主密码，至少 8 位" />
+          <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} onKeyDown={handlePasswordDialogKeyDown} placeholder="再次输入新主密码" />
+          {confirmPassword && newPassword !== confirmPassword ? <div className="text-xs text-destructive">两次输入的主密码不一致</div> : null}
+        </div>
+      </Modal>
 
       <Modal
         open={compareOpen && !!selectedSnapshot}

@@ -1,6 +1,7 @@
 ﻿import { useEffect, useState } from 'react'
 import { Activity, RefreshCw, Search } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '@/components/common/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { HealthMetricBadges } from '@/components/common/HealthMetricBadges'
@@ -33,6 +34,7 @@ function formatCheckType(checkType: string) {
 }
 
 export default function HealthPage() {
+  const { isReadOnly } = useAuth()
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [snapshots, setSnapshots] = useState<HealthSnapshot[]>([])
   const [summary, setSummary] = useState<HealthSummary | null>(null)
@@ -141,7 +143,9 @@ export default function HealthPage() {
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
-          <Button onClick={handleCheckAll} loading={checking}>检查当前范围</Button>
+          {!isReadOnly ? <Button onClick={() => {
+            void handleCheckAll()
+          }} loading={checking}>检查当前范围</Button> : null}
         </div>
       </div>
 
@@ -220,7 +224,7 @@ export default function HealthPage() {
           <table className="min-w-[1100px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
-                {['资产', '环境', '检查', '状态', 'RTT', '指标', '时间', '操作'].map((header) => (
+                {['资产', '环境', '检查', '状态', 'RTT', '指标', '时间', ...(!isReadOnly ? ['操作'] : [])].map((header) => (
                   <th key={header} className="px-3 py-2.5 text-left text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">{header}</th>
                 ))}
               </tr>
@@ -228,7 +232,7 @@ export default function HealthPage() {
             <tbody>
               {snapshots.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-16 text-center text-sm text-muted-foreground">当前没有健康快照，请先执行检查。</td>
+                  <td colSpan={isReadOnly ? 7 : 8} className="px-4 py-16 text-center text-sm text-muted-foreground">当前没有健康快照，请先执行检查。</td>
                 </tr>
               ) : snapshots.map((snapshot) => (
                 <tr key={snapshot.id} className="border-t border-border align-middle">
@@ -246,7 +250,9 @@ export default function HealthPage() {
                     <HealthMetricBadges snapshot={snapshot} />
                   </td>
                   <td className="px-3 py-2.5 text-[11px] text-muted-foreground whitespace-nowrap">{new Date(snapshot.checked_at).toLocaleString('zh-CN')}</td>
-                  <td className="px-3 py-2.5"><Button variant="outline" size="sm" onClick={() => handleCheckAsset(snapshot.asset_id)}>重检</Button></td>
+                  {!isReadOnly ? <td className="px-3 py-2.5"><Button variant="outline" size="sm" onClick={() => {
+                    void handleCheckAsset(snapshot.asset_id)
+                  }}>重检</Button></td> : null}
                 </tr>
               ))}
             </tbody>

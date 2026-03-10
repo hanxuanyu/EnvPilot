@@ -2,6 +2,7 @@
 package assetapi
 
 import (
+	authSvc "EnvPilot/internal/auth/service"
 	"EnvPilot/internal/asset/model"
 	"EnvPilot/internal/asset/repository"
 	"EnvPilot/internal/asset/service"
@@ -16,6 +17,7 @@ type AssetAPI struct {
 	grpSvc  *service.GroupService
 	astSvc  *service.AssetService
 	credSvc *service.CredentialService
+	auth    *authSvc.Service
 	log     *zap.Logger
 }
 
@@ -24,14 +26,23 @@ func NewAssetAPI(
 	grpSvc *service.GroupService,
 	astSvc *service.AssetService,
 	credSvc *service.CredentialService,
+	auth *authSvc.Service,
 ) *AssetAPI {
 	return &AssetAPI{
 		envSvc:  envSvc,
 		grpSvc:  grpSvc,
 		astSvc:  astSvc,
 		credSvc: credSvc,
+		auth:    auth,
 		log:     logger.Named("asset_api"),
 	}
+}
+
+func (a *AssetAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
 }
 
 // ── 插件管理 ──
@@ -60,6 +71,9 @@ type CreateEnvironmentReq struct {
 }
 
 func (a *AssetAPI) CreateEnvironment(req CreateEnvironmentReq) Result[*model.Environment] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Environment](err.Error())
+	}
 	env, err := a.envSvc.Create(req.Name, req.Description, req.Color)
 	if err != nil {
 		a.log.Warn("创建环境失败", zap.Error(err))
@@ -76,6 +90,9 @@ type UpdateEnvironmentReq struct {
 }
 
 func (a *AssetAPI) UpdateEnvironment(req UpdateEnvironmentReq) Result[*model.Environment] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Environment](err.Error())
+	}
 	env, err := a.envSvc.Update(req.ID, req.Name, req.Description, req.Color)
 	if err != nil {
 		return Fail[*model.Environment](err.Error())
@@ -84,6 +101,9 @@ func (a *AssetAPI) UpdateEnvironment(req UpdateEnvironmentReq) Result[*model.Env
 }
 
 func (a *AssetAPI) DeleteEnvironment(id uint) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.envSvc.Delete(id); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -107,6 +127,9 @@ type CreateGroupReq struct {
 }
 
 func (a *AssetAPI) CreateGroup(req CreateGroupReq) Result[*model.Group] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Group](err.Error())
+	}
 	g, err := a.grpSvc.Create(req.EnvironmentID, req.Name, req.Description)
 	if err != nil {
 		return Fail[*model.Group](err.Error())
@@ -121,6 +144,9 @@ type UpdateGroupReq struct {
 }
 
 func (a *AssetAPI) UpdateGroup(req UpdateGroupReq) Result[*model.Group] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Group](err.Error())
+	}
 	g, err := a.grpSvc.Update(req.ID, req.Name, req.Description)
 	if err != nil {
 		return Fail[*model.Group](err.Error())
@@ -129,6 +155,9 @@ func (a *AssetAPI) UpdateGroup(req UpdateGroupReq) Result[*model.Group] {
 }
 
 func (a *AssetAPI) DeleteGroup(id uint) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.grpSvc.Delete(id); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -159,6 +188,9 @@ type CreateAssetReq struct {
 }
 
 func (a *AssetAPI) CreateAsset(req CreateAssetReq) Result[*model.Asset] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Asset](err.Error())
+	}
 	asset, err := a.astSvc.Create(service.CreateAssetRequest{
 		EnvironmentID: req.EnvironmentID,
 		GroupID:       req.GroupID,
@@ -189,6 +221,9 @@ type UpdateAssetReq struct {
 }
 
 func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Asset](err.Error())
+	}
 	asset, err := a.astSvc.Update(service.UpdateAssetRequest{
 		ID:           req.ID,
 		GroupID:      req.GroupID,
@@ -206,6 +241,9 @@ func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
 }
 
 func (a *AssetAPI) DeleteAsset(id uint) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.astSvc.Delete(id); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -252,6 +290,9 @@ type CreateCredentialReq struct {
 }
 
 func (a *AssetAPI) CreateCredential(req CreateCredentialReq) Result[*model.Credential] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Credential](err.Error())
+	}
 	c, err := a.credSvc.Create(req.Name, req.Type, req.Username, req.Secret)
 	if err != nil {
 		return Fail[*model.Credential](err.Error())
@@ -268,6 +309,9 @@ type UpdateCredentialReq struct {
 }
 
 func (a *AssetAPI) UpdateCredential(req UpdateCredentialReq) Result[*model.Credential] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.Credential](err.Error())
+	}
 	c, err := a.credSvc.Update(req.ID, req.Name, req.Type, req.Username, req.Secret)
 	if err != nil {
 		return Fail[*model.Credential](err.Error())
@@ -276,6 +320,9 @@ func (a *AssetAPI) UpdateCredential(req UpdateCredentialReq) Result[*model.Crede
 }
 
 func (a *AssetAPI) DeleteCredential(id uint) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.credSvc.Delete(id); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -292,6 +339,9 @@ func (a *AssetAPI) ListCredentials() Result[[]model.Credential] {
 
 // RevealCredential 明文查看凭据（需二次确认，操作将被审计）
 func (a *AssetAPI) RevealCredential(id uint) Result[string] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[string](err.Error())
+	}
 	plain, err := a.credSvc.RevealSecret(id)
 	if err != nil {
 		return Fail[string](err.Error())

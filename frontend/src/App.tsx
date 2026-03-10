@@ -2,6 +2,7 @@
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
+import { AuthProvider, ProtectedPage } from '@/components/common/AuthProvider'
 import { Layout } from '@/components/common/Layout'
 import { useWailsReady } from '@/hooks/useWailsReady'
 import { IS_SERVER_MODE } from '@/lib/apiClient'
@@ -74,25 +75,27 @@ function AppShell() {
       {!wailsReady ? (
         <BridgeLoading />
       ) : (
-        <Suspense fallback={<RouteLoading />}>
-          <Routes>
-            {/* 所有页面共享主布局（侧边栏 + 内容区） */}
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="environments" element={<EnvironmentPage />} />
-              <Route path="assets" element={<AssetPage />} />
-              <Route path="executor" element={<ExecutorPage />} />
-              <Route path="terminal" element={<TerminalPage />} />
-              <Route path="terminal/:assetId" element={<TerminalPage />} />
-              <Route path="connector" element={<ConnectorPage />} />
-              <Route path="connector/:type" element={<ConnectorPage />} />
-              <Route path="dns" element={<DnsPage />} />
-              <Route path="health" element={<HealthPage />} />
-              <Route path="audit" element={<AuditPage />} />
-              <Route path="config" element={<ConfigPage />} />
-            </Route>
-          </Routes>
-        </Suspense>
+        <AuthProvider>
+          <Suspense fallback={<RouteLoading />}>
+            <Routes>
+              {/* 所有页面共享主布局（侧边栏 + 内容区） */}
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="environments" element={<EnvironmentPage />} />
+                <Route path="assets" element={<AssetPage />} />
+                <Route path="executor" element={<ProtectedPage title="命令执行" description="命令执行会直接对资产发起操作，未解锁时不开放页面。"><ExecutorPage /></ProtectedPage>} />
+                <Route path="terminal" element={<ProtectedPage title="在线终端" description="终端会话具备实时控制能力，必须先通过主密码解锁。"><TerminalPage /></ProtectedPage>} />
+                <Route path="terminal/:assetId" element={<ProtectedPage title="在线终端" description="终端会话具备实时控制能力，必须先通过主密码解锁。"><TerminalPage /></ProtectedPage>} />
+                <Route path="connector" element={<ProtectedPage title="中间件连接器" description="连接器支持探测、查询与消息发送，属于受保护的操作页面。"><ConnectorPage /></ProtectedPage>} />
+                <Route path="connector/:type" element={<ProtectedPage title="中间件连接器" description="连接器支持探测、查询与消息发送，属于受保护的操作页面。"><ConnectorPage /></ProtectedPage>} />
+                <Route path="dns" element={<DnsPage />} />
+                <Route path="health" element={<HealthPage />} />
+                <Route path="audit" element={<ProtectedPage title="操作审计" description="审计记录包含敏感的执行与变更轨迹，需要先解锁后查看。"><AuditPage /></ProtectedPage>} />
+                <Route path="config" element={<ProtectedPage title="系统配置" description="系统配置涉及运行参数和密码管理，必须先解锁后查看。"><ConfigPage /></ProtectedPage>} />
+              </Route>
+            </Routes>
+          </Suspense>
+        </AuthProvider>
       )}
     </Router>
   )

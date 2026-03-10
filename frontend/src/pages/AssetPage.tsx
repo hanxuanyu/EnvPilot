@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
+import { useAuth } from '@/components/common/AuthProvider'
 import { useAssetStore } from '@/store/assetStore'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { HealthMetricBadges } from '@/components/common/HealthMetricBadges'
@@ -49,6 +50,7 @@ type TabType = 'assets' | 'credentials'
 // ── 主页面 ──
 
 export default function AssetPage() {
+  const { isReadOnly, promptUnlock } = useAuth()
   const [searchParams] = useSearchParams()
   const {
     environments, assets, credentials, plugins,
@@ -199,6 +201,10 @@ export default function AssetPage() {
   const handleSearch = () => setAppliedKeyword(keyword.trim())
 
   const handleDeleteAsset = async (id: number, name: string) => {
+    if (isReadOnly) {
+      promptUnlock('当前为只读模式，解锁后才能删除资产。')
+      return
+    }
     try {
       await assetService.delete(id)
       toast.success(`资产「${name}」已删除`)
@@ -209,6 +215,10 @@ export default function AssetPage() {
   }
 
   const handleDeleteCred = async (id: number, name: string) => {
+    if (isReadOnly) {
+      promptUnlock('当前为只读模式，解锁后才能删除凭据。')
+      return
+    }
     try {
       await credentialService.delete(id)
       toast.success(`凭据「${name}」已删除`)
@@ -235,6 +245,12 @@ export default function AssetPage() {
 
   return (
     <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
+      {isReadOnly ? (
+        <div className="rounded-xl border border-amber-300/40 bg-amber-500/5 px-4 py-3 text-sm text-amber-700">
+          当前为只读模式。你仍可查看资产与凭据信息，但新增、编辑、删除和明文查看等操作需要先输入主密码。
+        </div>
+      ) : null}
+
       {/* 顶部 Tab + 操作按钮 */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-1 p-1 rounded-lg bg-secondary">
@@ -263,18 +279,20 @@ export default function AssetPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
-          <Button onClick={() => {
-            if (tab === 'assets') {
-              setEditingAsset(null)
-              setShowAssetForm(true)
-            } else {
-              setEditingCred(null)
-              setShowCredForm(true)
-            }
-          }}>
-            <Plus className="w-4 h-4" />
-            {tab === 'assets' ? '添加资产' : '添加凭据'}
-          </Button>
+          {!isReadOnly ? (
+            <Button onClick={() => {
+              if (tab === 'assets') {
+                setEditingAsset(null)
+                setShowAssetForm(true)
+              } else {
+                setEditingCred(null)
+                setShowCredForm(true)
+              }
+            }}>
+              <Plus className="w-4 h-4" />
+              {tab === 'assets' ? '添加资产' : '添加凭据'}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -360,7 +378,7 @@ export default function AssetPage() {
             <table className="min-w-[1120px] w-full text-sm">
               <thead>
                 <tr className="bg-secondary border-b border-border">
-                  {['资产名称', '类型', '连接地址', '环境', '状态', '健康', '操作'].map(h => (
+                  {['资产名称', '类型', '连接地址', '环境', '状态', '健康', ...(!isReadOnly ? ['操作'] : [])].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
@@ -368,7 +386,7 @@ export default function AssetPage() {
               <tbody>
                 {assets.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                    <td colSpan={isReadOnly ? 6 : 7} className="px-4 py-16 text-center text-sm text-muted-foreground">
                       暂无资产，点击「添加资产」开始
                     </td>
                   </tr>
@@ -426,24 +444,26 @@ export default function AssetPage() {
                       <td className="px-4 py-3 max-w-[320px]">
                         <HealthMetricBadges snapshot={healthByAssetId[asset.id]} emptyText="未检查" />
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-0.5">
-                          <Button variant="ghost" size="icon"
-                            onClick={() => { setEditingAsset(asset); setShowAssetForm(true) }}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <ConfirmDialog
-                            title="删除资产"
-                            description={`确定要删除资产「${asset.name}」吗？此操作不可撤销。`}
-                            confirmText="删除" danger
-                            onConfirm={() => handleDeleteAsset(asset.id, asset.name)}
-                          >
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                              <Trash2 className="w-3.5 h-3.5" />
+                      {!isReadOnly ? (
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-0.5">
+                            <Button variant="ghost" size="icon"
+                              onClick={() => { setEditingAsset(asset); setShowAssetForm(true) }}>
+                              <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                          </ConfirmDialog>
-                        </div>
-                      </td>
+                            <ConfirmDialog
+                              title="删除资产"
+                              description={`确定要删除资产「${asset.name}」吗？此操作不可撤销。`}
+                              confirmText="删除" danger
+                              onConfirm={() => handleDeleteAsset(asset.id, asset.name)}
+                            >
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </ConfirmDialog>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   )
                 })}
@@ -470,7 +490,7 @@ export default function AssetPage() {
           <table className="min-w-[760px] w-full text-sm">
             <thead>
               <tr className="bg-secondary border-b border-border">
-                {['名称', '类型', '用户名', '密钥', '操作'].map(h => (
+                {['名称', '类型', '用户名', '密钥', ...(!isReadOnly ? ['操作'] : [])].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                 ))}
               </tr>
@@ -478,7 +498,7 @@ export default function AssetPage() {
             <tbody>
               {filteredCredentials.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                  <td colSpan={isReadOnly ? 4 : 5} className="px-4 py-16 text-center text-sm text-muted-foreground">
                     暂无匹配凭据
                   </td>
                 </tr>
@@ -502,24 +522,26 @@ export default function AssetPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-foreground">{cred.username || '—'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{cred.secret_masked}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-0.5">
-                      <Button variant="ghost" size="icon"
-                        onClick={() => { setEditingCred(cred); setShowCredForm(true) }}>
-                        <Pencil className="w-3.5 h-3.5" />
-                      </Button>
-                      <ConfirmDialog
-                        title="删除凭据"
-                        description={`确定要删除「${cred.name}」吗？关联资产将失去连接凭据。`}
-                        confirmText="删除" danger
-                        onConfirm={() => handleDeleteCred(cred.id, cred.name)}
-                      >
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                          <Trash2 className="w-3.5 h-3.5" />
+                  {!isReadOnly ? (
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-0.5">
+                        <Button variant="ghost" size="icon"
+                          onClick={() => { setEditingCred(cred); setShowCredForm(true) }}>
+                          <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                      </ConfirmDialog>
-                    </div>
-                  </td>
+                        <ConfirmDialog
+                          title="删除凭据"
+                          description={`确定要删除「${cred.name}」吗？关联资产将失去连接凭据。`}
+                          confirmText="删除" danger
+                          onConfirm={() => handleDeleteCred(cred.id, cred.name)}
+                        >
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </ConfirmDialog>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

@@ -19,6 +19,7 @@ import {
   Workflow,
   XCircle,
 } from 'lucide-react'
+import { useAuth } from '@/components/common/AuthProvider'
 import { Button } from '@/components/ui/button'
 import { assetService, environmentService } from '@/services/assetService'
 import { auditService } from '@/services/auditService'
@@ -98,6 +99,7 @@ function healthTone(status: HealthSnapshot['status']) {
 }
 
 export default function Dashboard() {
+  const { isReadOnly } = useAuth()
   const activeRef = useRef(true)
   const liveRefreshRef = useRef(false)
   const [backendStatus, setBackendStatus] = useState<BackendStatus>('checking')
@@ -144,13 +146,21 @@ export default function Dashboard() {
       const pong = await ping()
       if (pong !== 'pong') throw new Error('后端不可用')
 
-      const [host, summary, snapshots, audits, executions] = await Promise.all([
+      const [host, summary, snapshots] = await Promise.all([
         getHostInfo(),
         healthService.getSummary(),
         healthService.listSnapshots({ limit: 8, offset: 0 }),
-        auditService.list({ limit: 6, offset: 0 }),
-        executorService.listExecutions({ page: 1, page_size: 6 }),
       ])
+
+      let audits = { items: [] as AuditLog[], total: 0 }
+      let executions = { list: [] as Execution[], total: 0 }
+
+      if (!isReadOnly) {
+        ;[audits, executions] = await Promise.all([
+          auditService.list({ limit: 6, offset: 0 }),
+          executorService.listExecutions({ page: 1, page_size: 6 }),
+        ])
+      }
 
       if (!activeRef.current) return
 
@@ -238,7 +248,7 @@ export default function Dashboard() {
       icon: ClipboardList,
       tone: 'text-violet-500',
     },
-  ]), [abnormalAssetCount, backendLatency, backendStatus, latestAudit, latestExecution, runningExecutions])
+  ].filter((item) => !isReadOnly || (item.title !== '运行中执行' && item.title !== '最近审计'))), [abnormalAssetCount, backendLatency, backendStatus, isReadOnly, latestAudit, latestExecution, runningExecutions])
 
   const statCards = [
     { title: '资产总量', value: String(assets.length), detail: `${serverAssets.length} 台服务器 / ${middlewareAssets.length} 个中间件`, icon: Server, tone: 'text-sky-500' },
@@ -247,7 +257,7 @@ export default function Dashboard() {
     { title: '异常资产', value: String(abnormalAssetCount), detail: abnormalAssetCount > 0 ? '包含告警、严重和不可达' : '当前无异常', icon: AlertTriangle, tone: abnormalAssetCount > 0 ? 'text-amber-500' : 'text-emerald-500' },
     { title: '审计记录', value: String(auditTotal), detail: latestAudit ? `最近 ${formatRelativeTime(latestAudit.created_at)}` : '暂无审计日志', icon: ClipboardList, tone: 'text-amber-500' },
     { title: '命令执行', value: String(executionTotal), detail: latestExecution ? `最近执行 ${formatRelativeTime(executionsafeTime(latestExecution))}` : '暂无执行记录', icon: TerminalSquare, tone: 'text-rose-500' },
-  ]
+  ].filter((item) => !isReadOnly || (item.title !== '审计记录' && item.title !== '命令执行'))
 
   const quickActions = [
     {
@@ -267,8 +277,8 @@ export default function Dashboard() {
     {
       to: '/executor',
       title: '执行台',
-      description: latestExecution ? `最近命令：${latestExecution.command}` : '适合批量执行与审计联动',
-      meta: `${executionTotal} 条记录`,
+      description: isReadOnly ? '解锁后可进入命令执行与批量操作' : latestExecution ? `最近命令：${latestExecution.command}` : '适合批量执行与审计联动',
+      meta: isReadOnly ? '受保护页面' : `${executionTotal} 条记录`,
       icon: TerminalSquare,
     },
     {
@@ -368,41 +378,50 @@ export default function Dashboard() {
           <InfoRow label="模式" value={IS_SERVER_MODE ? 'Server' : 'Desktop'} />
           <InfoRow label="后端 RTT" value={backendLatency ? `${backendLatency} ms` : '—'} />
           <InfoRow label="最近同步" value={formatClockTime(lastUpdatedAt)} />
-          <InfoRow label="最近审计" value={latestAudit ? `${latestAudit.module}/${latestAudit.action}` : '暂无'} />
+          {!isReadOnly ? <InfoRow label="最近审计" value={latestAudit ? `${latestAudit.module}/${latestAudit.action}` : '暂无'} /> : null}
         </div>
 
-        <Panel
-          title="主机资源"
-          extra={<LiveTag text={refreshing ? '同步中' : hostInfo ? `${hostInfo.platform} ${hostInfo.platform_version}` : '加载中'} active={refreshing} />}
-        >
-          <div className="space-y-4">
-            {[
-              { key: 'cpu', label: 'CPU', icon: Cpu, value: formatPercent(hostInfo?.cpu_percent ?? 0), percent: hostInfo?.cpu_percent ?? 0, detail: `${hostInfo?.cpu_cores ?? 0} 核` },
-              { key: 'memory', label: '内存', icon: Activity, value: formatPercent(hostInfo?.memory_percent ?? 0), percent: hostInfo?.memory_percent ?? 0, detail: `${formatBytes(hostInfo?.memory_used ?? 0)} / ${formatBytes(hostInfo?.memory_total ?? 0)}` },
-              { key: 'disk', label: '磁盘', icon: HardDrive, value: formatPercent(hostInfo?.disk_percent ?? 0), percent: hostInfo?.disk_percent ?? 0, detail: `${formatBytes(hostInfo?.disk_used ?? 0)} / ${formatBytes(hostInfo?.disk_total ?? 0)}` },
-            ].map((item) => (
-              <div key={item.key} className="space-y-2">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <item.icon className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
-                    <span style={{ color: 'var(--color-foreground)' }}>{item.label}</span>
+        {!isReadOnly ? (
+          <Panel
+            title="主机资源"
+            extra={<LiveTag text={refreshing ? '同步中' : hostInfo ? `${hostInfo.platform} ${hostInfo.platform_version}` : '加载中'} active={refreshing} />}
+          >
+            <div className="space-y-4">
+              {[
+                { key: 'cpu', label: 'CPU', icon: Cpu, value: formatPercent(hostInfo?.cpu_percent ?? 0), percent: hostInfo?.cpu_percent ?? 0, detail: `${hostInfo?.cpu_cores ?? 0} 核` },
+                { key: 'memory', label: '内存', icon: Activity, value: formatPercent(hostInfo?.memory_percent ?? 0), percent: hostInfo?.memory_percent ?? 0, detail: `${formatBytes(hostInfo?.memory_used ?? 0)} / ${formatBytes(hostInfo?.memory_total ?? 0)}` },
+                { key: 'disk', label: '磁盘', icon: HardDrive, value: formatPercent(hostInfo?.disk_percent ?? 0), percent: hostInfo?.disk_percent ?? 0, detail: `${formatBytes(hostInfo?.disk_used ?? 0)} / ${formatBytes(hostInfo?.disk_total ?? 0)}` },
+              ].map((item) => (
+                <div key={item.key} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-2">
+                      <item.icon className="h-4 w-4" style={{ color: 'var(--color-primary)' }} />
+                      <span style={{ color: 'var(--color-foreground)' }}>{item.label}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium" style={{ color: 'var(--color-foreground)' }}>{item.value}</div>
+                      <div className="text-[11px]" style={{ color: 'var(--color-muted-foreground)' }}>{item.detail}</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-medium" style={{ color: 'var(--color-foreground)' }}>{item.value}</div>
-                    <div className="text-[11px]" style={{ color: 'var(--color-muted-foreground)' }}>{item.detail}</div>
+                  <div className="h-2 rounded-full bg-muted">
+                    <div className="h-2 rounded-full" style={{ width: `${Math.max(6, Math.min(100, item.percent))}%`, background: 'linear-gradient(90deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 60%, white 40%))' }} />
                   </div>
                 </div>
-                <div className="h-2 rounded-full bg-muted">
-                  <div className="h-2 rounded-full" style={{ width: `${Math.max(6, Math.min(100, item.percent))}%`, background: 'linear-gradient(90deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 60%, white 40%))' }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 grid gap-1 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
-            <div>启动时长：{formatUptime(hostInfo?.uptime_seconds ?? 0)}</div>
-            <div className="truncate">应用位置：{hostInfo?.executable ?? '未知'}</div>
-          </div>
-        </Panel>
+              ))}
+            </div>
+            <div className="mt-4 grid gap-1 text-xs" style={{ color: 'var(--color-muted-foreground)' }}>
+              <div>启动时长：{formatUptime(hostInfo?.uptime_seconds ?? 0)}</div>
+              <div className="truncate">应用位置：{hostInfo?.executable ?? '未知'}</div>
+            </div>
+          </Panel>
+        ) : (
+          <Panel title="只读概览" extra={<LiveTag text={refreshing ? '同步中' : '基础数据'} active={refreshing} />}>
+            <div className="rounded-xl border px-4 py-4 text-sm" style={{ borderColor: 'var(--color-border)' }}>
+              <div style={{ color: 'var(--color-foreground)' }}>当前未解锁，首页仅展示基础数量信息与快捷入口。</div>
+              <div className="mt-2" style={{ color: 'var(--color-muted-foreground)' }}>如需查看审计记录、执行动态、连接器、终端或系统配置，请先在顶部状态栏输入主密码。</div>
+            </div>
+          </Panel>
+        )}
       </section>
 
       <section
@@ -426,7 +445,7 @@ export default function Dashboard() {
         style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }}
       >
         <div className="grid gap-4">
-          <Panel title="资产分布" action={{ to: '/assets', label: '查看资产' }}>
+          {!isReadOnly ? <Panel title="资产分布" action={{ to: '/assets', label: '查看资产' }}>
             <div
               className="grid gap-3"
               style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}
@@ -448,9 +467,9 @@ export default function Dashboard() {
                 )
               })}
             </div>
-          </Panel>
+          </Panel> : null}
 
-          <Panel title="最近审计" action={{ to: '/audit', label: '进入审计' }}>
+          {!isReadOnly ? <Panel title="最近审计" action={{ to: '/audit', label: '进入审计' }}>
             <div className="space-y-3">
               {loading && recentAudits.length === 0 ? <StackSkeleton rows={3} /> : recentAudits.length > 0 ? recentAudits.map((item) => (
                 <div key={item.id} className="flex items-start justify-between gap-4 rounded-xl border px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
@@ -469,7 +488,7 @@ export default function Dashboard() {
                 </div>
               )) : <EmptyState text="暂无审计数据" />}
             </div>
-          </Panel>
+          </Panel> : null}
         </div>
 
         <div className="grid gap-4">
@@ -511,7 +530,7 @@ export default function Dashboard() {
             )}
           </Panel>
 
-          <Panel title="健康关注" action={{ to: '/health', label: '查看详情' }}>
+          {!isReadOnly ? <Panel title="健康关注" action={{ to: '/health', label: '查看详情' }}>
             <div className="space-y-3">
               {loading && recentHealth.length === 0 ? <StackSkeleton rows={3} /> : (issueAssets.length > 0 ? issueAssets : recentHealth.slice(0, 4)).map((item) => (
                 <div key={item.id} className="rounded-xl border px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
@@ -529,9 +548,9 @@ export default function Dashboard() {
                 </div>
               ))}
             </div>
-          </Panel>
+          </Panel> : null}
 
-          <Panel title="最近执行" action={{ to: '/executor', label: '打开执行台' }}>
+          {!isReadOnly ? <Panel title="最近执行" action={{ to: '/executor', label: '打开执行台' }}>
             <div className="space-y-3">
               {loading && recentExecutions.length === 0 ? <StackSkeleton rows={3} /> : recentExecutions.length > 0 ? recentExecutions.map((execution) => (
                 <div key={execution.id} className="rounded-xl border px-4 py-3" style={{ borderColor: 'var(--color-border)' }}>
@@ -545,7 +564,7 @@ export default function Dashboard() {
                 </div>
               )) : <EmptyState text="暂无执行数据" />}
             </div>
-          </Panel>
+          </Panel> : null}
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 package dnsapi
 
 import (
+	authSvc "EnvPilot/internal/auth/service"
 	"EnvPilot/internal/dns/model"
 	"EnvPilot/internal/dns/service"
 	"errors"
@@ -10,10 +11,18 @@ import (
 
 type DNSAPI struct {
 	svc *service.DNSService
+	auth *authSvc.Service
 }
 
-func NewDNSAPI(svc *service.DNSService) *DNSAPI {
-	return &DNSAPI{svc: svc}
+func NewDNSAPI(svc *service.DNSService, auth *authSvc.Service) *DNSAPI {
+	return &DNSAPI{svc: svc, auth: auth}
+}
+
+func (a *DNSAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
 }
 
 type ListDNSRecordsReq struct {
@@ -56,6 +65,9 @@ type CreateDNSRecordReq struct {
 }
 
 func (a *DNSAPI) CreateRecord(req CreateDNSRecordReq) Result[*model.DNSRecord] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.DNSRecord](err.Error())
+	}
 	record, err := a.svc.Create(service.CreateDNSRecordRequest(req))
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())
@@ -74,6 +86,9 @@ type UpdateDNSRecordReq struct {
 }
 
 func (a *DNSAPI) UpdateRecord(req UpdateDNSRecordReq) Result[*model.DNSRecord] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.DNSRecord](err.Error())
+	}
 	record, err := a.svc.Update(service.UpdateDNSRecordRequest(req))
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())
@@ -82,6 +97,9 @@ func (a *DNSAPI) UpdateRecord(req UpdateDNSRecordReq) Result[*model.DNSRecord] {
 }
 
 func (a *DNSAPI) DeleteRecord(id uint) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.svc.Delete(id); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -89,6 +107,9 @@ func (a *DNSAPI) DeleteRecord(id uint) Result[bool] {
 }
 
 func (a *DNSAPI) SetRecordEnabled(id uint, enabled bool) Result[*model.DNSRecord] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*model.DNSRecord](err.Error())
+	}
 	record, err := a.svc.SetEnabled(id, enabled)
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())

@@ -3,6 +3,7 @@ package healthapi
 import (
 	"context"
 
+	authSvc "EnvPilot/internal/auth/service"
 	healthModel "EnvPilot/internal/health/model"
 	healthSvc "EnvPilot/internal/health/service"
 	"EnvPilot/internal/plugin"
@@ -10,10 +11,18 @@ import (
 
 type HealthAPI struct {
 	svc *healthSvc.HealthService
+	auth *authSvc.Service
 }
 
-func NewHealthAPI(svc *healthSvc.HealthService) *HealthAPI {
-	return &HealthAPI{svc: svc}
+func NewHealthAPI(svc *healthSvc.HealthService, auth *authSvc.Service) *HealthAPI {
+	return &HealthAPI{svc: svc, auth: auth}
+}
+
+func (a *HealthAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
 }
 
 type ListSnapshotsReq struct {
@@ -42,6 +51,9 @@ func (a *HealthAPI) GetSummary(req ListSnapshotsReq) Result[*healthSvc.SummaryRe
 }
 
 func (a *HealthAPI) CheckAsset(assetID uint) Result[*healthModel.HealthSnapshot] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*healthModel.HealthSnapshot](err.Error())
+	}
 	result, err := a.svc.CheckAsset(context.Background(), assetID)
 	if err != nil {
 		return Fail[*healthModel.HealthSnapshot](err.Error())
@@ -55,6 +67,9 @@ type CheckAllReq struct {
 }
 
 func (a *HealthAPI) CheckAll(req CheckAllReq) Result[*healthSvc.CheckAllResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*healthSvc.CheckAllResult](err.Error())
+	}
 	result, err := a.svc.CheckAll(context.Background(), healthSvc.CheckAllRequest{
 		EnvironmentID: req.EnvironmentID,
 		Category:      req.Category,

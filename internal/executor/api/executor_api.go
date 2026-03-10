@@ -3,6 +3,7 @@ package executorapi
 import (
 	"context"
 
+	authSvc "EnvPilot/internal/auth/service"
 	execModel "EnvPilot/internal/executor/model"
 	"EnvPilot/internal/executor/repository"
 	"EnvPilot/internal/executor/service"
@@ -30,6 +31,7 @@ type ExecutorAPI struct {
 	execSvc *service.ExecutorService
 	termSvc *service.TerminalService
 	pool    *sshpkg.Pool
+	auth    *authSvc.Service
 	log     *zap.Logger
 }
 
@@ -38,13 +40,22 @@ func NewExecutorAPI(
 	execSvc *service.ExecutorService,
 	termSvc *service.TerminalService,
 	pool *sshpkg.Pool,
+	auth *authSvc.Service,
 ) *ExecutorAPI {
 	return &ExecutorAPI{
 		execSvc: execSvc,
 		termSvc: termSvc,
 		pool:    pool,
+		auth:    auth,
 		log:     logger.Named("executor_api"),
 	}
+}
+
+func (a *ExecutorAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
 }
 
 // SetContext 在 Wails startup 阶段由 App 调用，注入运行时 context（用于事件推送）
@@ -85,6 +96,9 @@ type ExecuteResult struct {
 //   - executor:output:{id}  → 命令输出流
 //   - executor:done:{id}    → 执行完成
 func (a *ExecutorAPI) ExecuteCommand(req ExecuteCommandReq) Result[ExecuteResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[ExecuteResult](err.Error())
+	}
 	result, err := a.execSvc.Execute(a.ctx, service.ExecuteRequest{
 		AssetID:  req.AssetID,
 		Command:  req.Command,
@@ -117,6 +131,9 @@ type BatchExecuteResult struct {
 
 // BatchExecuteCommand 在多个资产上并发执行命令
 func (a *ExecutorAPI) BatchExecuteCommand(req BatchExecuteReq) Result[BatchExecuteResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[BatchExecuteResult](err.Error())
+	}
 	results, err := a.execSvc.BatchExecute(a.ctx, service.BatchExecuteRequest{
 		AssetIDs: req.AssetIDs,
 		Command:  req.Command,
@@ -144,6 +161,9 @@ func (a *ExecutorAPI) BatchExecuteCommand(req BatchExecuteReq) Result[BatchExecu
 
 // GetExecution 获取单条执行记录详情
 func (a *ExecutorAPI) GetExecution(id uint) Result[*execModel.Execution] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*execModel.Execution](err.Error())
+	}
 	exec, err := a.execSvc.GetExecution(id)
 	if err != nil {
 		return Fail[*execModel.Execution](err.Error())
@@ -166,6 +186,9 @@ type ExecutionListResult struct {
 
 // ListExecutions 分页查询执行记录
 func (a *ExecutorAPI) ListExecutions(req ListExecutionsReq) Result[ExecutionListResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[ExecutionListResult](err.Error())
+	}
 	list, total, err := a.execSvc.ListExecutions(repository.ExecutionQuery{
 		AssetID:  req.AssetID,
 		Page:     req.Page,
@@ -179,6 +202,9 @@ func (a *ExecutorAPI) ListExecutions(req ListExecutionsReq) Result[ExecutionList
 
 // CheckDangerousCommand 检查命令是否为高危命令
 func (a *ExecutorAPI) CheckDangerousCommand(command string) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	return OK(sshpkg.IsDangerous(command))
 }
 
@@ -190,6 +216,9 @@ func (a *ExecutorAPI) CheckDangerousCommand(command string) Result[bool] {
 //   - terminal:output:{sessionId}  → base64 编码的终端输出
 //   - terminal:closed:{sessionId}  → 会话关闭通知
 func (a *ExecutorAPI) StartTerminal(assetId uint) Result[string] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[string](err.Error())
+	}
 	sessionID, err := a.termSvc.StartTerminal(assetId, a.wailsEmitter())
 	if err != nil {
 		a.log.Warn("启动终端会话失败", zap.Uint("assetId", assetId), zap.Error(err))
@@ -200,6 +229,9 @@ func (a *ExecutorAPI) StartTerminal(assetId uint) Result[string] {
 
 // TerminalInput 向终端会话发送键盘输入
 func (a *ExecutorAPI) TerminalInput(sessionId, data string) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.termSvc.SendInput(sessionId, data); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -208,6 +240,9 @@ func (a *ExecutorAPI) TerminalInput(sessionId, data string) Result[bool] {
 
 // ResizeTerminal 调整终端窗口尺寸
 func (a *ExecutorAPI) ResizeTerminal(sessionId string, cols, rows uint32) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	if err := a.termSvc.ResizeTerminal(sessionId, cols, rows); err != nil {
 		return Fail[bool](err.Error())
 	}
@@ -216,6 +251,9 @@ func (a *ExecutorAPI) ResizeTerminal(sessionId string, cols, rows uint32) Result
 
 // CloseTerminal 关闭终端会话
 func (a *ExecutorAPI) CloseTerminal(sessionId string) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
 	a.termSvc.CloseTerminal(sessionId)
 	return OK(true)
 }

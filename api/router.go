@@ -20,7 +20,9 @@ import (
 // 当请求路径不匹配任何 API 路由时，返回 index.html（SPA fallback）。
 func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	bus := NewEventBus()
+	authz := NewAuthz(c.Auth)
 
+	authH := NewAuthHandler(c.Auth)
 	assetH := NewAssetHandler(c.EnvSvc, c.GrpSvc, c.AssetSvc, c.CredSvc)
 	auditH := NewAuditHandler(c.AuditSvc)
 	configH := NewConfigHandler(c.Config)
@@ -46,6 +48,11 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("GET /api/host/info", func(w http.ResponseWriter, r *http.Request) {
 		writeOK(w, hostinfo.Collect())
 	})
+	mux.HandleFunc("GET /api/auth/status", authH.GetStatus)
+	mux.HandleFunc("POST /api/auth/unlock", authH.Unlock)
+	mux.HandleFunc("POST /api/auth/setup", authH.Setup)
+	mux.HandleFunc("POST /api/auth/change-password", authH.ChangePassword)
+	mux.HandleFunc("POST /api/auth/lock", authH.Lock)
 
 	// ── 插件 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/plugins", assetH.ListPlugins)
@@ -53,66 +60,66 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	// ── 环境 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/environments", assetH.ListEnvironments)
-	mux.HandleFunc("POST /api/environments", assetH.CreateEnvironment)
-	mux.HandleFunc("PUT /api/environments/{id}", assetH.UpdateEnvironment)
-	mux.HandleFunc("DELETE /api/environments/{id}", assetH.DeleteEnvironment)
+	mux.HandleFunc("POST /api/environments", authz.RequireAdmin(assetH.CreateEnvironment))
+	mux.HandleFunc("PUT /api/environments/{id}", authz.RequireAdmin(assetH.UpdateEnvironment))
+	mux.HandleFunc("DELETE /api/environments/{id}", authz.RequireAdmin(assetH.DeleteEnvironment))
 
 	// ── 分组 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/groups", assetH.ListGroups)
-	mux.HandleFunc("POST /api/groups", assetH.CreateGroup)
-	mux.HandleFunc("PUT /api/groups/{id}", assetH.UpdateGroup)
-	mux.HandleFunc("DELETE /api/groups/{id}", assetH.DeleteGroup)
+	mux.HandleFunc("POST /api/groups", authz.RequireAdmin(assetH.CreateGroup))
+	mux.HandleFunc("PUT /api/groups/{id}", authz.RequireAdmin(assetH.UpdateGroup))
+	mux.HandleFunc("DELETE /api/groups/{id}", authz.RequireAdmin(assetH.DeleteGroup))
 
 	// ── 资产 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/assets", assetH.ListAssets)
 	mux.HandleFunc("GET /api/assets/{id}", assetH.GetAsset)
-	mux.HandleFunc("POST /api/assets", assetH.CreateAsset)
-	mux.HandleFunc("PUT /api/assets/{id}", assetH.UpdateAsset)
-	mux.HandleFunc("DELETE /api/assets/{id}", assetH.DeleteAsset)
+	mux.HandleFunc("POST /api/assets", authz.RequireAdmin(assetH.CreateAsset))
+	mux.HandleFunc("PUT /api/assets/{id}", authz.RequireAdmin(assetH.UpdateAsset))
+	mux.HandleFunc("DELETE /api/assets/{id}", authz.RequireAdmin(assetH.DeleteAsset))
 
 	// ── 凭据 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/credentials", assetH.ListCredentials)
-	mux.HandleFunc("POST /api/credentials", assetH.CreateCredential)
-	mux.HandleFunc("PUT /api/credentials/{id}", assetH.UpdateCredential)
-	mux.HandleFunc("DELETE /api/credentials/{id}", assetH.DeleteCredential)
-	mux.HandleFunc("POST /api/credentials/{id}/reveal", assetH.RevealCredential)
+	mux.HandleFunc("POST /api/credentials", authz.RequireAdmin(assetH.CreateCredential))
+	mux.HandleFunc("PUT /api/credentials/{id}", authz.RequireAdmin(assetH.UpdateCredential))
+	mux.HandleFunc("DELETE /api/credentials/{id}", authz.RequireAdmin(assetH.DeleteCredential))
+	mux.HandleFunc("POST /api/credentials/{id}/reveal", authz.RequireAdmin(assetH.RevealCredential))
 
 	// ── 中间件连接器 ───────────────────────────────────────────────
-	mux.HandleFunc("POST /api/connectors/test", connH.TestConnection)
-	mux.HandleFunc("GET /api/connectors/{id}/databases", connH.ListDatabases)
-	mux.HandleFunc("GET /api/connectors/{id}/tables", connH.ListTables)
-	mux.HandleFunc("POST /api/connectors/sql", connH.ExecuteSQL)
-	mux.HandleFunc("POST /api/connectors/redis", connH.ExecuteRedisCmd)
-	mux.HandleFunc("POST /api/connectors/mq", connH.SendMQMessage)
-	mux.HandleFunc("GET /api/audits", auditH.ListAuditLogs)
-	mux.HandleFunc("GET /api/config", configH.GetCurrent)
-	mux.HandleFunc("PUT /api/config", configH.Update)
-	mux.HandleFunc("GET /api/config/snapshots", configH.ListSnapshots)
-	mux.HandleFunc("GET /api/config/snapshots/{id}", configH.GetSnapshot)
-	mux.HandleFunc("POST /api/config/rollback", configH.Rollback)
+	mux.HandleFunc("POST /api/connectors/test", authz.RequireAdmin(connH.TestConnection))
+	mux.HandleFunc("GET /api/connectors/{id}/databases", authz.RequireAdmin(connH.ListDatabases))
+	mux.HandleFunc("GET /api/connectors/{id}/tables", authz.RequireAdmin(connH.ListTables))
+	mux.HandleFunc("POST /api/connectors/sql", authz.RequireAdmin(connH.ExecuteSQL))
+	mux.HandleFunc("POST /api/connectors/redis", authz.RequireAdmin(connH.ExecuteRedisCmd))
+	mux.HandleFunc("POST /api/connectors/mq", authz.RequireAdmin(connH.SendMQMessage))
+	mux.HandleFunc("GET /api/audits", authz.RequireProtectedPage(auditH.ListAuditLogs))
+	mux.HandleFunc("GET /api/config", authz.RequireProtectedPage(configH.GetCurrent))
+	mux.HandleFunc("PUT /api/config", authz.RequireAdmin(configH.Update))
+	mux.HandleFunc("GET /api/config/snapshots", authz.RequireProtectedPage(configH.ListSnapshots))
+	mux.HandleFunc("GET /api/config/snapshots/{id}", authz.RequireProtectedPage(configH.GetSnapshot))
+	mux.HandleFunc("POST /api/config/rollback", authz.RequireAdmin(configH.Rollback))
 	mux.HandleFunc("GET /api/dns/records", dnsH.ListRecords)
 	mux.HandleFunc("GET /api/dns/records/by-asset/{asset_id}", dnsH.GetRecordByAssetID)
-	mux.HandleFunc("POST /api/dns/records", dnsH.CreateRecord)
-	mux.HandleFunc("PUT /api/dns/records/{id}", dnsH.UpdateRecord)
-	mux.HandleFunc("DELETE /api/dns/records/{id}", dnsH.DeleteRecord)
-	mux.HandleFunc("POST /api/dns/records/{id}/enabled", dnsH.SetRecordEnabled)
+	mux.HandleFunc("POST /api/dns/records", authz.RequireAdmin(dnsH.CreateRecord))
+	mux.HandleFunc("PUT /api/dns/records/{id}", authz.RequireAdmin(dnsH.UpdateRecord))
+	mux.HandleFunc("DELETE /api/dns/records/{id}", authz.RequireAdmin(dnsH.DeleteRecord))
+	mux.HandleFunc("POST /api/dns/records/{id}/enabled", authz.RequireAdmin(dnsH.SetRecordEnabled))
 	mux.HandleFunc("GET /api/dns/logs", dnsH.ListQueryLogs)
 	mux.HandleFunc("GET /api/dns/status", dnsH.GetStatus)
 	mux.HandleFunc("GET /api/health/snapshots", healthH.ListSnapshots)
 	mux.HandleFunc("GET /api/health/summary", healthH.GetSummary)
-	mux.HandleFunc("POST /api/health/check/{asset_id}", healthH.CheckAsset)
-	mux.HandleFunc("POST /api/health/check-all", healthH.CheckAll)
+	mux.HandleFunc("POST /api/health/check/{asset_id}", authz.RequireAdmin(healthH.CheckAsset))
+	mux.HandleFunc("POST /api/health/check-all", authz.RequireAdmin(healthH.CheckAll))
 
 	// ── 命令执行 ──────────────────────────────────────────────────
-	mux.HandleFunc("POST /api/executions", execH.ExecuteCommand)
-	mux.HandleFunc("POST /api/executions/batch", execH.BatchExecuteCommand)
-	mux.HandleFunc("GET /api/executions/{id}", execH.GetExecution)
-	mux.HandleFunc("GET /api/executions", execH.ListExecutions)
-	mux.HandleFunc("GET /api/executions/{id}/stream", execH.StreamExecution) // SSE
-	mux.HandleFunc("POST /api/commands/check-dangerous", execH.CheckDangerousCommand)
+	mux.HandleFunc("POST /api/executions", authz.RequireAdmin(execH.ExecuteCommand))
+	mux.HandleFunc("POST /api/executions/batch", authz.RequireAdmin(execH.BatchExecuteCommand))
+	mux.HandleFunc("GET /api/executions/{id}", authz.RequireAdmin(execH.GetExecution))
+	mux.HandleFunc("GET /api/executions", authz.RequireAdmin(execH.ListExecutions))
+	mux.HandleFunc("GET /api/executions/{id}/stream", authz.RequireAdmin(execH.StreamExecution)) // SSE
+	mux.HandleFunc("POST /api/commands/check-dangerous", authz.RequireAdmin(execH.CheckDangerousCommand))
 
 	// ── 在线终端（WebSocket）──────────────────────────────────────
-	mux.HandleFunc("GET /ws/terminal", execH.TerminalWS)
+	mux.HandleFunc("GET /ws/terminal", authz.RequireAdmin(execH.TerminalWS))
 
 	// ── SPA fallback（前端静态资源）──────────────────────────────
 	if staticFiles != nil {

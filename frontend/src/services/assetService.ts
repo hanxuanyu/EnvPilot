@@ -1,12 +1,16 @@
 // assetService.ts — 资产管理模块后端调用封装（桌面 / 服务端双模式）
 import { IS_SERVER_MODE, http, unwrapResult } from '@/lib/apiClient'
+import { notifyAuthFailure } from '@/lib/authEvents'
 import type { AssetDNSConfig, PluginDef } from '@/types/asset'
 
 // ── 桌面模式：Wails 绑定 ──────────────────────────────────────────
 import * as AssetAPIJs from '@wailsjs/go/assetapi/AssetAPI'
 
 function wailsUnwrap<T>(result: { success: boolean; data: T; message: string }): T {
-  if (!result.success) throw new Error(result.message || '操作失败')
+  if (!result.success) {
+    notifyAuthFailure(result.message)
+    throw new Error(result.message || '操作失败')
+  }
   return result.data
 }
 
