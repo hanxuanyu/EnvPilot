@@ -36,6 +36,11 @@ endif
 # ── 平台检测 ─────────────────────────────────────────────────────
 GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
+CGO_ENABLED ?=
+GO_BUILD_ENV := GOOS=$(GOOS) GOARCH=$(GOARCH)
+ifneq ($(strip $(CGO_ENABLED)),)
+GO_BUILD_ENV += CGO_ENABLED=$(CGO_ENABLED)
+endif
 
 .DEFAULT_GOAL := help
 
@@ -87,7 +92,7 @@ build-server: SERVER_OUTPUT := $(SERVER_NAME)
 build-server: prepare-server-assets
 	@echo ">>> [3/3] 编译 Go 服务端二进制..."
 	mkdir -p $(BIN_DIR)
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+	$(GO_BUILD_ENV) go build \
 		-ldflags="$(GO_LDFLAGS)" \
 		-o $(BIN_DIR)/$(SERVER_OUTPUT) \
 		./cmd/server/
@@ -99,7 +104,7 @@ build-server-target: SERVER_OUTPUT := $(SERVER_NAME)-$(GOOS)-$(GOARCH)
 build-server-target: prepare-server-assets
 	@echo ">>> [3/3] 编译目标平台服务端二进制 ($(GOOS)/$(GOARCH))..."
 	mkdir -p $(BIN_DIR)
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
+	$(GO_BUILD_ENV) go build \
 		-ldflags="$(GO_LDFLAGS)" \
 		-o $(BIN_DIR)/$(SERVER_OUTPUT) \
 		./cmd/server/
