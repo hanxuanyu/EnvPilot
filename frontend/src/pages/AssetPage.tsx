@@ -17,7 +17,10 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Modal, FormField } from '@/components/ui/dialog'
+import {
+  Modal,
+  FormField,
+} from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -48,6 +51,12 @@ const CATEGORY_ICONS: Record<AssetCategory, React.FC<LucideProps>> = {
 }
 
 type TabType = 'assets' | 'credentials'
+
+type CredentialDeleteDialogState = {
+  open: boolean
+  credential: Credential | null
+  assetNames: string[]
+}
 
 // ── 主页面 ──
 
@@ -92,6 +101,12 @@ export default function AssetPage() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [editingCred, setEditingCred] = useState<Credential | null>(null)
+  const [credentialDeleteDialog, setCredentialDeleteDialog] = useState<CredentialDeleteDialogState>({
+    open: false,
+    credential: null,
+    assetNames: [],
+  })
+  const [credentialDeleteLoadingId, setCredentialDeleteLoadingId] = useState<number | null>(null)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [includeSensitive, setIncludeSensitive] = useState(false)
@@ -222,18 +237,51 @@ export default function AssetPage() {
     }
   }
 
-  const handleDeleteCred = async (id: number, name: string) => {
+  const resetCredentialDeleteDialog = () => {
+    setCredentialDeleteDialog({
+      open: false,
+      credential: null,
+      assetNames: [],
+    })
+  }
+
+  const openCredentialDeleteDialog = async (credential: Credential) => {
+    setCredentialDeleteLoadingId(credential.id)
+
+    try {
+      const assetNames = await credentialService.getBindings(credential.id)
+      setCredentialDeleteDialog({
+        open: true,
+        credential,
+        assetNames,
+      })
+    } catch (e: any) {
+      resetCredentialDeleteDialog()
+      toast.error('加载凭据绑定关系失败', { description: e?.message || '加载失败' })
+    } finally {
+      setCredentialDeleteLoadingId((current) => (current === credential.id ? null : current))
+    }
+  }
+
+  const handleDeleteCred = async () => {
     if (isReadOnly) {
       promptUnlock('当前为只读模式，解锁后才能删除凭据。')
       return
     }
+    const credential = credentialDeleteDialog.credential
+    if (!credential) return
     try {
-      await credentialService.delete(id)
-      toast.success(`凭据「${name}」已删除`)
+      await credentialService.delete(credential.id)
+      toast.success(`凭据「${credential.name}」已删除`)
+      resetCredentialDeleteDialog()
       await loadCredentials()
     } catch (e: any) {
-      toast.error('删除失败', { description: e.message })
+      const message = e?.message || '删除失败'
+      resetCredentialDeleteDialog()
+      toast.error('删除失败', { description: message })
+      return
     }
+    setCredentialDeleteDialog((current) => ({ ...current, loading: false }))
   }
 
   const canIncludeSensitive = !status?.enabled || !isReadOnly || !!status?.unlocked
@@ -752,16 +800,15 @@ export default function AssetPage() {
                           onClick={() => { setEditingCred(cred); setShowCredForm(true) }}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <ConfirmDialog
-                          title="删除凭据"
-                          description={`确定要删除「${cred.name}」吗？关联资产将失去连接凭据。`}
-                          confirmText="删除" danger
-                          onConfirm={() => handleDeleteCred(cred.id, cred.name)}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          disabled={credentialDeleteLoadingId === cred.id}
+                          onClick={() => void openCredentialDeleteDialog(cred)}
                         >
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </ConfirmDialog>
+                          <Trash2 className={credentialDeleteLoadingId === cred.id ? 'w-3.5 h-3.5 animate-pulse' : 'w-3.5 h-3.5'} />
+                        </Button>
                       </div>
                     </td>
                   ) : null}
@@ -772,6 +819,47 @@ export default function AssetPage() {
           </div>
         </div>
       )}
+
+      <Modal
+        open={credentialDeleteDialog.open}
+        onClose={resetCredentialDeleteDialog}
+        title={credentialDeleteDialog.assetNames.length > 0 ? '无法删除凭据' : '删除凭据'}
+        className="max-w-xl"
+        footer={(
+          <>
+            <Button variant="outline" onClick={resetCredentialDeleteDialog}>取消</Button>
+            {credentialDeleteDialog.assetNames.length === 0 ? (
+              <Button variant="destructive" onClick={() => void handleDeleteCred()}>
+                删除
+              </Button>
+            ) : null}
+          </>
+        )}
+      >
+        <div className="space-y-4 text-sm text-muted-foreground">
+          {credentialDeleteDialog.assetNames.length > 0 ? (
+            <>
+              <div className="rounded-lg border border-amber-300/40 bg-amber-500/5 px-4 py-3 text-amber-700">
+                凭据「{credentialDeleteDialog.credential?.name}」当前仍被以下资产绑定，暂时无法删除。请先解除绑定后再执行删除。
+              </div>
+              <div className="rounded-lg border border-border bg-background/60 p-4 text-left">
+                <div className="mb-3 text-sm font-medium text-foreground">已绑定资产</div>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {credentialDeleteDialog.assetNames.map((assetName) => (
+                    <div key={assetName} className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground">
+                      {assetName}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              确定要删除「{credentialDeleteDialog.credential?.name}」吗？
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={showExportModal}

@@ -458,6 +458,22 @@ export namespace assetapi {
 		    return a;
 		}
 	}
+	export class Result___string_ {
+	    success: boolean;
+	    data?: string[];
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result___string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = source["data"];
+	        this.message = source["message"];
+	    }
+	}
 	export class Result_bool_ {
 	    success: boolean;
 	    data?: boolean;

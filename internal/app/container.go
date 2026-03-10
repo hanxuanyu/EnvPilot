@@ -175,7 +175,7 @@ func Bootstrap() (*Container, error) {
 	if err := cfgSvc.EnsureInitialSnapshot(); err != nil {
 		return nil, fmt.Errorf("配置快照初始化失败: %w", err)
 	}
-	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, cipher, auditSvcInst)
+	sharedCredSvc := assetSvc.NewCredentialService(sharedCredRepo, sharedAssetRepo, cipher, auditSvcInst)
 
 	envRepo := assetRepo.NewEnvironmentRepo(db)
 	grpRepo := assetRepo.NewGroupRepo(db)

@@ -79,6 +79,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	// ── 凭据 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/credentials", assetH.ListCredentials)
+	mux.HandleFunc("GET /api/credentials/{id}/bindings", assetH.GetCredentialBindings)
 	mux.HandleFunc("POST /api/credentials", authz.RequireAdmin(assetH.CreateCredential))
 	mux.HandleFunc("PUT /api/credentials/{id}", authz.RequireAdmin(assetH.UpdateCredential))
 	mux.HandleFunc("DELETE /api/credentials/{id}", authz.RequireAdmin(assetH.DeleteCredential))

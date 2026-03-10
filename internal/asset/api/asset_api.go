@@ -337,6 +337,14 @@ func (a *AssetAPI) ListCredentials() Result[[]model.Credential] {
 	return OK(list)
 }
 
+func (a *AssetAPI) GetCredentialBindings(id uint) Result[[]string] {
+	assetNames, err := a.credSvc.GetBoundAssetNames(id)
+	if err != nil {
+		return Fail[[]string](err.Error())
+	}
+	return OK(assetNames)
+}
+
 // RevealCredential 明文查看凭据（需二次确认，操作将被审计）
 func (a *AssetAPI) RevealCredential(id uint) Result[string] {
 	if err := a.requireAdmin(); err != nil {

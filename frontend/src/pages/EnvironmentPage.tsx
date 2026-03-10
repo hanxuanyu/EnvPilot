@@ -34,6 +34,17 @@ export default function EnvironmentPage() {
   const [viewMode, setViewMode] = useState<'resources' | 'groups'>('resources')
   const [editingEnv, setEditingEnv] = useState<Environment | null>(null)
   const [editingGroup, setEditingGroup] = useState<Group | null>(null)
+  const [envAssetsByEnvId, setEnvAssetsByEnvId] = useState<Record<number, Asset[]>>({})
+  const [pendingDeleteEnv, setPendingDeleteEnv] = useState<Environment | null>(null)
+  const [envDeleteDialog, setEnvDeleteDialog] = useState<{
+    open: boolean
+    env: Environment | null
+    assets: Asset[]
+  }>({
+    open: false,
+    env: null,
+    assets: [],
+  })
 
   useEffect(() => { loadEnvironments() }, [])
 
@@ -74,10 +85,26 @@ export default function EnvironmentPage() {
       .then(([groupList, assetList]) => {
         setGroups(groupList as Group[])
         setEnvAssets(assetList as Asset[])
+        setEnvAssetsByEnvId((current) => ({
+          ...current,
+          [selectedEnv.id]: assetList as Asset[],
+        }))
       })
       .catch((error: any) => toast.error('加载环境详情失败', { description: error.message }))
       .finally(() => setAssetsLoading(false))
   }, [selectedEnv])
+
+  useEffect(() => {
+    if (!pendingDeleteEnv || assetsLoading) return
+    if (selectedEnv?.id !== pendingDeleteEnv.id) return
+
+    setEnvDeleteDialog({
+      open: true,
+      env: pendingDeleteEnv,
+      assets: envAssets,
+    })
+    setPendingDeleteEnv(null)
+  }, [pendingDeleteEnv, selectedEnv, assetsLoading, envAssets])
 
   const resourceSummary = useMemo(() => {
     const credentialCount = new Set(envAssets.map((asset) => asset.credential_id).filter(Boolean)).size
@@ -110,12 +137,38 @@ export default function EnvironmentPage() {
     try {
       await environmentService.delete(id)
       toast.success('环境已删除')
+      setEnvDeleteDialog({ open: false, env: null, assets: [] })
       if (selectedEnv?.id === id) setSelectedEnv(null)
       await loadEnvironments()
     } catch (e: any) {
       toast.error('删除失败', { description: e.message })
     }
   }
+
+  const requestDeleteEnv = (env: Environment) => {
+    const cachedAssets = env.id === selectedEnv?.id ? envAssets : envAssetsByEnvId[env.id]
+    if (cachedAssets) {
+      setEnvDeleteDialog({
+        open: true,
+        env,
+        assets: cachedAssets,
+      })
+      return
+    }
+
+    setPendingDeleteEnv(env)
+    setSelectedEnv(env)
+  }
+
+  const closeEnvDeleteDialog = () => {
+    setPendingDeleteEnv(null)
+    setEnvDeleteDialog({ open: false, env: null, assets: [] })
+  }
+
+  const envDeleteAssetLabels = useMemo(
+    () => envDeleteDialog.assets.map((asset) => `${asset.group?.name ?? '未分组'} / ${asset.name}`),
+    [envDeleteDialog.assets],
+  )
 
   const handleDeleteGroup = async (id: number) => {
     try {
@@ -239,21 +292,16 @@ export default function EnvironmentPage() {
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </Button>
-                  <ConfirmDialog
-                    title="删除环境"
-                    description={`确定要删除环境「${env.name}」吗？此操作不可撤销。`}
-                    confirmText="删除"
-                    danger
-                    onConfirm={() => handleDeleteEnv(env.id)}
+                  <Button
+                    variant="ghost" size="icon"
+                    onClick={e => {
+                      e.stopPropagation()
+                      requestDeleteEnv(env)
+                    }}
+                    className="text-destructive hover:text-destructive"
                   >
-                    <Button
-                      variant="ghost" size="icon"
-                      onClick={e => e.stopPropagation()}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </ConfirmDialog>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               ) : null}
               <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -420,6 +468,47 @@ export default function EnvironmentPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={envDeleteDialog.open}
+        onClose={closeEnvDeleteDialog}
+        title={envDeleteDialog.assets.length > 0 ? '无法删除环境' : '删除环境'}
+        className="max-w-xl"
+        footer={(
+          <>
+            <Button variant="outline" onClick={closeEnvDeleteDialog}>取消</Button>
+            {envDeleteDialog.assets.length === 0 && envDeleteDialog.env ? (
+              <Button variant="destructive" onClick={() => void handleDeleteEnv(envDeleteDialog.env!.id)}>
+                删除
+              </Button>
+            ) : null}
+          </>
+        )}
+      >
+        <div className="space-y-4 text-sm text-muted-foreground">
+          {envDeleteDialog.assets.length > 0 ? (
+            <>
+              <div className="rounded-lg border border-amber-300/40 bg-amber-500/5 px-4 py-3 text-amber-700">
+                环境「{envDeleteDialog.env?.name}」下仍存在资产，暂时无法删除。请先清空该环境下的资产后再执行删除。
+              </div>
+              <div className="rounded-lg border border-border bg-background/60 p-4">
+                <div className="mb-3 text-sm font-medium text-foreground">当前环境资产</div>
+                <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                  {envDeleteAssetLabels.map((label) => (
+                    <div key={label} className="rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              确定要删除环境「{envDeleteDialog.env?.name}」吗？此操作不可撤销。
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         open={showExportModal}

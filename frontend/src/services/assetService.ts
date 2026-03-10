@@ -151,6 +151,11 @@ export const credentialService = {
     const r = await AssetAPIJs.DeleteCredential(id)
     wailsUnwrap(r as any)
   },
+  getBindings: async (id: number): Promise<string[]> => {
+    if (IS_SERVER_MODE) return http.get<string[]>(`/api/credentials/${id}/bindings`) ?? []
+    const r = await AssetAPIJs.GetCredentialBindings(id)
+    return wailsUnwrap(r as any) ?? []
+  },
   reveal: async (id: number): Promise<string> => {
     if (IS_SERVER_MODE) return http.post<string>(`/api/credentials/${id}/reveal`)
     const r = await AssetAPIJs.RevealCredential(id)

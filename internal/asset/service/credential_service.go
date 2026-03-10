@@ -1,7 +1,9 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"EnvPilot/internal/asset/model"
 	"EnvPilot/internal/asset/repository"
@@ -19,14 +21,31 @@ import (
 //   - 只有明确调用 RevealSecret 才解密原文（用于实际连接）
 type CredentialService struct {
 	repo   *repository.CredentialRepo
+	assets *repository.AssetRepo
 	cipher *crypto.AESCipher
 	audit  *auditSvc.AuditService
 	log    *zap.Logger
 }
 
-func NewCredentialService(repo *repository.CredentialRepo, cipher *crypto.AESCipher, audit *auditSvc.AuditService) *CredentialService {
+type CredentialBoundError struct {
+	CredentialID uint
+	AssetNames   []string
+}
+
+func (e *CredentialBoundError) Error() string {
+	if e == nil {
+		return "凭据已被资产绑定，无法删除"
+	}
+	if len(e.AssetNames) == 0 {
+		return fmt.Sprintf("凭据 [id=%d] 已被资产绑定，无法删除", e.CredentialID)
+	}
+	return fmt.Sprintf("当前凭据已绑定以下资产，无法删除：%s", strings.Join(e.AssetNames, "；"))
+}
+
+func NewCredentialService(repo *repository.CredentialRepo, assetRepo *repository.AssetRepo, cipher *crypto.AESCipher, audit *auditSvc.AuditService) *CredentialService {
 	return &CredentialService{
 		repo:   repo,
+		assets: assetRepo,
 		cipher: cipher,
 		audit:  audit,
 		log:    logger.Named("credential"),
@@ -125,6 +144,13 @@ func (s *CredentialService) Delete(id uint) error {
 	if err != nil {
 		return fmt.Errorf("凭据不存在 [id=%d]", id)
 	}
+	assetNames, err := s.GetBoundAssetNames(id)
+	if err != nil {
+		return err
+	}
+	if len(assetNames) > 0 {
+		return &CredentialBoundError{CredentialID: id, AssetNames: assetNames}
+	}
 	if err := s.repo.Delete(id); err != nil {
 		return fmt.Errorf("删除凭据失败: %w", err)
 	}
@@ -153,6 +179,29 @@ func (s *CredentialService) ListAll() ([]model.Credential, error) {
 		masked[i] = *s.mask(&c)
 	}
 	return masked, nil
+}
+
+func (s *CredentialService) GetBoundAssetNames(id uint) ([]string, error) {
+	if s.assets == nil {
+		return nil, nil
+	}
+	boundAssets, err := s.assets.ListByCredentialID(id)
+	if err != nil {
+		return nil, fmt.Errorf("查询凭据绑定资产失败: %w", err)
+	}
+	assetNames := make([]string, 0, len(boundAssets))
+	for _, asset := range boundAssets {
+		parts := make([]string, 0, 3)
+		if strings.TrimSpace(asset.Environment.Name) != "" {
+			parts = append(parts, asset.Environment.Name)
+		}
+		if asset.Group != nil && strings.TrimSpace(asset.Group.Name) != "" {
+			parts = append(parts, asset.Group.Name)
+		}
+		parts = append(parts, asset.Name)
+		assetNames = append(assetNames, strings.Join(parts, " / "))
+	}
+	return assetNames, nil
 }
 
 // RevealSecret 解密并返回凭据原文（仅供 executor/connector 内部使用）
@@ -211,4 +260,9 @@ func (s *CredentialService) recordAudit(input auditSvc.RecordInput) {
 		return
 	}
 	s.audit.RecordBestEffort(input)
+}
+
+func IsCredentialBoundError(err error) bool {
+	var target *CredentialBoundError
+	return errors.As(err, &target)
 }

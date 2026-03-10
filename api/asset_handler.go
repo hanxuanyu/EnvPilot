@@ -333,10 +333,29 @@ func (h *AssetHandler) DeleteCredential(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := h.credSvc.Delete(id); err != nil {
+		if assetSvc.IsCredentialBoundError(err) {
+			writeFail(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeFail(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeOK(w, true)
+}
+
+// GET /api/credentials/{id}/bindings
+func (h *AssetHandler) GetCredentialBindings(w http.ResponseWriter, r *http.Request) {
+	id, err := pathUint(r, "id")
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+	assetNames, err := h.credSvc.GetBoundAssetNames(id)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, assetNames)
 }
 
 // POST /api/credentials/{id}/reveal

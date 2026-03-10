@@ -103,6 +103,17 @@ func (r *AssetRepo) List(f AssetFilter) ([]model.Asset, error) {
 	return list, err
 }
 
+func (r *AssetRepo) ListByCredentialID(credentialID uint) ([]model.Asset, error) {
+	var list []model.Asset
+	err := r.db.
+		Preload("Environment").
+		Preload("Group").
+		Where("credential_id = ?", credentialID).
+		Order("name asc").
+		Find(&list).Error
+	return list, err
+}
+
 func (r *AssetRepo) UpdateStatus(id uint, status model.AssetStatus) error {
 	return r.db.Model(&model.Asset{}).
 		Where("id = ?", id).

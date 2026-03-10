@@ -20,6 +20,8 @@ export function DeleteGroup(arg1:number):Promise<assetapi.Result_bool_>;
 
 export function GetAsset(arg1:number):Promise<assetapi.Result_EnvPilot_internal_asset_model_Asset_>;
 
+export function GetCredentialBindings(arg1:number):Promise<assetapi.Result___string_>;
+
 export function GetPluginSchema(arg1:string):Promise<assetapi.Result_EnvPilot_internal_plugin_PluginDef_>;
 
 export function ListAssets(arg1:assetapi.ListAssetsReq):Promise<assetapi.Result___EnvPilot_internal_asset_model_Asset_>;

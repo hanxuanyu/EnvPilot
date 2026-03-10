@@ -38,6 +38,10 @@ export function GetAsset(arg1) {
   return window['go']['assetapi']['AssetAPI']['GetAsset'](arg1);
 }
 
+export function GetCredentialBindings(arg1) {
+  return window['go']['assetapi']['AssetAPI']['GetCredentialBindings'](arg1);
+}
+
 export function GetPluginSchema(arg1) {
   return window['go']['assetapi']['AssetAPI']['GetPluginSchema'](arg1);
 }
