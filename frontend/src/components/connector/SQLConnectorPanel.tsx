@@ -20,6 +20,13 @@ import {
 } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { sql as sqlLanguage, MySQL, PostgreSQL } from '@codemirror/lang-sql'
+import {
+  autocompletion,
+  snippetCompletion,
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
+} from '@codemirror/autocomplete'
 import { EditorView, keymap } from '@codemirror/view'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { Button } from '@/components/ui/button'
@@ -76,6 +83,38 @@ const HISTORY_STORAGE_KEY = 'envpilot:sql-history'
 const FAVORITE_STORAGE_KEY = 'envpilot:sql-favorites'
 const HISTORY_LIMIT = 20
 const FAVORITE_LIMIT = 20
+
+const SQL_KEYWORDS = [
+  'SELECT', 'FROM', 'WHERE', 'ORDER BY', 'GROUP BY', 'HAVING', 'LIMIT', 'OFFSET',
+  'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM', 'JOIN', 'LEFT JOIN',
+  'RIGHT JOIN', 'INNER JOIN', 'ON', 'AS', 'DISTINCT', 'COUNT', 'SUM', 'AVG',
+  'MIN', 'MAX', 'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'AND', 'OR', 'NOT',
+  'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'IS NULL', 'IS NOT NULL', 'CREATE TABLE',
+  'ALTER TABLE', 'DROP TABLE', 'CREATE INDEX', 'BEGIN', 'COMMIT', 'ROLLBACK',
+]
+
+const SQL_SNIPPETS = [
+  snippetCompletion('SELECT ${1:*}\nFROM ${2:table_name} ${3:alias}\nWHERE ${4:condition}\nLIMIT ${5:100};', {
+    label: 'SELECT 模板',
+    detail: '查询模板',
+    type: 'keyword',
+  }),
+  snippetCompletion('INSERT INTO ${1:table_name} (${2:column1, column2})\nVALUES (${3:value1, value2});', {
+    label: 'INSERT 模板',
+    detail: '插入模板',
+    type: 'keyword',
+  }),
+  snippetCompletion('UPDATE ${1:table_name}\nSET ${2:column} = ${3:value}\nWHERE ${4:condition};', {
+    label: 'UPDATE 模板',
+    detail: '更新模板',
+    type: 'keyword',
+  }),
+  snippetCompletion('DELETE FROM ${1:table_name}\nWHERE ${2:condition};', {
+    label: 'DELETE 模板',
+    detail: '删除模板',
+    type: 'keyword',
+  }),
+]
 
 function isSystemDatabase(pluginType: string, databaseName: string) {
   const normalizedName = databaseName.trim().toLowerCase()
@@ -160,6 +199,33 @@ function summarizeTableNode(detail?: TableDetail) {
   if (primaryCount > 0) summary.push(`PK ${primaryCount}`)
   if (secondaryCount > 0) summary.push(`IDX ${secondaryCount}`)
   return summary
+}
+
+function normalizeIdentifier(token: string) {
+  return token.replace(/^[`"']+|[`"']+$/g, '').trim()
+}
+
+function extractAliasMap(sqlText: string) {
+  const aliasMap = new Map<string, string>()
+  const pattern = /\b(?:from|join|update|into)\s+([`"\w.]+)(?:\s+(?:as\s+)?([`"\w]+))?/gi
+
+  for (const match of sqlText.matchAll(pattern)) {
+    const tableName = normalizeIdentifier(match[1] || '')
+    const aliasName = normalizeIdentifier(match[2] || '')
+    if (tableName && aliasName && aliasName.toLowerCase() !== tableName.toLowerCase()) {
+      aliasMap.set(aliasName.toLowerCase(), tableName)
+    }
+  }
+
+  return aliasMap
+}
+
+function buildTableIndex(tableDetails: TableDetailMap) {
+  const tableIndex = new Map<string, TableDetail>()
+  Object.values(tableDetails).forEach((detail) => {
+    tableIndex.set(detail.table.toLowerCase(), detail)
+  })
+  return tableIndex
 }
 
 function SearchableAssetSelect({ assets, selectedAsset, onSelect }: SearchableAssetSelectProps) {
@@ -264,7 +330,7 @@ function SearchableAssetSelect({ assets, selectedAsset, onSelect }: SearchableAs
 function ResultTable({ result }: { result: QueryResult | null }) {
   if (!result) {
     return (
-      <div className="rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-[240px] items-center justify-center rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
         在上方输入 SQL 脚本后，执行结果会以表格形式展示在这里
       </div>
     )
@@ -272,24 +338,24 @@ function ResultTable({ result }: { result: QueryResult | null }) {
 
   if (result.columns.length === 0) {
     return (
-      <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+      <div className="h-full overflow-auto rounded-2xl border border-border bg-card shadow-sm">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-secondary/60">
+            <tr className="sticky top-0 z-[1] border-b border-border bg-secondary/90 backdrop-blur">
               <th className="px-4 py-3 text-left font-medium text-foreground">指标</th>
               <th className="px-4 py-3 text-left font-medium text-foreground">结果</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-t border-border">
+            <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
               <td className="px-4 py-3 text-muted-foreground">执行摘要</td>
               <td className="px-4 py-3 text-foreground">{result.summary || 'SQL 执行成功'}</td>
             </tr>
-            <tr className="border-t border-border">
+            <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
               <td className="px-4 py-3 text-muted-foreground">影响行数</td>
               <td className="px-4 py-3 text-foreground">{result.affected}</td>
             </tr>
-            <tr className="border-t border-border">
+            <tr className="border-t border-border odd:bg-background even:bg-secondary/20">
               <td className="px-4 py-3 text-muted-foreground">耗时</td>
               <td className="px-4 py-3 text-foreground">{result.duration_ms}ms</td>
             </tr>
@@ -300,10 +366,10 @@ function ResultTable({ result }: { result: QueryResult | null }) {
   }
 
   return (
-    <div className="overflow-auto rounded-2xl border border-border bg-card">
+    <div className="h-full overflow-auto rounded-2xl border border-border bg-card shadow-sm">
       <table className="min-w-[720px] text-sm">
         <thead>
-          <tr className="border-b border-border bg-secondary/60">
+          <tr className="sticky top-0 z-[1] border-b border-border bg-secondary/90 backdrop-blur">
             {result.columns.map((column) => (
               <th key={column.name} className="px-4 py-3 text-left font-medium text-foreground">
                 <div>{column.name}</div>
@@ -320,7 +386,7 @@ function ResultTable({ result }: { result: QueryResult | null }) {
               </td>
             </tr>
           ) : result.rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="border-t border-border align-top">
+            <tr key={rowIndex} className="border-t border-border align-top odd:bg-background even:bg-secondary/20 hover:bg-accent/30">
               {result.columns.map((column) => (
                 <td key={column.name} className="px-4 py-3 text-foreground">
                   <pre className="whitespace-pre-wrap break-all font-sans">{prettyValue(row[column.name])}</pre>
@@ -435,10 +501,178 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     return schemaEntries
   }, [database, tableDetails])
 
+  const sqlCompletions = useMemo<Completion[]>(() => {
+    const items: Completion[] = [...SQL_SNIPPETS]
+
+    SQL_KEYWORDS.forEach((keyword) => {
+      items.push({ label: keyword, type: 'keyword', boost: 80 })
+    })
+
+    visibleCatalog?.databases.forEach((databaseItem) => {
+      items.push({
+        label: databaseItem.name,
+        type: 'namespace',
+        detail: '数据库',
+        boost: 60,
+      })
+
+      databaseItem.tables.forEach((tableName) => {
+        const tableKey = buildTableKey(databaseItem.name, tableName)
+        const detail = tableDetails[tableKey]
+
+        items.push({
+          label: tableName,
+          type: 'class',
+          detail: `${databaseItem.name} · 数据表`,
+          boost: 70,
+        })
+
+        detail?.columns.forEach((column) => {
+          items.push({
+            label: column.name,
+            type: 'property',
+            detail: `${tableName} · ${column.type}`,
+            info: column.comment || column.default_value || undefined,
+            boost: 65,
+          })
+          items.push({
+            label: `${tableName}.${column.name}`,
+            apply: `${tableName}.${column.name}`,
+            type: 'property',
+            detail: `${databaseItem.name} · 字段限定名`,
+            boost: 68,
+          })
+        })
+      })
+    })
+
+    return items
+  }, [tableDetails, visibleCatalog])
+
+  const contextCompletionSource = useMemo(() => {
+    return (context: CompletionContext): CompletionResult | null => {
+      const word = context.matchBefore(/[A-Za-z_][\w$]*(?:\.[A-Za-z_][\w$]*)?/) || context.matchBefore(/[A-Za-z_]*/)
+      const from = word ? word.from : context.pos
+      const tokenText = word?.text ?? ''
+      const normalizedToken = tokenText.toLowerCase()
+      const beforeText = context.state.sliceDoc(Math.max(0, context.pos - 220), context.pos)
+      const tableIndex = buildTableIndex(tableDetails)
+      const aliasMap = extractAliasMap(sql)
+      const options: Completion[] = []
+
+      const tableContext = /(?:from|join|update|into)\s+[a-z0-9_`".]*$/i.test(beforeText)
+      const columnContext = /(?:select|where|and|or|on|having|group\s+by|order\s+by|set|,\s*)[\s\w`".]*$/i.test(beforeText)
+      const qualifierParts = tokenText.includes('.') ? tokenText.split('.') : null
+
+      if (qualifierParts && qualifierParts.length === 2) {
+        const qualifier = normalizeIdentifier(qualifierParts[0]).toLowerCase()
+        const tableName = aliasMap.get(qualifier) || qualifier
+        const detail = tableIndex.get(tableName)
+        if (detail) {
+          detail.columns.forEach((column) => {
+            options.push({
+              label: column.name,
+              apply: column.name,
+              type: 'property',
+              detail: `${detail.table} · ${column.type}`,
+              info: column.comment || column.default_value || undefined,
+              boost: 120,
+            })
+          })
+        }
+      } else if (tableContext) {
+        sqlCompletions.forEach((item) => {
+          if (item.type === 'class' || item.type === 'namespace') options.push(item)
+        })
+      } else if (columnContext) {
+        sqlCompletions.forEach((item) => {
+          if (item.type === 'property' || item.type === 'keyword') options.push(item)
+        })
+        aliasMap.forEach((tableName, aliasName) => {
+          const detail = tableIndex.get(tableName.toLowerCase())
+          if (!detail) return
+          detail.columns.forEach((column) => {
+            options.push({
+              label: `${aliasName}.${column.name}`,
+              apply: `${aliasName}.${column.name}`,
+              type: 'property',
+              detail: `${detail.table} · 别名字段`,
+              boost: 115,
+            })
+          })
+        })
+      } else {
+        options.push(...sqlCompletions)
+      }
+
+      const deduped = new Map<string, Completion>()
+      options.forEach((item) => {
+        if (!normalizedToken || item.label.toLowerCase().includes(normalizedToken)) {
+          deduped.set(`${item.type}:${item.label}`, item)
+        }
+      })
+
+      const nextOptions = Array.from(deduped.values())
+      if (nextOptions.length === 0 && !context.explicit) {
+        return null
+      }
+
+      return {
+        from,
+        options: nextOptions,
+        validFor: /^[\w$.]*$/,
+      }
+    }
+  }, [sql, sqlCompletions, tableDetails])
+
+  const handleExecuteSQL = async () => {
+    if (!asset) return
+    const trimmedSQL = sql.trim()
+    if (!trimmedSQL) {
+      toast.error('SQL 不能为空')
+      return
+    }
+
+    setRunning(true)
+    try {
+      const next = await connectorService.executeSQL({
+        asset_id: asset.id,
+        database,
+        query: trimmedSQL,
+        limit: Number(sqlLimit) || 500,
+      })
+      setResult(next)
+
+      const nextHistoryItem: SQLHistoryItem = {
+        id: `${asset.id}-${Date.now()}`,
+        assetId: asset.id,
+        assetName: asset.name,
+        database: database.trim(),
+        sql: trimmedSQL,
+        executedAt: new Date().toISOString(),
+      }
+      const deduped = historyItems.filter((item) => !(item.assetId === nextHistoryItem.assetId && item.database === nextHistoryItem.database && item.sql === nextHistoryItem.sql))
+      setHistoryItems([nextHistoryItem, ...deduped].slice(0, HISTORY_LIMIT))
+      setStorageItems(HISTORY_STORAGE_KEY, [nextHistoryItem, ...deduped].slice(0, HISTORY_LIMIT))
+
+      toast.success('SQL 执行成功', { description: summarizeResult(next) })
+    } catch (error: any) {
+      toast.error('SQL 执行失败', { description: error.message })
+    } finally {
+      setRunning(false)
+    }
+  }
+
   const editorExtensions = useMemo(() => {
     const dialect = asset?.plugin_type === 'postgresql' ? PostgreSQL : MySQL
     return [
       sqlLanguage({ dialect, upperCaseKeywords: true, schema: completionSchema as never }),
+      autocompletion({
+        activateOnTyping: true,
+        closeOnBlur: true,
+        icons: true,
+        override: [contextCompletionSource],
+      }),
       EditorView.lineWrapping,
       EditorView.theme({
         '&': {
@@ -471,9 +705,6 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
           backgroundColor: resolvedTheme === 'dark' ? '#0f172a' : '#ffffff',
           color: resolvedTheme === 'dark' ? '#e5e7eb' : '#0f172a',
         },
-        '.cm-panels': {
-          backgroundColor: resolvedTheme === 'dark' ? '#0f172a' : '#ffffff',
-        },
       }),
       keymap.of([{
         key: 'Mod-Enter',
@@ -483,7 +714,7 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
         },
       }]),
     ]
-  }, [asset?.plugin_type, completionSchema, resolvedTheme])
+  }, [asset?.plugin_type, completionSchema, contextCompletionSource, resolvedTheme])
 
   const editorTheme = useMemo(() => (resolvedTheme === 'dark' ? oneDark : 'light'), [resolvedTheme])
 
@@ -496,16 +727,6 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     () => asset ? favoriteItems.filter((item) => item.assetId === asset.id).slice(0, 8) : [],
     [asset, favoriteItems],
   )
-
-  const persistHistory = (nextItems: SQLHistoryItem[]) => {
-    setHistoryItems(nextItems)
-    setStorageItems(HISTORY_STORAGE_KEY, nextItems)
-  }
-
-  const persistFavorites = (nextItems: SQLFavoriteItem[]) => {
-    setFavoriteItems(nextItems)
-    setStorageItems(FAVORITE_STORAGE_KEY, nextItems)
-  }
 
   const toggleDatabase = (databaseName: string) => {
     setExpandedDatabases((current) => current.includes(databaseName)
@@ -570,12 +791,16 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     }
 
     const deduped = favoriteItems.filter((item) => !(item.assetId === nextItem.assetId && item.database === nextItem.database && item.sql === nextItem.sql))
-    persistFavorites([nextItem, ...deduped].slice(0, FAVORITE_LIMIT))
+    const nextItems = [nextItem, ...deduped].slice(0, FAVORITE_LIMIT)
+    setFavoriteItems(nextItems)
+    setStorageItems(FAVORITE_STORAGE_KEY, nextItems)
     toast.success('已加入收藏', { description: nextItem.label })
   }
 
   const removeFavorite = (favoriteId: string) => {
-    persistFavorites(favoriteItems.filter((item) => item.id !== favoriteId))
+    const nextItems = favoriteItems.filter((item) => item.id !== favoriteId)
+    setFavoriteItems(nextItems)
+    setStorageItems(FAVORITE_STORAGE_KEY, nextItems)
     toast.success('已移除收藏')
   }
 
@@ -585,15 +810,8 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     toast.success('已载入收藏语句', { description: item.label })
   }
 
-  if (!asset) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
-        当前环境下没有可用的数据库资产，请先选择环境或创建 MySQL / PostgreSQL 资产。
-      </div>
-    )
-  }
-
   const handleTestConnection = async () => {
+    if (!asset) return
     setTesting(true)
     try {
       await connectorService.testConnection(asset.id)
@@ -606,6 +824,7 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
   }
 
   const handleReloadCatalog = async () => {
+    if (!asset) return
     setLoadingCatalog(true)
     try {
       const nextCatalog = await connectorService.getDatabaseCatalog(asset.id)
@@ -621,44 +840,8 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     }
   }
 
-  const handleExecuteSQL = async () => {
-    const trimmedSQL = sql.trim()
-    if (!trimmedSQL) {
-      toast.error('SQL 不能为空')
-      return
-    }
-
-    setRunning(true)
-    try {
-      const next = await connectorService.executeSQL({
-        asset_id: asset.id,
-        database,
-        query: trimmedSQL,
-        limit: Number(sqlLimit) || 500,
-      })
-      setResult(next)
-
-      const nextHistoryItem: SQLHistoryItem = {
-        id: `${asset.id}-${Date.now()}`,
-        assetId: asset.id,
-        assetName: asset.name,
-        database: database.trim(),
-        sql: trimmedSQL,
-        executedAt: new Date().toISOString(),
-      }
-      const deduped = historyItems.filter((item) => !(item.assetId === nextHistoryItem.assetId && item.database === nextHistoryItem.database && item.sql === nextHistoryItem.sql))
-      persistHistory([nextHistoryItem, ...deduped].slice(0, HISTORY_LIMIT))
-
-      toast.success('SQL 执行成功', { description: summarizeResult(next) })
-    } catch (error: any) {
-      toast.error('SQL 执行失败', { description: error.message })
-    } finally {
-      setRunning(false)
-    }
-  }
-
   const handleExportResult = async (format: 'csv' | 'json' | 'xlsx') => {
-    if (!result) {
+    if (!result || !asset) {
       toast.error('当前没有可导出的结果')
       return
     }
@@ -719,310 +902,322 @@ export function SQLConnectorPanel({ asset, assets, environments, selectedEnvId, 
     )
   }
 
+  if (!asset) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-card/60 p-10 text-center text-sm text-muted-foreground">
+        当前环境下没有可用的数据库资产，请先选择环境或创建 MySQL / PostgreSQL 资产。
+      </div>
+    )
+  }
+
   return (
     <TooltipProvider delayDuration={520}>
-      <div className="space-y-4 min-w-0">
-        <div className="rounded-2xl border border-border bg-card px-3 py-3">
+      <div className="flex h-full min-h-0 min-w-0 flex-col gap-4 overflow-hidden overscroll-none">
+        <div className="sticky top-0 z-10 shrink-0 rounded-2xl border border-border bg-card px-3 py-3">
           <div className="grid gap-2 xl:grid-cols-[180px_minmax(260px,420px)_minmax(0,1fr)_auto] xl:items-center">
-          <div className="min-w-0">
-            <Select
-              value={selectedEnvId?.toString() ?? '__all__'}
-              onValueChange={async (value) => {
-                await onSelectEnv(value === '__all__' ? null : Number(value))
-              }}
-            >
-              <SelectTrigger className="h-9 rounded-lg">
-                <SelectValue placeholder="全部环境" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">全部环境</SelectItem>
-                {environments.map((env) => (
-                  <SelectItem key={env.id} value={env.id.toString()}>{env.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <SearchableAssetSelect assets={assets} selectedAsset={asset} onSelect={onSelectAsset} />
-
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground xl:justify-end">
-            <Badge variant="outline">{asset.plugin_type}</Badge>
-            <span>{getAssetAddress(asset)}</span>
-            {visibleCatalog?.schema && <span>Schema: {visibleCatalog.schema}</span>}
-          </div>
-
-          <div className="flex flex-wrap gap-2 xl:justify-end">
-            <Button variant="outline" size="sm" onClick={handleTestConnection} loading={testing} className="h-9 rounded-lg px-3">
-              <Wifi className="h-4 w-4" />
-              测试
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleReloadCatalog} loading={loadingCatalog} className="h-9 rounded-lg px-3">
-              <RefreshCw className="h-4 w-4" />
-              刷新目录
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid items-start gap-4 xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4 min-w-0">
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Server className="h-4 w-4 text-primary" />
-                数据库目录
-              </div>
-              <Badge variant="outline">{visibleCatalog?.databases.length ?? 0} DB</Badge>
+            <div className="min-w-0">
+              <Select
+                value={selectedEnvId?.toString() ?? '__all__'}
+                onValueChange={async (value) => {
+                  await onSelectEnv(value === '__all__' ? null : Number(value))
+                }}
+              >
+                <SelectTrigger className="h-9 rounded-lg">
+                  <SelectValue placeholder="全部环境" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">全部环境</SelectItem>
+                  {environments.map((env) => (
+                    <SelectItem key={env.id} value={env.id.toString()}>{env.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="max-h-[calc(100vh-260px)] space-y-2 overflow-y-auto pr-1">
-              {loadingCatalog ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                  正在加载数据库目录...
-                </div>
-              ) : !visibleCatalog || visibleCatalog.databases.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                  当前资产没有可展示的数据库目录
-                </div>
-              ) : visibleCatalog.databases.map((item) => {
-                const expanded = expandedDatabases.includes(item.name)
-                const selected = item.name === database
-                return (
-                  <div key={item.name} className="rounded-xl border border-border/80 bg-background/40">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDatabase(item.name)
-                        toggleDatabase(item.name)
-                      }}
-                      className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left ${selected ? 'text-foreground' : 'text-muted-foreground'}`}
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                        <Database className="h-4 w-4 shrink-0 text-primary" />
-                        <span className="truncate text-sm font-medium">{item.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.error ? (
-                          <Badge variant="outline" className="border-red-500/40 text-red-300">目录异常</Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">{item.tables.length} 表</span>
-                        )}
-                      </div>
-                    </button>
+            <SearchableAssetSelect assets={assets} selectedAsset={asset} onSelect={onSelectAsset} />
 
-                    {expanded && (
-                      <div className="border-t border-border/70 px-3 py-3">
-                        {item.error ? (
-                          <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-xs text-red-200">
-                            <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                            <span>{item.error}</span>
-                          </div>
-                        ) : item.tables.length === 0 ? (
-                          <div className="text-xs text-muted-foreground">当前数据库没有可见数据表</div>
-                        ) : (
-                          <div className="space-y-1">
-                            {item.tables.map((tableName) => {
-                              const tableKey = buildTableKey(item.name, tableName)
-                              const activeTable = selectedTableKey === tableKey
-                              const detail = tableDetails[tableKey]
-                              const isTableLoading = loadingTableKeys.includes(tableKey)
-                              const nodeSummary = summarizeTableNode(detail)
-                              return (
-                                <Tooltip key={tableName}>
-                                  <TooltipTrigger asChild>
-                                    <button
-                                      type="button"
-                                      onMouseEnter={() => { void loadTableDetail(item.name, tableName, { silent: true }) }}
-                                      onFocus={() => { void loadTableDetail(item.name, tableName, { silent: true }) }}
-                                      onClick={() => { void loadTableDetail(item.name, tableName) }}
-                                      className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${activeTable ? 'border-primary/30 bg-primary/8 text-foreground' : 'border-transparent text-muted-foreground hover:border-primary/20 hover:bg-accent/50 hover:text-foreground'}`}
-                                    >
-                                      <div className="flex items-start gap-2">
-                                        <TableProperties className="mt-0.5 h-4 w-4 shrink-0" />
-                                        <div className="min-w-0 flex-1 space-y-1">
-                                          <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate text-sm font-medium">{tableName}</span>
-                                            {isTableLoading ? <span className="text-[10px] text-muted-foreground">加载中...</span> : null}
-                                          </div>
-                                          <div className="flex flex-wrap gap-1">
-                                            {nodeSummary.map((text) => <Badge key={text} variant="outline" className="px-1.5 py-0 text-[10px]">{text}</Badge>)}
-                                            {detail?.indexes?.some((index) => index.primary) ? (
-                                              <Badge variant="outline" className="px-1.5 py-0 text-[10px]"><KeyRound className="mr-1 h-3 w-3" />主键</Badge>
-                                            ) : null}
-                                          </div>
-                                          {detail ? (
-                                            <div className="truncate text-[11px] text-muted-foreground">
-                                              {(detail.indexes ?? []).slice(0, 2).map((index) => index.name).join(' · ') || '悬浮查看 DDL'}
-                                            </div>
-                                          ) : (
-                                            <div className="text-[11px] text-muted-foreground">悬浮查看 DDL 与索引</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </button>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="right" className="max-w-none p-3">
-                                    {renderCreateSQLTooltip(detail)}
-                                  </TooltipContent>
-                                </Tooltip>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
-                <span>执行上下文</span>
-                {selectedTableDetail ? <Badge variant="outline">{selectedTableDetail.table}</Badge> : null}
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-[11px] text-muted-foreground">数据库</div>
-                <Input value={database} onChange={(event) => setDatabase(event.target.value)} placeholder="输入或选择数据库名" className="h-9" />
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-[11px] text-muted-foreground">结果上限</div>
-                <Input value={sqlLimit} onChange={(event) => setSQLLimit(event.target.value)} placeholder="500" inputMode="numeric" className="h-9" />
-              </div>
-              {selectedTableDetail ? (
-                <Button variant="outline" size="sm" onClick={insertTableTemplate} className="h-9 w-full">
-                  插入查询模板
-                </Button>
-              ) : null}
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground xl:justify-end">
+              <Badge variant="outline">{asset.plugin_type}</Badge>
+              <span>{getAssetAddress(asset)}</span>
+              {visibleCatalog?.schema && <span>Schema: {visibleCatalog.schema}</span>}
             </div>
 
-            <div className="rounded-xl border border-border bg-background/50 p-3 space-y-2">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <History className="h-4 w-4 text-primary" />
-                执行历史
-              </div>
-              <div className="max-h-32 space-y-2 overflow-auto pr-1">
-                {assetHistoryItems.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">当前资产还没有执行历史</div>
-                ) : assetHistoryItems.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setDatabase(item.database)
-                      setSQL(item.sql)
-                      toast.success('已载入历史语句', { description: buildSQLLabel(item.sql) })
-                    }}
-                    className="w-full rounded-lg border border-border px-3 py-2 text-left transition hover:border-primary/30 hover:bg-accent/40"
-                  >
-                    <div className="truncate text-sm font-medium text-foreground">{buildSQLLabel(item.sql)}</div>
-                    <div className="truncate text-xs text-muted-foreground">{item.database || '默认库'} · {formatTimestamp(item.executedAt)}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-border bg-background/50 p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Star className="h-4 w-4 text-primary" />
-                  收藏语句
-                </div>
-                <Button variant="outline" size="sm" onClick={saveCurrentFavorite} className="h-8">
-                  <Star className="h-3.5 w-3.5" />
-                  收藏当前
-                </Button>
-              </div>
-              <div className="max-h-32 space-y-2 overflow-auto pr-1">
-                {assetFavoriteItems.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">当前资产还没有收藏语句</div>
-                ) : assetFavoriteItems.map((item) => (
-                  <div key={item.id} className="rounded-lg border border-border px-3 py-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => applyFavorite(item)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="truncate text-sm font-medium text-foreground">{item.label}</div>
-                        <div className="truncate text-xs text-muted-foreground">{item.database || '默认库'} · {formatTimestamp(item.savedAt)}</div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeFavorite(item.id)}
-                        className="rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
-                        aria-label="删除收藏"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="w-full min-w-0 space-y-4">
-          <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-foreground">SQL 脚本</div>
-                <div className="text-xs text-muted-foreground">支持语法高亮、关键字与已加载表结构补全，⌘/Ctrl + Enter 可执行</div>
-              </div>
-              <Button size="sm" onClick={handleExecuteSQL} loading={running} className="h-9 shrink-0">
-                <Play className="h-4 w-4" />
-                执行 SQL
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              <Button variant="outline" size="sm" onClick={handleTestConnection} loading={testing} className="h-9 rounded-lg px-3">
+                <Wifi className="h-4 w-4" />
+                测试
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleReloadCatalog} loading={loadingCatalog} className="h-9 rounded-lg px-3">
+                <RefreshCw className="h-4 w-4" />
+                刷新目录
               </Button>
             </div>
-
-            <div className="space-y-2">
-              <div className="overflow-hidden rounded-xl border border-border bg-background/60 shadow-sm">
-                <CodeMirror
-                  value={sql}
-                  height="220px"
-                  theme={editorTheme}
-                  basicSetup={{
-                    lineNumbers: true,
-                    foldGutter: false,
-                    dropCursor: false,
-                    allowMultipleSelections: false,
-                    highlightActiveLineGutter: true,
-                  }}
-                  extensions={editorExtensions}
-                  onChange={(value) => setSQL(value)}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
-              <div className="text-sm text-muted-foreground">
-                {result ? summarizeResult(result) : '查询结果'}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => { void handleExportResult('csv') }} disabled={!result || !!exportingFormat}>
-                  <Download className="h-4 w-4" />
-                  CSV
-                </Button>
-                <Button variant="outline" onClick={() => { void handleExportResult('json') }} disabled={!result || !!exportingFormat}>
-                  <Download className="h-4 w-4" />
-                  JSON
-                </Button>
-                <Button variant="outline" onClick={() => { void handleExportResult('xlsx') }} disabled={!result || !!exportingFormat} loading={exportingFormat === 'xlsx'}>
-                  <Download className="h-4 w-4" />
-                  Excel
-                </Button>
-              </div>
-            </div>
-            <ResultTable result={result} />
           </div>
         </div>
-      </div>
+
+        <div className="grid min-h-0 flex-1 items-stretch gap-4 overflow-hidden xl:grid-cols-[340px_minmax(0,1fr)] 2xl:grid-cols-[360px_minmax(0,1fr)]">
+          <div className="min-h-0 min-w-0 overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain pr-2">
+              <div className="rounded-2xl border border-border bg-card p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Server className="h-4 w-4 text-primary" />
+                    数据库目录
+                  </div>
+                  <Badge variant="outline">{visibleCatalog?.databases.length ?? 0} DB</Badge>
+                </div>
+
+                <div className="space-y-2 pr-1">
+                  {loadingCatalog ? (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                      正在加载数据库目录...
+                    </div>
+                  ) : !visibleCatalog || visibleCatalog.databases.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                      当前资产没有可展示的数据库目录
+                    </div>
+                  ) : visibleCatalog.databases.map((item) => {
+                    const expanded = expandedDatabases.includes(item.name)
+                    const selected = item.name === database
+                    return (
+                      <div key={item.name} className="rounded-xl border border-border/80 bg-background/40">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDatabase(item.name)
+                            toggleDatabase(item.name)
+                          }}
+                          className={`flex w-full items-center justify-between gap-3 px-3 py-3 text-left ${selected ? 'text-foreground' : 'text-muted-foreground'}`}
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            {expanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                            <Database className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="truncate text-sm font-medium">{item.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {item.error ? (
+                              <Badge variant="outline" className="border-red-500/40 text-red-300">目录异常</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">{item.tables.length} 表</span>
+                            )}
+                          </div>
+                        </button>
+
+                        {expanded && (
+                          <div className="border-t border-border/70 px-3 py-3">
+                            {item.error ? (
+                              <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-xs text-red-200">
+                                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>{item.error}</span>
+                              </div>
+                            ) : item.tables.length === 0 ? (
+                              <div className="text-xs text-muted-foreground">当前数据库没有可见数据表</div>
+                            ) : (
+                              <div className="space-y-1">
+                                {item.tables.map((tableName) => {
+                                  const tableKey = buildTableKey(item.name, tableName)
+                                  const activeTable = selectedTableKey === tableKey
+                                  const detail = tableDetails[tableKey]
+                                  const isTableLoading = loadingTableKeys.includes(tableKey)
+                                  const nodeSummary = summarizeTableNode(detail)
+                                  return (
+                                    <Tooltip key={tableName}>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onMouseEnter={() => { void loadTableDetail(item.name, tableName, { silent: true }) }}
+                                          onFocus={() => { void loadTableDetail(item.name, tableName, { silent: true }) }}
+                                          onClick={() => { void loadTableDetail(item.name, tableName) }}
+                                          className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${activeTable ? 'border-primary/30 bg-primary/8 text-foreground' : 'border-transparent text-muted-foreground hover:border-primary/20 hover:bg-accent/50 hover:text-foreground'}`}
+                                        >
+                                          <div className="flex items-start gap-2">
+                                            <TableProperties className="mt-0.5 h-4 w-4 shrink-0" />
+                                            <div className="min-w-0 flex-1 space-y-1">
+                                              <div className="flex items-center justify-between gap-2">
+                                                <span className="truncate text-sm font-medium">{tableName}</span>
+                                                {isTableLoading ? <span className="text-[10px] text-muted-foreground">加载中...</span> : null}
+                                              </div>
+                                              <div className="flex flex-wrap gap-1">
+                                                {nodeSummary.map((text) => <Badge key={text} variant="outline" className="px-1.5 py-0 text-[10px]">{text}</Badge>)}
+                                                {detail?.indexes?.some((index) => index.primary) ? (
+                                                  <Badge variant="outline" className="px-1.5 py-0 text-[10px]"><KeyRound className="mr-1 h-3 w-3" />主键</Badge>
+                                                ) : null}
+                                              </div>
+                                              {detail ? (
+                                                <div className="truncate text-[11px] text-muted-foreground">
+                                                  {(detail.indexes ?? []).slice(0, 2).map((index) => index.name).join(' · ') || '悬浮查看 DDL'}
+                                                </div>
+                                              ) : (
+                                                <div className="text-[11px] text-muted-foreground">悬浮查看 DDL 与索引</div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="right" className="max-w-none p-3">
+                                        {renderCreateSQLTooltip(detail)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 text-sm font-medium text-foreground">
+                    <span>执行上下文</span>
+                    {selectedTableDetail ? <Badge variant="outline">{selectedTableDetail.table}</Badge> : null}
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] text-muted-foreground">数据库</div>
+                    <Input value={database} onChange={(event) => setDatabase(event.target.value)} placeholder="输入或选择数据库名" className="h-9" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] text-muted-foreground">结果上限</div>
+                    <Input value={sqlLimit} onChange={(event) => setSQLLimit(event.target.value)} placeholder="500" inputMode="numeric" className="h-9" />
+                  </div>
+                  {selectedTableDetail ? (
+                    <Button variant="outline" size="sm" onClick={insertTableTemplate} className="h-9 w-full">
+                      插入查询模板
+                    </Button>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-border bg-background/50 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <History className="h-4 w-4 text-primary" />
+                    执行历史
+                  </div>
+                  <div className="max-h-40 space-y-2 overflow-auto pr-1">
+                    {assetHistoryItems.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">当前资产还没有执行历史</div>
+                    ) : assetHistoryItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setDatabase(item.database)
+                          setSQL(item.sql)
+                          toast.success('已载入历史语句', { description: buildSQLLabel(item.sql) })
+                        }}
+                        className="w-full rounded-lg border border-border px-3 py-2 text-left transition hover:border-primary/30 hover:bg-accent/40"
+                      >
+                        <div className="truncate text-sm font-medium text-foreground">{buildSQLLabel(item.sql)}</div>
+                        <div className="truncate text-xs text-muted-foreground">{item.database || '默认库'} · {formatTimestamp(item.executedAt)}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-background/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Star className="h-4 w-4 text-primary" />
+                      收藏语句
+                    </div>
+                    <Button variant="outline" size="sm" onClick={saveCurrentFavorite} className="h-8">
+                      <Star className="h-3.5 w-3.5" />
+                      收藏当前
+                    </Button>
+                  </div>
+                  <div className="max-h-40 space-y-2 overflow-auto pr-1">
+                    {assetFavoriteItems.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">当前资产还没有收藏语句</div>
+                    ) : assetFavoriteItems.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-border px-3 py-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <button
+                            type="button"
+                            onClick={() => applyFavorite(item)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <div className="truncate text-sm font-medium text-foreground">{item.label}</div>
+                            <div className="truncate text-xs text-muted-foreground">{item.database || '默认库'} · {formatTimestamp(item.savedAt)}</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFavorite(item.id)}
+                            className="rounded-md p-1 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                            aria-label="删除收藏"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="min-h-0 min-w-0 overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col gap-4 pl-2">
+              <div className="shrink-0 rounded-2xl border border-border bg-card p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-foreground">SQL 脚本</div>
+                    <div className="text-xs text-muted-foreground">支持上下文感知补全：FROM/JOIN 推荐表，table. 与别名推荐字段，SELECT/WHERE/ON 推荐字段与关键字</div>
+                  </div>
+                  <Button size="sm" onClick={handleExecuteSQL} loading={running} className="h-9 shrink-0">
+                    <Play className="h-4 w-4" />
+                    执行 SQL
+                  </Button>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-border bg-background/60 shadow-sm">
+                  <CodeMirror
+                    value={sql}
+                    height="220px"
+                    theme={editorTheme}
+                    basicSetup={{
+                      lineNumbers: true,
+                      foldGutter: false,
+                      dropCursor: false,
+                      allowMultipleSelections: false,
+                      highlightActiveLineGutter: true,
+                    }}
+                    extensions={editorExtensions}
+                    onChange={(value) => setSQL(value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+                <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3">
+                  <div className="text-sm text-muted-foreground">
+                    {result ? summarizeResult(result) : '查询结果'}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => { void handleExportResult('csv') }} disabled={!result || !!exportingFormat}>
+                      <Download className="h-4 w-4" />
+                      CSV
+                    </Button>
+                    <Button variant="outline" onClick={() => { void handleExportResult('json') }} disabled={!result || !!exportingFormat}>
+                      <Download className="h-4 w-4" />
+                      JSON
+                    </Button>
+                    <Button variant="outline" onClick={() => { void handleExportResult('xlsx') }} disabled={!result || !!exportingFormat} loading={exportingFormat === 'xlsx'}>
+                      <Download className="h-4 w-4" />
+                      Excel
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <ResultTable result={result} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </TooltipProvider>
   )

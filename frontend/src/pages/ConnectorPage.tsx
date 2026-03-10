@@ -121,8 +121,8 @@ export default function ConnectorPage() {
   }
 
   return (
-    <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-5 overflow-hidden animate-in fade-in-0 duration-200">
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3">
         <ConnectorTabs
           active={activeTab}
           counts={counts}
@@ -135,7 +135,7 @@ export default function ConnectorPage() {
       </div>
 
       {activeTab === 'database' ? (
-        <div className="min-w-0">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <SQLConnectorPanel
             asset={selectedAsset}
             assets={visibleAssets}
@@ -149,8 +149,8 @@ export default function ConnectorPage() {
           />
         </div>
       ) : (
-        <div className="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
-          <div className="min-w-0 space-y-4">
+        <div className="grid min-h-0 flex-1 gap-5 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)] 2xl:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="min-h-0 min-w-0 space-y-4 overflow-auto pr-2">
             <div className="rounded-xl border border-border bg-card p-4 space-y-3">
               <div className="space-y-2">
                 <div className="text-sm font-medium text-foreground">筛选环境</div>
@@ -185,7 +185,7 @@ export default function ConnectorPage() {
             />
           </div>
 
-          <div className="min-w-0 w-full">
+          <div className="min-h-0 min-w-0 w-full overflow-auto pl-2">
             {renderPanel(selectedAsset)}
           </div>
         </div>
