@@ -217,6 +217,7 @@ jobs:
           $exePath = 'build/bin/EnvPilot.exe'
           if (-not (Test-Path $exePath)) {
             throw "missing desktop executable: $exePath"
+          }
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $archive = "release/EnvPilot-$env:TAG_NAME-windows-$env:ARCH.zip"
           Compress-Archive -Path $exePath -DestinationPath $archive -Force
