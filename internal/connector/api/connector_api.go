@@ -119,6 +119,61 @@ func (a *ConnectorAPI) ExecuteRedisCmd(req connectorSvc.ExecuteRedisCommandReque
 	return OK(result)
 }
 
+func (a *ConnectorAPI) GetCacheCatalog(assetID uint) Result[*connector.CacheCatalog] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.CacheCatalog](err.Error())
+	}
+	result, err := a.svc.GetCacheCatalog(a.ctx, assetID)
+	if err != nil {
+		return Fail[*connector.CacheCatalog](err.Error())
+	}
+	return OK(result)
+}
+
+func (a *ConnectorAPI) ListCacheKeys(req connectorSvc.CacheKeyListRequest) Result[*connector.CacheKeyPage] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.CacheKeyPage](err.Error())
+	}
+	result, err := a.svc.ListCacheKeys(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.CacheKeyPage](err.Error())
+	}
+	return OK(result)
+}
+
+func (a *ConnectorAPI) GetCacheKeyDetail(req connectorSvc.CacheKeyDetailRequest) Result[*connector.CacheKeyDetail] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.CacheKeyDetail](err.Error())
+	}
+	result, err := a.svc.GetCacheKeyDetail(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.CacheKeyDetail](err.Error())
+	}
+	return OK(result)
+}
+
+func (a *ConnectorAPI) SaveCacheKey(req connectorSvc.CacheKeySaveRequest) Result[*connector.CacheMutationResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.CacheMutationResult](err.Error())
+	}
+	result, err := a.svc.SaveCacheKey(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.CacheMutationResult](err.Error())
+	}
+	return OK(result)
+}
+
+func (a *ConnectorAPI) DeleteCacheKey(req connectorSvc.CacheKeyDeleteRequest) Result[*connector.CacheMutationResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.CacheMutationResult](err.Error())
+	}
+	result, err := a.svc.DeleteCacheKey(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.CacheMutationResult](err.Error())
+	}
+	return OK(result)
+}
+
 func (a *ConnectorAPI) SendMQMessage(req connectorSvc.SendMQMessageRequest) Result[*connector.SendResult] {
 	if err := a.requireAdmin(); err != nil {
 		return Fail[*connector.SendResult](err.Error())

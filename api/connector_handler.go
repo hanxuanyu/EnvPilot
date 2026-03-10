@@ -127,6 +127,86 @@ func (h *ConnectorHandler) ExecuteRedisCmd(w http.ResponseWriter, r *http.Reques
 	writeOK(w, result)
 }
 
+// GET /api/connectors/{id}/cache/catalog
+func (h *ConnectorHandler) GetCacheCatalog(w http.ResponseWriter, r *http.Request) {
+	id, err := pathUint(r, "id")
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+
+	result, err := h.svc.GetCacheCatalog(r.Context(), id)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+// POST /api/connectors/cache/keys
+func (h *ConnectorHandler) ListCacheKeys(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.CacheKeyListRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.ListCacheKeys(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+// POST /api/connectors/cache/key-detail
+func (h *ConnectorHandler) GetCacheKeyDetail(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.CacheKeyDetailRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 || req.Key == "" {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.GetCacheKeyDetail(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+// POST /api/connectors/cache/key-save
+func (h *ConnectorHandler) SaveCacheKey(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.CacheKeySaveRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 || req.Input.Key == "" || req.Input.Type == "" {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.SaveCacheKey(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+// POST /api/connectors/cache/key-delete
+func (h *ConnectorHandler) DeleteCacheKey(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.CacheKeyDeleteRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 || req.Key == "" {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.DeleteCacheKey(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
 // POST /api/connectors/mq
 func (h *ConnectorHandler) SendMQMessage(w http.ResponseWriter, r *http.Request) {
 	var req connectorSvc.SendMQMessageRequest

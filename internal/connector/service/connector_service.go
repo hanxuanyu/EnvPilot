@@ -34,9 +34,35 @@ type TableDetailRequest struct {
 }
 
 type ExecuteRedisCommandRequest struct {
-	AssetID uint     `json:"asset_id"`
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
+	AssetID  uint     `json:"asset_id"`
+	Database int      `json:"database"`
+	Command  string   `json:"command"`
+	Args     []string `json:"args"`
+}
+
+type CacheKeyListRequest struct {
+	AssetID  uint   `json:"asset_id"`
+	Database int    `json:"database"`
+	Pattern  string `json:"pattern"`
+	Cursor   uint64 `json:"cursor"`
+	Limit    int    `json:"limit"`
+}
+
+type CacheKeyDetailRequest struct {
+	AssetID  uint   `json:"asset_id"`
+	Database int    `json:"database"`
+	Key      string `json:"key"`
+}
+
+type CacheKeySaveRequest struct {
+	AssetID uint                    `json:"asset_id"`
+	Input   connector.CacheKeyInput `json:"input"`
+}
+
+type CacheKeyDeleteRequest struct {
+	AssetID  uint   `json:"asset_id"`
+	Database int    `json:"database"`
+	Key      string `json:"key"`
 }
 
 type SendMQMessageRequest struct {
@@ -276,8 +302,8 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 
 func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteRedisCommandRequest) (*connector.CommandResult, error) {
 	command := strings.ToUpper(strings.TrimSpace(req.Command))
-	if !isAllowedRedisCommand(command) {
-		return nil, fmt.Errorf("Redis 命令不在允许列表: %s", command)
+	if command == "" {
+		return nil, fmt.Errorf("Redis 命令不能为空")
 	}
 
 	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
@@ -286,7 +312,7 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 	}
 	defer cleanup()
 
-	result, err := cacheConn.Command(ctx, command, req.Args...)
+	result, err := cacheConn.Command(ctx, req.Database, command, req.Args...)
 	if err != nil {
 		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
 			Module:       "connector",
@@ -295,8 +321,9 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 			Success:      false,
 			Detail:       err.Error(),
 			Request: map[string]any{
-				"command": command,
-				"args":    req.Args,
+				"database": req.Database,
+				"command":  command,
+				"args":     req.Args,
 			},
 		})
 		return nil, err
@@ -313,8 +340,184 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 		Success:      true,
 		Detail:       "执行 Redis 命令成功",
 		Request: map[string]any{
-			"command": command,
-			"args":    req.Args,
+			"database": req.Database,
+			"command":  command,
+			"args":     req.Args,
+		},
+		Result: result,
+	})
+	return result, nil
+}
+
+func (s *ConnectorService) GetCacheCatalog(ctx context.Context, assetID uint) (*connector.CacheCatalog, error) {
+	cacheConn, cleanup, err := s.newCacheConnector(assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	return cacheConn.GetCatalog(ctx)
+}
+
+func (s *ConnectorService) ListCacheKeys(ctx context.Context, req CacheKeyListRequest) (*connector.CacheKeyPage, error) {
+	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := cacheConn.ListKeys(ctx, req.Database, strings.TrimSpace(req.Pattern), req.Cursor, req.Limit)
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "list_cache_keys",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"database": req.Database,
+				"pattern":  strings.TrimSpace(req.Pattern),
+				"cursor":   req.Cursor,
+				"limit":    req.Limit,
+			},
+		})
+		return nil, err
+	}
+
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "list_cache_keys",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "查询缓存键列表成功",
+		Request: map[string]any{
+			"database": req.Database,
+			"pattern":  strings.TrimSpace(req.Pattern),
+			"cursor":   req.Cursor,
+			"limit":    req.Limit,
+		},
+		Result: map[string]any{
+			"count":  len(result.Items),
+			"cursor": result.Cursor,
+		},
+	})
+	return result, nil
+}
+
+func (s *ConnectorService) GetCacheKeyDetail(ctx context.Context, req CacheKeyDetailRequest) (*connector.CacheKeyDetail, error) {
+	if strings.TrimSpace(req.Key) == "" {
+		return nil, fmt.Errorf("缓存键名不能为空")
+	}
+
+	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := cacheConn.GetKeyDetail(ctx, req.Database, strings.TrimSpace(req.Key))
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "describe_cache_key",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"database": req.Database,
+				"key":      strings.TrimSpace(req.Key),
+			},
+		})
+		return nil, err
+	}
+
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "describe_cache_key",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "查看缓存键详情成功",
+		Request: map[string]any{
+			"database": req.Database,
+			"key":      strings.TrimSpace(req.Key),
+		},
+		Result: map[string]any{
+			"type":  result.Type,
+			"size":  result.Size,
+			"count": len(result.Entries),
+		},
+	})
+	return result, nil
+}
+
+func (s *ConnectorService) SaveCacheKey(ctx context.Context, req CacheKeySaveRequest) (*connector.CacheMutationResult, error) {
+	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := cacheConn.SetKey(ctx, req.Input)
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "save_cache_key",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request:      req.Input,
+		})
+		return nil, err
+	}
+
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "save_cache_key",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       result.Summary,
+		Request:      req.Input,
+		Result:       result,
+	})
+	return result, nil
+}
+
+func (s *ConnectorService) DeleteCacheKey(ctx context.Context, req CacheKeyDeleteRequest) (*connector.CacheMutationResult, error) {
+	if strings.TrimSpace(req.Key) == "" {
+		return nil, fmt.Errorf("缓存键名不能为空")
+	}
+
+	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	result, err := cacheConn.DeleteKey(ctx, req.Database, strings.TrimSpace(req.Key))
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "delete_cache_key",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"database": req.Database,
+				"key":      strings.TrimSpace(req.Key),
+			},
+		})
+		return nil, err
+	}
+
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "delete_cache_key",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       result.Summary,
+		Request: map[string]any{
+			"database": req.Database,
+			"key":      strings.TrimSpace(req.Key),
 		},
 		Result: result,
 	})
@@ -451,38 +654,6 @@ func normalizeSQL(query string) (string, error) {
 	}
 
 	return trimmed, nil
-}
-
-func isAllowedRedisCommand(command string) bool {
-	allowed := map[string]struct{}{
-		"PING":          {},
-		"GET":           {},
-		"MGET":          {},
-		"EXISTS":        {},
-		"TYPE":          {},
-		"TTL":           {},
-		"PTTL":          {},
-		"DBSIZE":        {},
-		"INFO":          {},
-		"HGET":          {},
-		"HGETALL":       {},
-		"HKEYS":         {},
-		"HLEN":          {},
-		"LRANGE":        {},
-		"LINDEX":        {},
-		"LLEN":          {},
-		"SMEMBERS":      {},
-		"SCARD":         {},
-		"ZRANGE":        {},
-		"ZRANGEBYSCORE": {},
-		"ZSCORE":        {},
-		"SCAN":          {},
-		"SSCAN":         {},
-		"HSCAN":         {},
-		"ZSCAN":         {},
-	}
-	_, ok := allowed[command]
-	return ok
 }
 
 func (s *ConnectorService) recordConnectorAudit(assetID uint, input auditSvc.RecordInput) {

@@ -40,7 +40,6 @@ function renderPanel(asset: Asset | null) {
     )
   }
 
-  if (asset.plugin_type === 'redis') return <RedisConnectorPanel asset={asset} />
   if (asset.plugin_type === 'rabbitmq') return <RabbitMQConnectorPanel asset={asset} />
   if (asset.plugin_type === 'kafka') return <KafkaConnectorPanel asset={asset} />
   if (asset.plugin_type === 'rocketmq') return <RocketMQConnectorPanel asset={asset} />
@@ -116,6 +115,10 @@ export default function ConnectorPage() {
     setSelectedAssetId(null)
   }, [activeTab])
 
+  useEffect(() => {
+    void loadAssets({ environment_id: selectedEnvId ?? undefined })
+  }, [activeTab, selectedEnvId])
+
   const refreshAssets = async () => {
     await Promise.all([loadEnvironments(), loadAssets()])
   }
@@ -137,6 +140,20 @@ export default function ConnectorPage() {
       {activeTab === 'database' ? (
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <SQLConnectorPanel
+            asset={selectedAsset}
+            assets={visibleAssets}
+            environments={environments}
+            selectedEnvId={selectedEnvId}
+            onSelectEnv={async (envId) => {
+              setSelectedEnv(envId)
+              await loadAssets({ environment_id: envId ?? undefined })
+            }}
+            onSelectAsset={setSelectedAssetId}
+          />
+        </div>
+      ) : activeTab === 'cache' ? (
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
+          <RedisConnectorPanel
             asset={selectedAsset}
             assets={visibleAssets}
             environments={environments}

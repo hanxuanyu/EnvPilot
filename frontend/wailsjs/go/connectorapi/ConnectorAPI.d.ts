@@ -4,17 +4,27 @@ import {service} from '../models';
 import {connectorapi} from '../models';
 import {context} from '../models';
 
+export function DeleteCacheKey(arg1:service.CacheKeyDeleteRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_CacheMutationResult_>;
+
 export function ExecuteRedisCmd(arg1:service.ExecuteRedisCommandRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_CommandResult_>;
 
 export function ExecuteSQL(arg1:service.ExecuteSQLRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_QueryResult_>;
+
+export function GetCacheCatalog(arg1:number):Promise<connectorapi.Result_EnvPilot_internal_connector_CacheCatalog_>;
+
+export function GetCacheKeyDetail(arg1:service.CacheKeyDetailRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_CacheKeyDetail_>;
 
 export function GetDatabaseCatalog(arg1:number):Promise<connectorapi.Result_EnvPilot_internal_connector_DatabaseCatalog_>;
 
 export function GetTableDetail(arg1:service.TableDetailRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_TableDetail_>;
 
+export function ListCacheKeys(arg1:service.CacheKeyListRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_CacheKeyPage_>;
+
 export function ListDatabases(arg1:number):Promise<connectorapi.Result___string_>;
 
 export function ListTables(arg1:connectorapi.ListTablesReq):Promise<connectorapi.Result___string_>;
+
+export function SaveCacheKey(arg1:service.CacheKeySaveRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_CacheMutationResult_>;
 
 export function SendMQMessage(arg1:service.SendMQMessageRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_SendResult_>;
 

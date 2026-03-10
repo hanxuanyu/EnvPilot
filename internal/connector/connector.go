@@ -81,7 +81,71 @@ type TableDetail struct {
 // CacheConnector 定义缓存类资产的统一能力。
 type CacheConnector interface {
 	Connector
-	Command(ctx context.Context, command string, args ...string) (*CommandResult, error)
+	Command(ctx context.Context, database int, command string, args ...string) (*CommandResult, error)
+	GetCatalog(ctx context.Context) (*CacheCatalog, error)
+	ListKeys(ctx context.Context, database int, pattern string, cursor uint64, limit int) (*CacheKeyPage, error)
+	GetKeyDetail(ctx context.Context, database int, key string) (*CacheKeyDetail, error)
+	SetKey(ctx context.Context, input CacheKeyInput) (*CacheMutationResult, error)
+	DeleteKey(ctx context.Context, database int, key string) (*CacheMutationResult, error)
+}
+
+type CacheCatalog struct {
+	DefaultDatabase int             `json:"default_database"`
+	Databases       []CacheDatabase `json:"databases"`
+}
+
+type CacheDatabase struct {
+	Name     string `json:"name"`
+	Index    int    `json:"index"`
+	KeyCount int64  `json:"key_count"`
+}
+
+type CacheKeyPage struct {
+	Database int               `json:"database"`
+	Cursor   uint64            `json:"cursor"`
+	Items    []CacheKeySummary `json:"items"`
+}
+
+type CacheKeySummary struct {
+	Key        string `json:"key"`
+	Type       string `json:"type"`
+	TTLSeconds int64  `json:"ttl_seconds"`
+	Size       int64  `json:"size"`
+	Preview    string `json:"preview,omitempty"`
+}
+
+type CacheEntry struct {
+	Field string  `json:"field,omitempty"`
+	Value string  `json:"value,omitempty"`
+	Score float64 `json:"score,omitempty"`
+}
+
+type CacheKeyDetail struct {
+	Database    int          `json:"database"`
+	Key         string       `json:"key"`
+	Type        string       `json:"type"`
+	TTLSeconds  int64        `json:"ttl_seconds"`
+	Size        int64        `json:"size"`
+	StringValue string       `json:"string_value,omitempty"`
+	Entries     []CacheEntry `json:"entries,omitempty"`
+}
+
+type CacheKeyInput struct {
+	Database    int          `json:"database"`
+	Key         string       `json:"key"`
+	Type        string       `json:"type"`
+	TTLSeconds  *int64       `json:"ttl_seconds,omitempty"`
+	StringValue string       `json:"string_value,omitempty"`
+	Entries     []CacheEntry `json:"entries,omitempty"`
+}
+
+type CacheMutationResult struct {
+	Database   int    `json:"database"`
+	Key        string `json:"key"`
+	Type       string `json:"type"`
+	TTLSeconds int64  `json:"ttl_seconds"`
+	Size       int64  `json:"size"`
+	Summary    string `json:"summary,omitempty"`
 }
 
 // MQConnector 定义消息队列类资产的统一能力。

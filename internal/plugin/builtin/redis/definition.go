@@ -14,7 +14,7 @@ func init() {
 		CredentialTypes:    []plugin.CredentialKind{plugin.CredentialKindPassword, plugin.CredentialKindToken},
 		Capabilities:       []plugin.Capability{plugin.CapabilityTestConnection, plugin.CapabilityExecuteCacheCmd},
 		IntegrationGuide: []string{
-			"实现 CacheConnector 并设置命令白名单",
+			"实现 CacheConnector 并提供键空间浏览、键详情与命令执行能力",
 			"按单机或 Sentinel 模式解析 ext_config",
 		},
 		ConfigSchema: []plugin.ConfigField{

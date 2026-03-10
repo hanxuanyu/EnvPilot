@@ -1,6 +1,18 @@
 import { IS_SERVER_MODE, http } from '@/lib/apiClient'
 import { notifyAuthFailure } from '@/lib/authEvents'
-import type { CommandResult, DatabaseCatalog, MQMessage, QueryResult, SendResult, TableDetail } from '@/types/connector'
+import type {
+  CacheCatalog,
+  CacheKeyDetail,
+  CacheKeyInput,
+  CacheKeyPage,
+  CacheMutationResult,
+  CommandResult,
+  DatabaseCatalog,
+  MQMessage,
+  QueryResult,
+  SendResult,
+  TableDetail,
+} from '@/types/connector'
 
 interface WailsResult<T> {
   success: boolean
@@ -66,11 +78,54 @@ export const connectorService = {
 
   executeRedisCmd: async (req: {
     asset_id: number
+    database?: number
     command: string
     args?: string[]
   }) => {
     if (IS_SERVER_MODE) return http.post<CommandResult>('/api/connectors/redis', req)
     return unwrap<CommandResult>(await getDesktopAPI().ExecuteRedisCmd(req))
+  },
+
+  getCacheCatalog: async (assetId: number) => {
+    if (IS_SERVER_MODE) return http.get<CacheCatalog>(`/api/connectors/${assetId}/cache/catalog`)
+    return unwrap<CacheCatalog>(await getDesktopAPI().GetCacheCatalog(assetId))
+  },
+
+  listCacheKeys: async (req: {
+    asset_id: number
+    database: number
+    pattern?: string
+    cursor?: number
+    limit?: number
+  }) => {
+    if (IS_SERVER_MODE) return http.post<CacheKeyPage>('/api/connectors/cache/keys', req)
+    return unwrap<CacheKeyPage>(await getDesktopAPI().ListCacheKeys(req))
+  },
+
+  getCacheKeyDetail: async (req: {
+    asset_id: number
+    database: number
+    key: string
+  }) => {
+    if (IS_SERVER_MODE) return http.post<CacheKeyDetail>('/api/connectors/cache/key-detail', req)
+    return unwrap<CacheKeyDetail>(await getDesktopAPI().GetCacheKeyDetail(req))
+  },
+
+  saveCacheKey: async (req: {
+    asset_id: number
+    input: CacheKeyInput
+  }) => {
+    if (IS_SERVER_MODE) return http.post<CacheMutationResult>('/api/connectors/cache/key-save', req)
+    return unwrap<CacheMutationResult>(await getDesktopAPI().SaveCacheKey(req))
+  },
+
+  deleteCacheKey: async (req: {
+    asset_id: number
+    database: number
+    key: string
+  }) => {
+    if (IS_SERVER_MODE) return http.post<CacheMutationResult>('/api/connectors/cache/key-delete', req)
+    return unwrap<CacheMutationResult>(await getDesktopAPI().DeleteCacheKey(req))
   },
 
   sendMQMessage: async (req: {

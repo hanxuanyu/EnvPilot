@@ -57,6 +57,65 @@ export interface CommandResult {
   result: unknown
 }
 
+export interface CacheDatabase {
+  name: string
+  index: number
+  key_count: number
+}
+
+export interface CacheCatalog {
+  default_database: number
+  databases: CacheDatabase[]
+}
+
+export interface CacheKeySummary {
+  key: string
+  type: string
+  ttl_seconds: number
+  size: number
+  preview?: string
+}
+
+export interface CacheKeyPage {
+  database: number
+  cursor: number
+  items: CacheKeySummary[]
+}
+
+export interface CacheEntry {
+  field?: string
+  value?: string
+  score?: number
+}
+
+export interface CacheKeyDetail {
+  database: number
+  key: string
+  type: string
+  ttl_seconds: number
+  size: number
+  string_value?: string
+  entries?: CacheEntry[]
+}
+
+export interface CacheKeyInput {
+  database: number
+  key: string
+  type: string
+  ttl_seconds?: number
+  string_value?: string
+  entries?: CacheEntry[]
+}
+
+export interface CacheMutationResult {
+  database: number
+  key: string
+  type: string
+  ttl_seconds: number
+  size: number
+  summary?: string
+}
+
 export interface MQMessage {
   topic?: string
   tag?: string
