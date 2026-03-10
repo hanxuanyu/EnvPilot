@@ -18,6 +18,18 @@ export function CloseTerminal(arg1) {
   return window['go']['executorapi']['ExecutorAPI']['CloseTerminal'](arg1);
 }
 
+export function CreateSFTPDirectory(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['CreateSFTPDirectory'](arg1);
+}
+
+export function DeleteSFTPPath(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['DeleteSFTPPath'](arg1);
+}
+
+export function DownloadSFTPFile(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['DownloadSFTPFile'](arg1);
+}
+
 export function ExecuteCommand(arg1) {
   return window['go']['executorapi']['ExecutorAPI']['ExecuteCommand'](arg1);
 }
@@ -28,6 +40,14 @@ export function GetExecution(arg1) {
 
 export function ListExecutions(arg1) {
   return window['go']['executorapi']['ExecutorAPI']['ListExecutions'](arg1);
+}
+
+export function ListSFTPDirectory(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['ListSFTPDirectory'](arg1);
+}
+
+export function MoveSFTPPath(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['MoveSFTPPath'](arg1);
 }
 
 export function ResizeTerminal(arg1, arg2, arg3) {
@@ -44,4 +64,8 @@ export function StartTerminal(arg1) {
 
 export function TerminalInput(arg1, arg2) {
   return window['go']['executorapi']['ExecutorAPI']['TerminalInput'](arg1, arg2);
+}
+
+export function UploadSFTPFile(arg1) {
+  return window['go']['executorapi']['ExecutorAPI']['UploadSFTPFile'](arg1);
 }

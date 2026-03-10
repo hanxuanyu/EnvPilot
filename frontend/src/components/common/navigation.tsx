@@ -2,6 +2,7 @@ import {
   Activity,
   ClipboardList,
   Database,
+  FolderTree,
   Globe,
   LayoutDashboard,
   Layers,
@@ -71,6 +72,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/executor', label: '命令执行', icon: Terminal, keywords: ['executor', 'command', 'batch'] },
       { path: '/terminal', label: '在线终端', icon: Terminal, keywords: ['terminal', 'shell', 'ssh'] },
+      { path: '/sftp', label: 'SFTP 文件', icon: FolderTree, keywords: ['sftp', 'file', 'upload', 'download'] },
       { path: '/connector', label: '中间件', icon: Database, keywords: ['connector', 'mysql', 'redis', 'mq'] },
     ],
   },
@@ -144,6 +146,17 @@ export const routeMetaList: RouteMeta[] = [
     description: '直接进入资产终端会话，适合单点排障与实时操作。',
     actions: [
       { label: '命令执行', to: '/executor' },
+      { label: '资产列表', to: '/assets' },
+    ],
+  },
+  {
+    path: '/sftp',
+    match: 'prefix',
+    group: '运维操作',
+    title: 'SFTP 文件传输',
+    description: '浏览远端目录并执行受控的文件上传、下载与清理操作。',
+    actions: [
+      { label: '在线终端', to: '/terminal' },
       { label: '资产列表', to: '/assets' },
     ],
   },

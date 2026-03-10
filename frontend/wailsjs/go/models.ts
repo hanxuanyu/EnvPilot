@@ -2259,6 +2259,217 @@ export namespace executorapi {
 		    return a;
 		}
 	}
+	export class SFTPDownloadResult {
+	    name: string;
+	    path: string;
+	    size: number;
+	    content_base64: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPDownloadResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.size = source["size"];
+	        this.content_base64 = source["content_base64"];
+	    }
+	}
+	export class Result_EnvPilot_internal_executor_api_SFTPDownloadResult_ {
+	    success: boolean;
+	    data?: SFTPDownloadResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_SFTPDownloadResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], SFTPDownloadResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SFTPEntry {
+	    name: string;
+	    path: string;
+	    is_dir: boolean;
+	    size: number;
+	    mode: string;
+	    // Go type: time
+	    mod_time: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.is_dir = source["is_dir"];
+	        this.size = source["size"];
+	        this.mode = source["mode"];
+	        this.mod_time = this.convertValues(source["mod_time"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SFTPListResult {
+	    path: string;
+	    home: string;
+	    parent?: string;
+	    entries: SFTPEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPListResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.home = source["home"];
+	        this.parent = source["parent"];
+	        this.entries = this.convertValues(source["entries"], SFTPEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_EnvPilot_internal_executor_api_SFTPListResult_ {
+	    success: boolean;
+	    data?: SFTPListResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_SFTPListResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], SFTPListResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SFTPTransferResult {
+	    path: string;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPTransferResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.size = source["size"];
+	    }
+	}
+	export class Result_EnvPilot_internal_executor_api_SFTPTransferResult_ {
+	    success: boolean;
+	    data?: SFTPTransferResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_EnvPilot_internal_executor_api_SFTPTransferResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], SFTPTransferResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_bool_ {
 	    success: boolean;
 	    data?: boolean;
@@ -2289,6 +2500,74 @@ export namespace executorapi {
 	        this.success = source["success"];
 	        this.data = source["data"];
 	        this.message = source["message"];
+	    }
+	}
+	
+	
+	export class SFTPListRequest {
+	    asset_id: number;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPListRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.path = source["path"];
+	    }
+	}
+	
+	export class SFTPMoveRequest {
+	    asset_id: number;
+	    path: string;
+	    target_path: string;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPMoveRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.path = source["path"];
+	        this.target_path = source["target_path"];
+	        this.overwrite = source["overwrite"];
+	    }
+	}
+	export class SFTPPathRequest {
+	    asset_id: number;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPPathRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.path = source["path"];
+	    }
+	}
+	
+	export class SFTPUploadRequest {
+	    asset_id: number;
+	    path: string;
+	    content_base64: string;
+	    overwrite: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SFTPUploadRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.path = source["path"];
+	        this.content_base64 = source["content_base64"];
+	        this.overwrite = source["overwrite"];
 	    }
 	}
 
@@ -2530,6 +2809,7 @@ export namespace main {
 	    title: string;
 	    filter_display_name: string;
 	    filter_pattern: string;
+	    default_directory: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SaveExportFileReq(source);
@@ -2542,6 +2822,7 @@ export namespace main {
 	        this.title = source["title"];
 	        this.filter_display_name = source["filter_display_name"];
 	        this.filter_pattern = source["filter_pattern"];
+	        this.default_directory = source["default_directory"];
 	    }
 	}
 

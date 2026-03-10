@@ -17,6 +17,23 @@ export const IS_SERVER_MODE = typeof __APP_MODE__ !== 'undefined' && __APP_MODE_
 /** API 基础路径（服务端模式）。生产环境部署时可通过 __API_BASE__ 注入 */
 const BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : ''
 
+export const API_BASE = BASE
+
+export function buildApiURL(
+  path: string,
+  query?: Record<string, string | number | undefined>,
+): URL {
+  const url = new URL(BASE + path, window.location.origin)
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v !== undefined && v !== null && v !== '' && v !== 0) {
+        url.searchParams.set(k, String(v))
+      }
+    }
+  }
+  return url
+}
+
 // ── 统一响应格式 ──────────────────────────────────────────────────
 
 export interface ApiResult<T> {
@@ -42,14 +59,7 @@ async function request<T>(
   body?: unknown,
   query?: Record<string, string | number | undefined>,
 ): Promise<T> {
-  const url = new URL(BASE + path, window.location.origin)
-  if (query) {
-    for (const [k, v] of Object.entries(query)) {
-      if (v !== undefined && v !== null && v !== '' && v !== 0) {
-        url.searchParams.set(k, String(v))
-      }
-    }
-  }
+  const url = buildApiURL(path, query)
 
   const opts: RequestInit = {
     method,

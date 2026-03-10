@@ -37,7 +37,10 @@ interface SaveDesktopExportFileReq {
   title: string
   filter_display_name: string
   filter_pattern: string
+  default_directory?: string
 }
+
+const LAST_SAVE_DIRECTORY_KEY = 'envpilot.desktop.lastSaveDirectory'
 
 function bytesToBase64(data: Uint8Array): string {
   const chunkSize = 0x8000
@@ -47,6 +50,28 @@ function bytesToBase64(data: Uint8Array): string {
     binary += String.fromCharCode(...chunk)
   }
   return btoa(binary)
+}
+
+function getLastSaveDirectory() {
+  try {
+    return window.localStorage.getItem(LAST_SAVE_DIRECTORY_KEY) || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function setLastSaveDirectory(filePath: string) {
+  const normalized = filePath.trim()
+  if (!normalized) return
+  const separatorIndex = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
+  if (separatorIndex <= 0) return
+  const directory = normalized.slice(0, separatorIndex)
+  if (!directory) return
+  try {
+    window.localStorage.setItem(LAST_SAVE_DIRECTORY_KEY, directory)
+  } catch {
+    // ignore storage failures
+  }
 }
 
 export async function ping(): Promise<string> {
@@ -79,6 +104,7 @@ export async function saveDesktopExportFile(input: {
   title?: string
   filterDisplayName?: string
   filterPattern?: string
+  defaultDirectory?: string
 }): Promise<string | null> {
   if (IS_SERVER_MODE) {
     throw new Error('saveDesktopExportFile 仅支持桌面模式')
@@ -90,6 +116,7 @@ export async function saveDesktopExportFile(input: {
     title: input.title ?? '保存文件',
     filter_display_name: input.filterDisplayName ?? '所有文件',
     filter_pattern: input.filterPattern ?? '*.*',
+    default_directory: input.defaultDirectory ?? getLastSaveDirectory(),
   }
 
   const saveFile = (window as any)?.go?.main?.App?.SaveExportFile
@@ -98,5 +125,9 @@ export async function saveDesktopExportFile(input: {
   }
 
   const savedPath = await saveFile(request)
-  return savedPath || null
+  if (!savedPath) {
+    return null
+  }
+  setLastSaveDirectory(savedPath)
+  return savedPath
 }

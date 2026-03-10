@@ -29,7 +29,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	connH := NewConnectorHandler(c.ConnSvc)
 	dnsH := NewDNSHandler(c.DNSSvc)
 	healthH := NewHealthHandler(c.HealthSvc)
-	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.Pool, bus)
+	execH := NewExecutorHandler(c.ExecSvc, c.TermSvc, c.SFTPSvc, c.Pool, bus)
 
 	mux := http.NewServeMux()
 
@@ -125,6 +125,12 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("GET /api/executions", authz.RequireAdmin(execH.ListExecutions))
 	mux.HandleFunc("GET /api/executions/{id}/stream", authz.RequireAdmin(execH.StreamExecution)) // SSE
 	mux.HandleFunc("POST /api/commands/check-dangerous", authz.RequireAdmin(execH.CheckDangerousCommand))
+	mux.HandleFunc("GET /api/sftp/list", authz.RequireAdmin(execH.ListSFTPDirectory))
+	mux.HandleFunc("POST /api/sftp/mkdir", authz.RequireAdmin(execH.CreateSFTPDirectory))
+	mux.HandleFunc("POST /api/sftp/delete", authz.RequireAdmin(execH.DeleteSFTPPath))
+	mux.HandleFunc("POST /api/sftp/move", authz.RequireAdmin(execH.MoveSFTPPath))
+	mux.HandleFunc("POST /api/sftp/upload", authz.RequireAdmin(execH.UploadSFTPFile))
+	mux.HandleFunc("GET /api/sftp/download", authz.RequireAdmin(execH.DownloadSFTPFile))
 
 	// ── 在线终端（WebSocket）──────────────────────────────────────
 	mux.HandleFunc("GET /ws/terminal", authz.RequireAdmin(execH.TerminalWS))

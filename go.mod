@@ -9,6 +9,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/miekg/dns v1.1.63
+	github.com/pkg/sftp v1.13.10
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/segmentio/kafka-go v0.4.50
@@ -24,6 +25,7 @@ require (
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
+	github.com/kr/fs v0.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect

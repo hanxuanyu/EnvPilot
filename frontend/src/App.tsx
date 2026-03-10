@@ -13,6 +13,7 @@ const EnvironmentPage = lazy(() => import('@/pages/EnvironmentPage'))
 const AssetPage = lazy(() => import('@/pages/AssetPage'))
 const ExecutorPage = lazy(() => import('@/pages/ExecutorPage'))
 const TerminalPage = lazy(() => import('@/pages/TerminalPage'))
+const SftpPage = lazy(() => import('@/pages/SftpPage'))
 const ConnectorPage = lazy(() => import('@/pages/ConnectorPage'))
 const DnsPage = lazy(() => import('@/pages/DnsPage'))
 const HealthPage = lazy(() => import('@/pages/HealthPage'))
@@ -86,6 +87,8 @@ function AppShell() {
                 <Route path="executor" element={<ProtectedPage title="命令执行" description="命令执行会直接对资产发起操作，未解锁时不开放页面。"><ExecutorPage /></ProtectedPage>} />
                 <Route path="terminal" element={<ProtectedPage title="在线终端" description="终端会话具备实时控制能力，必须先通过主密码解锁。"><TerminalPage /></ProtectedPage>} />
                 <Route path="terminal/:assetId" element={<ProtectedPage title="在线终端" description="终端会话具备实时控制能力，必须先通过主密码解锁。"><TerminalPage /></ProtectedPage>} />
+                <Route path="sftp" element={<ProtectedPage title="SFTP 文件传输" description="文件传输支持远端目录浏览、上传和下载，属于受保护的资产操作页面。"><SftpPage /></ProtectedPage>} />
+                <Route path="sftp/:assetId" element={<ProtectedPage title="SFTP 文件传输" description="文件传输支持远端目录浏览、上传和下载，属于受保护的资产操作页面。"><SftpPage /></ProtectedPage>} />
                 <Route path="connector" element={<ProtectedPage title="中间件连接器" description="连接器支持探测、查询与消息发送，属于受保护的操作页面。"><ConnectorPage /></ProtectedPage>} />
                 <Route path="connector/:type" element={<ProtectedPage title="中间件连接器" description="连接器支持探测、查询与消息发送，属于受保护的操作页面。"><ConnectorPage /></ProtectedPage>} />
                 <Route path="dns" element={<DnsPage />} />

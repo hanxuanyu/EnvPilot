@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Terminal, Power, PowerOff, Maximize2, Server } from 'lucide-react'
+import { Terminal, Power, PowerOff, Maximize2, Server, Copy, ClipboardPaste } from 'lucide-react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -20,6 +20,8 @@ const XTERM_DARK_THEME = {
   foreground:    '#e6edf3',
   cursor:        '#58a6ff',
   cursorAccent:  '#0d1117',
+  selectionBackground: '#1d4ed866',
+  selectionInactiveBackground: '#1e3a8a4d',
   black:         '#21262d',
   red:           '#f85149',
   green:         '#3fb950',
@@ -43,6 +45,8 @@ const XTERM_LIGHT_THEME = {
   foreground:    '#0f172a',
   cursor:        '#2563eb',
   cursorAccent:  '#f8fafc',
+  selectionBackground: '#93c5fd99',
+  selectionInactiveBackground: '#bfdbfe80',
   black:         '#334155',
   red:           '#dc2626',
   green:         '#16a34a',
@@ -61,6 +65,43 @@ const XTERM_LIGHT_THEME = {
   brightWhite:   '#e2e8f0',
 }
 
+const AUTO_COPY_DELAY = 120
+
+type ContextMenuState = {
+  open: boolean
+  x: number
+  y: number
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+}
+
+function isCopyShortcut(event: KeyboardEvent) {
+  return event.key.toLowerCase() === 'c' && (event.metaKey || (event.ctrlKey && event.shiftKey))
+}
+
+function isPasteShortcut(event: KeyboardEvent) {
+  return event.key.toLowerCase() === 'v' && (event.metaKey || (event.ctrlKey && event.shiftKey))
+}
+
+function isSelectAllShortcut(event: KeyboardEvent) {
+  return event.key.toLowerCase() === 'a' && (event.metaKey || (event.ctrlKey && event.shiftKey))
+}
+
 export default function TerminalPage() {
   const { assetId: paramAssetId } = useParams<{ assetId?: string }>()
   const navigate = useNavigate()
@@ -76,11 +117,15 @@ export default function TerminalPage() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
   const [connecting, setConnecting] = useState(false)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({ open: false, x: 0, y: 0 })
 
   const termContainerRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const sessionIdRef = useRef<string | null>(null)
+  const terminalWrapperRef = useRef<HTMLDivElement>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
+  const autoCopyTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     loadAssets()
@@ -111,12 +156,44 @@ export default function TerminalPage() {
       cursorStyle: 'bar',
       scrollback: 5000,
       allowTransparency: true,
+      macOptionClickForcesSelection: true,
+      rightClickSelectsWord: true,
     })
 
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(termContainerRef.current)
     fitAddon.fit()
+
+    term.attachCustomKeyEventHandler((event) => {
+      if (event.type !== 'keydown') return true
+
+      if (isSelectAllShortcut(event)) {
+        event.preventDefault()
+        term.selectAll()
+        return false
+      }
+
+      if (isCopyShortcut(event) && term.hasSelection()) {
+        event.preventDefault()
+        void writeClipboardText(term.getSelection().trimEnd())
+        return false
+      }
+
+      if (isPasteShortcut(event)) {
+        event.preventDefault()
+        void navigator.clipboard.readText().then((text) => {
+          const sid = sessionIdRef.current
+          if (!sid || !text) return
+          void executorService.sendInput(sid, text)
+        }).catch(() => {
+          toast.error('读取剪贴板失败，请检查浏览器权限')
+        })
+        return false
+      }
+
+      return true
+    })
 
     // 键盘输入 → 发送到 SSH 服务端
     term.onData((data) => {
@@ -133,6 +210,107 @@ export default function TerminalPage() {
 
     return { term, fitAddon }
   }, [resolvedTheme])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(prev => (prev.open ? { ...prev, open: false } : prev))
+  }, [])
+
+  const copySelection = useCallback(async (showToast = true) => {
+    const term = xtermRef.current
+    const selection = term?.getSelection()?.trimEnd() ?? ''
+    if (!selection) {
+      if (showToast) toast.warning('当前没有可复制的终端选中内容')
+      return false
+    }
+
+    try {
+      await writeClipboardText(selection)
+      if (showToast) toast.success('已复制终端选中内容')
+      return true
+    } catch {
+      toast.error('复制终端内容失败')
+      return false
+    }
+  }, [])
+
+  const pasteClipboard = useCallback(async () => {
+    const sid = sessionIdRef.current
+    if (!sid) {
+      toast.warning('请先建立终端连接')
+      return
+    }
+
+    try {
+      const text = await navigator.clipboard.readText()
+      if (!text) {
+        toast.warning('剪贴板为空')
+        return
+      }
+      await executorService.sendInput(sid, text)
+      toast.success('已粘贴到终端')
+    } catch {
+      toast.error('读取剪贴板失败，请检查浏览器权限')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!termContainerRef.current) return
+
+    const container = termContainerRef.current
+    const handleMouseUp = () => {
+      if (!xtermRef.current?.hasSelection()) return
+      if (autoCopyTimerRef.current) window.clearTimeout(autoCopyTimerRef.current)
+      autoCopyTimerRef.current = window.setTimeout(() => {
+        void copySelection(false)
+      }, AUTO_COPY_DELAY)
+    }
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault()
+      const wrapperRect = terminalWrapperRef.current?.getBoundingClientRect()
+      if (!wrapperRect) return
+      setContextMenu({
+        open: true,
+        x: event.clientX - wrapperRect.left,
+        y: event.clientY - wrapperRect.top,
+      })
+    }
+
+    container.addEventListener('mouseup', handleMouseUp)
+    container.addEventListener('contextmenu', handleContextMenu)
+
+    return () => {
+      container.removeEventListener('mouseup', handleMouseUp)
+      container.removeEventListener('contextmenu', handleContextMenu)
+    }
+  }, [copySelection])
+
+  useEffect(() => {
+    if (!contextMenu.open) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (contextMenuRef.current?.contains(event.target as Node)) return
+      closeContextMenu()
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeContextMenu()
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+    window.addEventListener('resize', closeContextMenu)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('resize', closeContextMenu)
+    }
+  }, [contextMenu.open, closeContextMenu])
+
+  useEffect(() => {
+    return () => {
+      if (autoCopyTimerRef.current) window.clearTimeout(autoCopyTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!xtermRef.current) return
@@ -257,6 +435,7 @@ export default function TerminalPage() {
         executorService.offTerminalClosed(sid)
         executorService.closeTerminal(sid).catch(() => {})
       }
+      if (autoCopyTimerRef.current) window.clearTimeout(autoCopyTimerRef.current)
       xtermRef.current?.dispose()
     }
   }, [])
@@ -354,26 +533,53 @@ export default function TerminalPage() {
             <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+C</kbd> 中断</span>
             <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+D</kbd> 退出</span>
             <span><kbd className="px-1 py-0.5 rounded bg-muted/30 font-mono text-[10px]">Ctrl+L</kbd> 清屏</span>
+            <span>Cmd+A 全选终端内容</span>
+            <span>Cmd+C 复制选区</span>
+            <span>macOS 下按住 Option 拖拽选择文本</span>
           </div>
         )}
 
         {/* 全屏按钮 */}
         {connected && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleFullscreen}
-            title="全屏"
-            className="ml-auto h-8 w-8"
-          >
-            <Maximize2 className="w-4 h-4" />
-          </Button>
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                xtermRef.current?.selectAll()
+              }}
+              className="h-8"
+            >
+              全选
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void copySelection(true)
+              }}
+              className="h-8"
+            >
+              <Copy className="w-4 h-4" />
+              复制
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleFullscreen}
+              title="全屏"
+              className="h-8 w-8"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </Button>
+          </div>
         )}
       </div>
 
       {/* 终端容器 */}
       <div
-        className="terminal-wrapper flex-1 rounded-xl border border-border overflow-hidden min-h-0"
+        ref={terminalWrapperRef}
+        className="terminal-wrapper relative flex-1 rounded-xl border border-border overflow-hidden min-h-0"
         style={{
           backgroundColor: resolvedTheme === 'dark' ? XTERM_DARK_THEME.background : XTERM_LIGHT_THEME.background,
         }}
@@ -401,6 +607,38 @@ export default function TerminalPage() {
           className="w-full h-full"
           style={{ display: connected || connecting ? 'block' : 'none' }}
         />
+
+        {contextMenu.open && connected && (
+          <div
+            ref={contextMenuRef}
+            className="absolute z-20 min-w-44 rounded-lg border border-border bg-popover/95 p-1 shadow-xl backdrop-blur"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+            onClick={event => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left text-foreground hover:bg-accent"
+              onClick={() => {
+                closeContextMenu()
+                void copySelection(true)
+              }}
+            >
+              <Copy className="h-4 w-4 text-muted-foreground" />
+              复制选中内容
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left text-foreground hover:bg-accent"
+              onClick={() => {
+                closeContextMenu()
+                void pasteClipboard()
+              }}
+            >
+              <ClipboardPaste className="h-4 w-4 text-muted-foreground" />
+              粘贴到终端
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

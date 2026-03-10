@@ -1,9 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 
 	"EnvPilot/internal/executor/repository"
@@ -27,6 +32,7 @@ var wsUpgrader = websocket.Upgrader{
 type ExecutorHandler struct {
 	execSvc *execSvc.ExecutorService
 	termSvc *execSvc.TerminalService
+	sftpSvc *execSvc.SFTPService
 	pool    *sshpkg.Pool
 	bus     *EventBus
 	log     *zap.Logger
@@ -35,12 +41,14 @@ type ExecutorHandler struct {
 func NewExecutorHandler(
 	es *execSvc.ExecutorService,
 	ts *execSvc.TerminalService,
+	sftpSvc *execSvc.SFTPService,
 	pool *sshpkg.Pool,
 	bus *EventBus,
 ) *ExecutorHandler {
 	return &ExecutorHandler{
 		execSvc: es,
 		termSvc: ts,
+		sftpSvc: sftpSvc,
 		pool:    pool,
 		bus:     bus,
 		log:     logger.Named("executor_handler"),
@@ -234,6 +242,130 @@ func (h *ExecutorHandler) StreamExecution(w http.ResponseWriter, r *http.Request
 func sseEvent(w http.ResponseWriter, eventType string, data interface{}) {
 	b, _ := json.Marshal(map[string]interface{}{"type": eventType, "data": data})
 	fmt.Fprintf(w, "data: %s\n\n", b)
+}
+
+// ── SFTP 文件传输 ────────────────────────────────────────────────
+
+func (h *ExecutorHandler) ListSFTPDirectory(w http.ResponseWriter, r *http.Request) {
+	assetID := queryUint(r, "asset_id")
+	if assetID == 0 {
+		writeFail(w, http.StatusBadRequest, "缺少 asset_id 参数")
+		return
+	}
+	result, err := h.sftpSvc.ListDirectory(assetID, r.URL.Query().Get("path"))
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+func (h *ExecutorHandler) CreateSFTPDirectory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AssetID uint   `json:"asset_id"`
+		Path    string `json:"path"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+	createdPath, err := h.sftpSvc.CreateDirectory(req.AssetID, req.Path)
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeOK(w, map[string]string{"path": createdPath})
+}
+
+func (h *ExecutorHandler) DeleteSFTPPath(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AssetID uint   `json:"asset_id"`
+		Path    string `json:"path"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+	if err := h.sftpSvc.DeletePath(req.AssetID, req.Path); err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeOK(w, true)
+}
+
+func (h *ExecutorHandler) MoveSFTPPath(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AssetID    uint   `json:"asset_id"`
+		Path       string `json:"path"`
+		TargetPath string `json:"target_path"`
+		Overwrite  bool   `json:"overwrite"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+	result, err := h.sftpSvc.MovePath(req.AssetID, req.Path, req.TargetPath, req.Overwrite)
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+func (h *ExecutorHandler) UploadSFTPFile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(execSvc.MaxInlineSFTPUploadFormMemory); err != nil {
+		writeFail(w, http.StatusBadRequest, "解析上传请求失败")
+		return
+	}
+	assetID := queryUintFromString(r.FormValue("asset_id"))
+	if assetID == 0 {
+		writeFail(w, http.StatusBadRequest, "缺少 asset_id 参数")
+		return
+	}
+	remotePath := r.FormValue("path")
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, "缺少上传文件")
+		return
+	}
+	defer file.Close()
+
+	if remotePath == "" {
+		remotePath = header.Filename
+	}
+	overwrite := strings.EqualFold(strings.TrimSpace(r.FormValue("overwrite")), "true")
+	result, err := h.sftpSvc.UploadFile(assetID, remotePath, file, overwrite)
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeOK(w, result)
+}
+
+func (h *ExecutorHandler) DownloadSFTPFile(w http.ResponseWriter, r *http.Request) {
+	assetID := queryUint(r, "asset_id")
+	if assetID == 0 {
+		writeFail(w, http.StatusBadRequest, "缺少 asset_id 参数")
+		return
+	}
+	result, err := h.sftpSvc.DownloadFile(assetID, r.URL.Query().Get("path"))
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.QueryEscape(result.Name)))
+	w.Header().Set("Content-Length", strconv.FormatInt(result.Size, 10))
+	_, _ = io.Copy(w, bytes.NewReader(result.Content))
+}
+
+func queryUintFromString(value string) uint {
+	n, err := strconv.ParseUint(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(n)
 }
 
 // ── 在线终端（WebSocket）─────────────────────────────────────────

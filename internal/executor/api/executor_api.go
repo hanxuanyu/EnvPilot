@@ -1,7 +1,9 @@
 package executorapi
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 
 	authSvc "EnvPilot/internal/auth/service"
 	execModel "EnvPilot/internal/executor/model"
@@ -30,6 +32,7 @@ type ExecutorAPI struct {
 	ctx     context.Context // 由 SetContext 在 startup 阶段注入，用于 Wails 事件推送
 	execSvc *service.ExecutorService
 	termSvc *service.TerminalService
+	sftpSvc *service.SFTPService
 	pool    *sshpkg.Pool
 	auth    *authSvc.Service
 	log     *zap.Logger
@@ -39,12 +42,14 @@ type ExecutorAPI struct {
 func NewExecutorAPI(
 	execSvc *service.ExecutorService,
 	termSvc *service.TerminalService,
+	sftpSvc *service.SFTPService,
 	pool *sshpkg.Pool,
 	auth *authSvc.Service,
 ) *ExecutorAPI {
 	return &ExecutorAPI{
 		execSvc: execSvc,
 		termSvc: termSvc,
+		sftpSvc: sftpSvc,
 		pool:    pool,
 		auth:    auth,
 		log:     logger.Named("executor_api"),
@@ -256,4 +261,98 @@ func (a *ExecutorAPI) CloseTerminal(sessionId string) Result[bool] {
 	}
 	a.termSvc.CloseTerminal(sessionId)
 	return OK(true)
+}
+
+// ==================== SFTP 文件传输 ====================
+
+func (a *ExecutorAPI) ListSFTPDirectory(req SFTPListRequest) Result[SFTPListResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[SFTPListResult](err.Error())
+	}
+	result, err := a.sftpSvc.ListDirectory(req.AssetID, req.Path)
+	if err != nil {
+		return Fail[SFTPListResult](err.Error())
+	}
+	entries := make([]SFTPEntry, 0, len(result.Entries))
+	for _, entry := range result.Entries {
+		entries = append(entries, SFTPEntry{
+			Name:    entry.Name,
+			Path:    entry.Path,
+			IsDir:   entry.IsDir,
+			Size:    entry.Size,
+			Mode:    entry.Mode,
+			Owner:   entry.Owner,
+			Group:   entry.Group,
+			ModTime: entry.ModTime,
+		})
+	}
+	return OK(SFTPListResult{
+		Path:    result.Path,
+		Home:    result.Home,
+		Parent:  result.Parent,
+		Entries: entries,
+	})
+}
+
+func (a *ExecutorAPI) CreateSFTPDirectory(req SFTPPathRequest) Result[string] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[string](err.Error())
+	}
+	createdPath, err := a.sftpSvc.CreateDirectory(req.AssetID, req.Path)
+	if err != nil {
+		return Fail[string](err.Error())
+	}
+	return OK(createdPath)
+}
+
+func (a *ExecutorAPI) DeleteSFTPPath(req SFTPPathRequest) Result[bool] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[bool](err.Error())
+	}
+	if err := a.sftpSvc.DeletePath(req.AssetID, req.Path); err != nil {
+		return Fail[bool](err.Error())
+	}
+	return OK(true)
+}
+
+func (a *ExecutorAPI) MoveSFTPPath(req SFTPMoveRequest) Result[SFTPTransferResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[SFTPTransferResult](err.Error())
+	}
+	result, err := a.sftpSvc.MovePath(req.AssetID, req.Path, req.TargetPath, req.Overwrite)
+	if err != nil {
+		return Fail[SFTPTransferResult](err.Error())
+	}
+	return OK(SFTPTransferResult{Path: result.Path, Size: result.Size})
+}
+
+func (a *ExecutorAPI) UploadSFTPFile(req SFTPUploadRequest) Result[SFTPTransferResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[SFTPTransferResult](err.Error())
+	}
+	data, err := base64.StdEncoding.DecodeString(req.ContentBase64)
+	if err != nil {
+		return Fail[SFTPTransferResult]("解析上传内容失败")
+	}
+	result, err := a.sftpSvc.UploadFile(req.AssetID, req.Path, bytes.NewReader(data), req.Overwrite)
+	if err != nil {
+		return Fail[SFTPTransferResult](err.Error())
+	}
+	return OK(SFTPTransferResult{Path: result.Path, Size: result.Size})
+}
+
+func (a *ExecutorAPI) DownloadSFTPFile(req SFTPPathRequest) Result[SFTPDownloadResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[SFTPDownloadResult](err.Error())
+	}
+	result, err := a.sftpSvc.DownloadFile(req.AssetID, req.Path)
+	if err != nil {
+		return Fail[SFTPDownloadResult](err.Error())
+	}
+	return OK(SFTPDownloadResult{
+		Name:          result.Name,
+		Path:          result.Path,
+		Size:          result.Size,
+		ContentBase64: a.sftpSvc.EncodeDownloadContent(result),
+	})
 }

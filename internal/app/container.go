@@ -59,6 +59,7 @@ type Container struct {
 	HealthSvc *healthSvc.HealthService
 	ExecSvc   *executorSvc.ExecutorService
 	TermSvc   *executorSvc.TerminalService
+	SFTPSvc   *executorSvc.SFTPService
 	Pool      *sshPool.Pool
 	Config    *configService.ConfigService
 	AuditSvc  *auditSvc.AuditService
@@ -211,7 +212,8 @@ func Bootstrap() (*Container, error) {
 	execRepo := executorRepo.NewExecutionRepo(db)
 	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo, auditSvcInst)
 	termSvc := executorSvc.NewTerminalService(pool, sharedAssetRepo, auditSvcInst)
-	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, pool, authSvc)
+	sftpSvc := executorSvc.NewSFTPService(pool, sharedAssetRepo, auditSvcInst)
+	execAPIInst := executorAPI.NewExecutorAPI(execSvc, termSvc, sftpSvc, pool, authSvc)
 
 	return &Container{
 		EnvSvc:       envSvc,
@@ -223,6 +225,7 @@ func Bootstrap() (*Container, error) {
 		HealthSvc:    healthSvcInst,
 		ExecSvc:      execSvc,
 		TermSvc:      termSvc,
+		SFTPSvc:      sftpSvc,
 		Pool:         pool,
 		Config:       cfgSvc,
 		AuditSvc:     auditSvcInst,

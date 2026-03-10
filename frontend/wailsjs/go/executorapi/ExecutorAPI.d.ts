@@ -11,11 +11,21 @@ export function Cleanup():Promise<void>;
 
 export function CloseTerminal(arg1:string):Promise<executorapi.Result_bool_>;
 
+export function CreateSFTPDirectory(arg1:executorapi.SFTPPathRequest):Promise<executorapi.Result_string_>;
+
+export function DeleteSFTPPath(arg1:executorapi.SFTPPathRequest):Promise<executorapi.Result_bool_>;
+
+export function DownloadSFTPFile(arg1:executorapi.SFTPPathRequest):Promise<executorapi.Result_EnvPilot_internal_executor_api_SFTPDownloadResult_>;
+
 export function ExecuteCommand(arg1:executorapi.ExecuteCommandReq):Promise<executorapi.Result_EnvPilot_internal_executor_api_ExecuteResult_>;
 
 export function GetExecution(arg1:number):Promise<executorapi.Result_EnvPilot_internal_executor_model_Execution_>;
 
 export function ListExecutions(arg1:executorapi.ListExecutionsReq):Promise<executorapi.Result_EnvPilot_internal_executor_api_ExecutionListResult_>;
+
+export function ListSFTPDirectory(arg1:executorapi.SFTPListRequest):Promise<executorapi.Result_EnvPilot_internal_executor_api_SFTPListResult_>;
+
+export function MoveSFTPPath(arg1:executorapi.SFTPMoveRequest):Promise<executorapi.Result_EnvPilot_internal_executor_api_SFTPTransferResult_>;
 
 export function ResizeTerminal(arg1:string,arg2:number,arg3:number):Promise<executorapi.Result_bool_>;
 
@@ -24,3 +34,5 @@ export function SetContext(arg1:context.Context):Promise<void>;
 export function StartTerminal(arg1:number):Promise<executorapi.Result_string_>;
 
 export function TerminalInput(arg1:string,arg2:string):Promise<executorapi.Result_bool_>;
+
+export function UploadSFTPFile(arg1:executorapi.SFTPUploadRequest):Promise<executorapi.Result_EnvPilot_internal_executor_api_SFTPTransferResult_>;

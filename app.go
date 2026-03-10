@@ -116,6 +116,7 @@ type SaveExportFileReq struct {
 	Title             string `json:"title"`
 	FilterDisplayName string `json:"filter_display_name"`
 	FilterPattern     string `json:"filter_pattern"`
+	DefaultDirectory  string `json:"default_directory"`
 }
 
 // SaveExportFile 在桌面模式下弹出原生保存对话框并写入导出文件。
@@ -139,6 +140,11 @@ func (a *App) SaveExportFile(req SaveExportFileReq) (string, error) {
 		Title:                req.Title,
 		DefaultFilename:      req.Filename,
 		CanCreateDirectories: true,
+	}
+	if req.DefaultDirectory != "" {
+		if stat, statErr := os.Stat(req.DefaultDirectory); statErr == nil && stat.IsDir() {
+			options.DefaultDirectory = req.DefaultDirectory
+		}
 	}
 	if req.FilterDisplayName != "" && req.FilterPattern != "" {
 		options.Filters = []wailsruntime.FileFilter{{
