@@ -10,6 +10,14 @@ export function ExecuteSQL(arg1) {
   return window['go']['connectorapi']['ConnectorAPI']['ExecuteSQL'](arg1);
 }
 
+export function GetDatabaseCatalog(arg1) {
+  return window['go']['connectorapi']['ConnectorAPI']['GetDatabaseCatalog'](arg1);
+}
+
+export function GetTableDetail(arg1) {
+  return window['go']['connectorapi']['ConnectorAPI']['GetTableDetail'](arg1);
+}
+
 export function ListDatabases(arg1) {
   return window['go']['connectorapi']['ConnectorAPI']['ListDatabases'](arg1);
 }

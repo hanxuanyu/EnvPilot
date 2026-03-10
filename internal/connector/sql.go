@@ -1,8 +1,10 @@
 package connector
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -74,5 +76,69 @@ func NormalizeValue(value any) any {
 		return mapped
 	default:
 		return value
+	}
+}
+
+func ExecuteStatement(ctx context.Context, db *sql.DB, query string, limit int) (*QueryResult, error) {
+	startedAt := time.Now()
+	if statementReturnsRows(query) {
+		rows, err := db.QueryContext(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("执行 SQL 失败: %w", err)
+		}
+		defer rows.Close()
+
+		columns, data, err := ScanRows(rows, limit)
+		if err != nil {
+			return nil, err
+		}
+
+		return &QueryResult{
+			Columns:    columns,
+			Rows:       data,
+			Affected:   int64(len(data)),
+			DurationMS: time.Since(startedAt).Milliseconds(),
+			Summary:    "查询执行完成",
+		}, nil
+	}
+
+	result, err := db.ExecContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("执行 SQL 失败: %w", err)
+	}
+
+	affected := int64(0)
+	if rowsAffected, rowsErr := result.RowsAffected(); rowsErr == nil {
+		affected = rowsAffected
+	}
+
+	return &QueryResult{
+		Columns:    []QueryColumn{},
+		Rows:       []map[string]any{},
+		Affected:   affected,
+		DurationMS: time.Since(startedAt).Milliseconds(),
+		Summary:    "SQL 执行成功",
+	}, nil
+}
+
+func statementReturnsRows(query string) bool {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return false
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return false
+	}
+
+	firstToken := strings.ToUpper(fields[0])
+	switch firstToken {
+	case "SELECT", "SHOW", "DESC", "DESCRIBE", "EXPLAIN", "WITH", "VALUES", "TABLE", "PRAGMA":
+		return true
+	case "INSERT", "UPDATE", "DELETE":
+		return strings.Contains(strings.ToUpper(trimmed), " RETURNING ") || strings.HasSuffix(strings.ToUpper(trimmed), " RETURNING")
+	default:
+		return false
 	}
 }

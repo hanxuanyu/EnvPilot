@@ -904,6 +904,57 @@ export namespace connector {
 	        this.result = source["result"];
 	    }
 	}
+	export class DatabaseCatalogItem {
+	    name: string;
+	    tables: string[];
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabaseCatalogItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.tables = source["tables"];
+	        this.error = source["error"];
+	    }
+	}
+	export class DatabaseCatalog {
+	    default_database?: string;
+	    schema?: string;
+	    databases: DatabaseCatalogItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabaseCatalog(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.default_database = source["default_database"];
+	        this.schema = source["schema"];
+	        this.databases = this.convertValues(source["databases"], DatabaseCatalogItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class Message {
 	    topic?: string;
 	    tag?: string;
@@ -947,6 +998,7 @@ export namespace connector {
 	    rows: any[];
 	    affected: number;
 	    duration_ms: number;
+	    summary?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new QueryResult(source);
@@ -958,6 +1010,7 @@ export namespace connector {
 	        this.rows = source["rows"];
 	        this.affected = source["affected"];
 	        this.duration_ms = source["duration_ms"];
+	        this.summary = source["summary"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -994,6 +1047,90 @@ export namespace connector {
 	        this.detail = source["detail"];
 	    }
 	}
+	export class TableColumn {
+	    name: string;
+	    type: string;
+	    nullable: boolean;
+	    default_value?: string;
+	    key?: string;
+	    extra?: string;
+	    comment?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TableColumn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.nullable = source["nullable"];
+	        this.default_value = source["default_value"];
+	        this.key = source["key"];
+	        this.extra = source["extra"];
+	        this.comment = source["comment"];
+	    }
+	}
+	export class TableIndex {
+	    name: string;
+	    columns?: string[];
+	    unique: boolean;
+	    primary: boolean;
+	    method?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TableIndex(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.columns = source["columns"];
+	        this.unique = source["unique"];
+	        this.primary = source["primary"];
+	        this.method = source["method"];
+	    }
+	}
+	export class TableDetail {
+	    database?: string;
+	    schema?: string;
+	    table: string;
+	    columns: TableColumn[];
+	    indexes?: TableIndex[];
+	    create_sql?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TableDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.database = source["database"];
+	        this.schema = source["schema"];
+	        this.table = source["table"];
+	        this.columns = this.convertValues(source["columns"], TableColumn);
+	        this.indexes = this.convertValues(source["indexes"], TableIndex);
+	        this.create_sql = source["create_sql"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
@@ -1026,6 +1163,40 @@ export namespace connectorapi {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], connector.CommandResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_connector_DatabaseCatalog_ {
+	    success: boolean;
+	    data?: connector.DatabaseCatalog;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_connector_DatabaseCatalog_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], connector.DatabaseCatalog);
 	        this.message = source["message"];
 	    }
 	
@@ -1094,6 +1265,40 @@ export namespace connectorapi {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
 	        this.data = this.convertValues(source["data"], connector.SendResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_connector_TableDetail_ {
+	    success: boolean;
+	    data?: connector.TableDetail;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_connector_TableDetail_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], connector.TableDetail);
 	        this.message = source["message"];
 	    }
 	
@@ -3084,6 +3289,22 @@ export namespace service {
 	        this.critical = source["critical"];
 	        this.unreachable = source["unreachable"];
 	        this.unknown = source["unknown"];
+	    }
+	}
+	export class TableDetailRequest {
+	    asset_id: number;
+	    database: string;
+	    table: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TableDetailRequest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.asset_id = source["asset_id"];
+	        this.database = source["database"];
+	        this.table = source["table"];
 	    }
 	}
 

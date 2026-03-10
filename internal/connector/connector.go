@@ -36,6 +36,46 @@ type DatabaseConnector interface {
 	Execute(ctx context.Context, database, query string, limit int) (*QueryResult, error)
 	ListDatabases(ctx context.Context) ([]string, error)
 	ListTables(ctx context.Context, database string) ([]string, error)
+	GetTableDetail(ctx context.Context, database, table string) (*TableDetail, error)
+}
+
+type DatabaseCatalog struct {
+	DefaultDatabase string                `json:"default_database,omitempty"`
+	Schema          string                `json:"schema,omitempty"`
+	Databases       []DatabaseCatalogItem `json:"databases"`
+}
+
+type DatabaseCatalogItem struct {
+	Name   string   `json:"name"`
+	Tables []string `json:"tables"`
+	Error  string   `json:"error,omitempty"`
+}
+
+type TableColumn struct {
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Nullable     bool   `json:"nullable"`
+	DefaultValue string `json:"default_value,omitempty"`
+	Key          string `json:"key,omitempty"`
+	Extra        string `json:"extra,omitempty"`
+	Comment      string `json:"comment,omitempty"`
+}
+
+type TableIndex struct {
+	Name    string   `json:"name"`
+	Columns []string `json:"columns,omitempty"`
+	Unique  bool     `json:"unique"`
+	Primary bool     `json:"primary"`
+	Method  string   `json:"method,omitempty"`
+}
+
+type TableDetail struct {
+	Database  string        `json:"database,omitempty"`
+	Schema    string        `json:"schema,omitempty"`
+	Table     string        `json:"table"`
+	Columns   []TableColumn `json:"columns"`
+	Indexes   []TableIndex  `json:"indexes,omitempty"`
+	CreateSQL string        `json:"create_sql,omitempty"`
 }
 
 // CacheConnector 定义缓存类资产的统一能力。
@@ -69,6 +109,7 @@ type QueryResult struct {
 	Rows       []map[string]any `json:"rows"`
 	Affected   int64            `json:"affected"`
 	DurationMS int64            `json:"duration_ms"`
+	Summary    string           `json:"summary,omitempty"`
 }
 
 type CommandResult struct {

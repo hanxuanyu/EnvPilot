@@ -86,8 +86,10 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	// ── 中间件连接器 ───────────────────────────────────────────────
 	mux.HandleFunc("POST /api/connectors/test", authz.RequireAdmin(connH.TestConnection))
+	mux.HandleFunc("GET /api/connectors/{id}/catalog", authz.RequireAdmin(connH.GetDatabaseCatalog))
 	mux.HandleFunc("GET /api/connectors/{id}/databases", authz.RequireAdmin(connH.ListDatabases))
 	mux.HandleFunc("GET /api/connectors/{id}/tables", authz.RequireAdmin(connH.ListTables))
+	mux.HandleFunc("POST /api/connectors/table-detail", authz.RequireAdmin(connH.GetTableDetail))
 	mux.HandleFunc("POST /api/connectors/sql", authz.RequireAdmin(connH.ExecuteSQL))
 	mux.HandleFunc("POST /api/connectors/redis", authz.RequireAdmin(connH.ExecuteRedisCmd))
 	mux.HandleFunc("POST /api/connectors/mq", authz.RequireAdmin(connH.SendMQMessage))

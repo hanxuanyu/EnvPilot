@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"EnvPilot/internal/connector"
 
@@ -147,22 +146,96 @@ func (c *mysqlConnector) Execute(ctx context.Context, database, query string, li
 		return nil, err
 	}
 
-	startedAt := time.Now()
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("执行 SQL 失败: %w", err)
-	}
-	defer rows.Close()
+	return connector.ExecuteStatement(ctx, db, query, limit)
+}
 
-	columns, data, err := connector.ScanRows(rows, limit)
+func (c *mysqlConnector) GetTableDetail(ctx context.Context, database, table string) (*connector.TableDetail, error) {
+	db, err := c.ensureDB(ctx, database)
 	if err != nil {
 		return nil, err
 	}
-	return &connector.QueryResult{
-		Columns:    columns,
-		Rows:       data,
-		Affected:   int64(len(data)),
-		DurationMS: time.Since(startedAt).Milliseconds(),
+
+	quotedTable := quoteMySQLIdentifier(table)
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("SHOW FULL COLUMNS FROM %s", quotedTable))
+	if err != nil {
+		return nil, fmt.Errorf("查询字段列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]connector.TableColumn, 0)
+	for rows.Next() {
+		var field, fieldType, nullFlag, keyName, extra, privileges, comment string
+		var collation sql.NullString
+		var defaultValue sql.NullString
+		if err := rows.Scan(&field, &fieldType, &collation, &nullFlag, &keyName, &defaultValue, &extra, &privileges, &comment); err != nil {
+			return nil, fmt.Errorf("读取字段信息失败: %w", err)
+		}
+		columns = append(columns, connector.TableColumn{
+			Name:         field,
+			Type:         fieldType,
+			Nullable:     strings.EqualFold(nullFlag, "YES"),
+			DefaultValue: defaultValue.String,
+			Key:          keyName,
+			Extra:        extra,
+			Comment:      comment,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("读取字段列表失败: %w", err)
+	}
+
+	indexRows, err := db.QueryContext(ctx, `
+		SELECT index_name, non_unique, seq_in_index, column_name, index_type
+		FROM information_schema.statistics
+		WHERE table_schema = DATABASE()
+		  AND table_name = ?
+		ORDER BY index_name ASC, seq_in_index ASC
+	`, strings.TrimSpace(table))
+	if err != nil {
+		return nil, fmt.Errorf("查询索引信息失败: %w", err)
+	}
+	defer indexRows.Close()
+
+	indexes := make([]connector.TableIndex, 0)
+	indexPos := make(map[string]int)
+	for indexRows.Next() {
+		var indexName, columnName, indexType string
+		var nonUnique int
+		var sequence int
+		if err := indexRows.Scan(&indexName, &nonUnique, &sequence, &columnName, &indexType); err != nil {
+			return nil, fmt.Errorf("读取索引信息失败: %w", err)
+		}
+
+		position, exists := indexPos[indexName]
+		if !exists {
+			indexes = append(indexes, connector.TableIndex{
+				Name:    indexName,
+				Unique:  nonUnique == 0,
+				Primary: strings.EqualFold(indexName, "PRIMARY"),
+				Method:  indexType,
+			})
+			position = len(indexes) - 1
+			indexPos[indexName] = position
+		}
+		if strings.TrimSpace(columnName) != "" {
+			indexes[position].Columns = append(indexes[position].Columns, columnName)
+		}
+	}
+	if err := indexRows.Err(); err != nil {
+		return nil, fmt.Errorf("读取索引信息失败: %w", err)
+	}
+
+	var tableName, createSQL string
+	if err := db.QueryRowContext(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", quotedTable)).Scan(&tableName, &createSQL); err != nil {
+		return nil, fmt.Errorf("查询建表语句失败: %w", err)
+	}
+
+	return &connector.TableDetail{
+		Database:  c.currentDB,
+		Table:     strings.TrimSpace(table),
+		Columns:   columns,
+		Indexes:   indexes,
+		CreateSQL: createSQL,
 	}, nil
 }
 
@@ -226,6 +299,7 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	parsedDSN.Passwd = c.cfg.Password
 	parsedDSN.DBName = wantedDB
 	parsedDSN.ParseTime = true
+	parsedDSN.MultiStatements = true
 	if parsedDSN.Params == nil {
 		parsedDSN.Params = make(map[string]string)
 	}
@@ -264,4 +338,8 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	c.db = db
 	c.currentDB = wantedDB
 	return db, nil
+}
+
+func quoteMySQLIdentifier(name string) string {
+	return "`" + strings.ReplaceAll(strings.TrimSpace(name), "`", "``") + "`"
 }

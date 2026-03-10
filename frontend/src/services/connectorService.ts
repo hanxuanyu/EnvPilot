@@ -1,6 +1,6 @@
 import { IS_SERVER_MODE, http } from '@/lib/apiClient'
 import { notifyAuthFailure } from '@/lib/authEvents'
-import type { CommandResult, MQMessage, QueryResult, SendResult } from '@/types/connector'
+import type { CommandResult, DatabaseCatalog, MQMessage, QueryResult, SendResult, TableDetail } from '@/types/connector'
 
 interface WailsResult<T> {
   success: boolean
@@ -28,6 +28,11 @@ export const connectorService = {
     return unwrap<boolean>(await getDesktopAPI().TestConnection(assetId))
   },
 
+  getDatabaseCatalog: async (assetId: number) => {
+    if (IS_SERVER_MODE) return http.get<DatabaseCatalog>(`/api/connectors/${assetId}/catalog`)
+    return unwrap<DatabaseCatalog>(await getDesktopAPI().GetDatabaseCatalog(assetId))
+  },
+
   listDatabases: async (assetId: number) => {
     if (IS_SERVER_MODE) return http.get<string[]>(`/api/connectors/${assetId}/databases`) ?? []
     return unwrap<string[]>(await getDesktopAPI().ListDatabases(assetId)) ?? []
@@ -38,6 +43,15 @@ export const connectorService = {
       return http.get<string[]>(`/api/connectors/${assetId}/tables`, { database }) ?? []
     }
     return unwrap<string[]>(await getDesktopAPI().ListTables({ asset_id: assetId, database })) ?? []
+  },
+
+  getTableDetail: async (req: {
+    asset_id: number
+    database?: string
+    table: string
+  }) => {
+    if (IS_SERVER_MODE) return http.post<TableDetail>('/api/connectors/table-detail', req)
+    return unwrap<TableDetail>(await getDesktopAPI().GetTableDetail(req))
   },
 
   executeSQL: async (req: {

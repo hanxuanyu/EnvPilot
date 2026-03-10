@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"EnvPilot/internal/connector"
 
@@ -157,23 +156,158 @@ func (c *postgresqlConnector) Execute(ctx context.Context, database, query strin
 		return nil, err
 	}
 
-	startedAt := time.Now()
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("执行 SQL 失败: %w", err)
-	}
-	defer rows.Close()
+	return connector.ExecuteStatement(ctx, db, query, limit)
+}
 
-	columns, data, err := connector.ScanRows(rows, limit)
+func (c *postgresqlConnector) GetTableDetail(ctx context.Context, database, table string) (*connector.TableDetail, error) {
+	db, err := c.ensureDB(ctx, database)
 	if err != nil {
 		return nil, err
 	}
 
-	return &connector.QueryResult{
-		Columns:    columns,
-		Rows:       data,
-		Affected:   int64(len(data)),
-		DurationMS: time.Since(startedAt).Milliseconds(),
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			a.attname,
+			pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+			NOT a.attnotnull AS nullable,
+			COALESCE(pg_get_expr(ad.adbin, ad.adrelid), '') AS default_value,
+			COALESCE(col_description(a.attrelid, a.attnum), '') AS comment
+		FROM pg_attribute a
+		JOIN pg_class c ON c.oid = a.attrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		LEFT JOIN pg_attrdef ad ON ad.adrelid = a.attrelid AND ad.adnum = a.attnum
+		WHERE n.nspname = $1
+		  AND c.relname = $2
+		  AND a.attnum > 0
+		  AND NOT a.attisdropped
+		ORDER BY a.attnum
+	`, c.cfg.Schema, strings.TrimSpace(table))
+	if err != nil {
+		return nil, fmt.Errorf("查询字段列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	columns := make([]connector.TableColumn, 0)
+	for rows.Next() {
+		var name, dataType, defaultValue, comment string
+		var nullable bool
+		if err := rows.Scan(&name, &dataType, &nullable, &defaultValue, &comment); err != nil {
+			return nil, fmt.Errorf("读取字段信息失败: %w", err)
+		}
+		columns = append(columns, connector.TableColumn{
+			Name:         name,
+			Type:         dataType,
+			Nullable:     nullable,
+			DefaultValue: defaultValue,
+			Comment:      comment,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("读取字段列表失败: %w", err)
+	}
+	if len(columns) == 0 {
+		return nil, fmt.Errorf("未找到数据表 %s", strings.TrimSpace(table))
+	}
+
+	primaryKeyRows, err := db.QueryContext(ctx, `
+		SELECT a.attname
+		FROM pg_index i
+		JOIN pg_class c ON c.oid = i.indrelid
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		JOIN unnest(i.indkey) WITH ORDINALITY AS cols(attnum, ord) ON true
+		JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = cols.attnum
+		WHERE n.nspname = $1
+		  AND c.relname = $2
+		  AND i.indisprimary
+		ORDER BY cols.ord
+	`, c.cfg.Schema, strings.TrimSpace(table))
+	if err != nil {
+		return nil, fmt.Errorf("查询主键信息失败: %w", err)
+	}
+	defer primaryKeyRows.Close()
+
+	primaryKeys := make([]string, 0)
+	primaryKeySet := make(map[string]struct{})
+	for primaryKeyRows.Next() {
+		var columnName string
+		if err := primaryKeyRows.Scan(&columnName); err != nil {
+			return nil, fmt.Errorf("读取主键信息失败: %w", err)
+		}
+		primaryKeys = append(primaryKeys, columnName)
+		primaryKeySet[columnName] = struct{}{}
+	}
+	if err := primaryKeyRows.Err(); err != nil {
+		return nil, fmt.Errorf("读取主键信息失败: %w", err)
+	}
+
+	for index, column := range columns {
+		if _, ok := primaryKeySet[column.Name]; ok {
+			columns[index].Key = "PRI"
+		}
+	}
+
+	indexRows, err := db.QueryContext(ctx, `
+		SELECT
+			index_class.relname AS index_name,
+			idx.indisprimary,
+			idx.indisunique,
+			am.amname AS index_method,
+			COALESCE(attr.attname, pg_get_indexdef(idx.indexrelid, cols.ordinality, true)) AS column_name,
+			cols.ordinality
+		FROM pg_class table_class
+		JOIN pg_namespace n ON n.oid = table_class.relnamespace
+		JOIN pg_index idx ON idx.indrelid = table_class.oid
+		JOIN pg_class index_class ON index_class.oid = idx.indexrelid
+		JOIN pg_am am ON am.oid = index_class.relam
+		LEFT JOIN LATERAL unnest(idx.indkey) WITH ORDINALITY AS cols(attnum, ordinality) ON true
+		LEFT JOIN pg_attribute attr ON attr.attrelid = table_class.oid AND attr.attnum = cols.attnum
+		WHERE n.nspname = $1
+		  AND table_class.relname = $2
+		ORDER BY index_class.relname ASC, cols.ordinality ASC
+	`, c.cfg.Schema, strings.TrimSpace(table))
+	if err != nil {
+		return nil, fmt.Errorf("查询索引信息失败: %w", err)
+	}
+	defer indexRows.Close()
+
+	indexes := make([]connector.TableIndex, 0)
+	indexPos := make(map[string]int)
+	for indexRows.Next() {
+		var indexName, indexMethod string
+		var isPrimary, isUnique bool
+		var columnName sql.NullString
+		var ordinality sql.NullInt64
+		if err := indexRows.Scan(&indexName, &isPrimary, &isUnique, &indexMethod, &columnName, &ordinality); err != nil {
+			return nil, fmt.Errorf("读取索引信息失败: %w", err)
+		}
+
+		position, exists := indexPos[indexName]
+		if !exists {
+			indexes = append(indexes, connector.TableIndex{
+				Name:    indexName,
+				Primary: isPrimary,
+				Unique:  isUnique,
+				Method:  indexMethod,
+			})
+			position = len(indexes) - 1
+			indexPos[indexName] = position
+		}
+		if columnName.Valid && strings.TrimSpace(columnName.String) != "" {
+			indexes[position].Columns = append(indexes[position].Columns, columnName.String)
+		}
+	}
+	if err := indexRows.Err(); err != nil {
+		return nil, fmt.Errorf("读取索引信息失败: %w", err)
+	}
+
+	createSQL := buildPostgreSQLCreateSQL(c.cfg.Schema, strings.TrimSpace(table), columns, primaryKeys)
+	return &connector.TableDetail{
+		Database:  c.currentDB,
+		Schema:    c.cfg.Schema,
+		Table:     strings.TrimSpace(table),
+		Columns:   columns,
+		Indexes:   indexes,
+		CreateSQL: createSQL,
 	}, nil
 }
 
@@ -255,4 +389,31 @@ func (c *postgresqlConnector) ensureDB(ctx context.Context, database string) (*s
 	c.db = db
 	c.currentDB = wantedDB
 	return db, nil
+}
+
+func buildPostgreSQLCreateSQL(schema, table string, columns []connector.TableColumn, primaryKeys []string) string {
+	definitions := make([]string, 0, len(columns)+1)
+	for _, column := range columns {
+		parts := []string{quotePostgreSQLIdentifier(column.Name), column.Type}
+		if column.DefaultValue != "" {
+			parts = append(parts, "DEFAULT "+column.DefaultValue)
+		}
+		if !column.Nullable {
+			parts = append(parts, "NOT NULL")
+		}
+		definitions = append(definitions, "    "+strings.Join(parts, " "))
+	}
+	if len(primaryKeys) > 0 {
+		quotedPrimaryKeys := make([]string, 0, len(primaryKeys))
+		for _, key := range primaryKeys {
+			quotedPrimaryKeys = append(quotedPrimaryKeys, quotePostgreSQLIdentifier(key))
+		}
+		definitions = append(definitions, "    PRIMARY KEY ("+strings.Join(quotedPrimaryKeys, ", ")+")")
+	}
+
+	return "CREATE TABLE " + quotePostgreSQLIdentifier(schema) + "." + quotePostgreSQLIdentifier(table) + " (\n" + strings.Join(definitions, ",\n") + "\n);"
+}
+
+func quotePostgreSQLIdentifier(name string) string {
+	return `"` + strings.ReplaceAll(strings.TrimSpace(name), `"`, `""`) + `"`
 }

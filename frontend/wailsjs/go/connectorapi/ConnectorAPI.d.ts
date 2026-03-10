@@ -8,6 +8,10 @@ export function ExecuteRedisCmd(arg1:service.ExecuteRedisCommandRequest):Promise
 
 export function ExecuteSQL(arg1:service.ExecuteSQLRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_QueryResult_>;
 
+export function GetDatabaseCatalog(arg1:number):Promise<connectorapi.Result_EnvPilot_internal_connector_DatabaseCatalog_>;
+
+export function GetTableDetail(arg1:service.TableDetailRequest):Promise<connectorapi.Result_EnvPilot_internal_connector_TableDetail_>;
+
 export function ListDatabases(arg1:number):Promise<connectorapi.Result___string_>;
 
 export function ListTables(arg1:connectorapi.ListTablesReq):Promise<connectorapi.Result___string_>;

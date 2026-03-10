@@ -48,6 +48,17 @@ func (a *ConnectorAPI) TestConnection(assetID uint) Result[bool] {
 	return OK(true)
 }
 
+func (a *ConnectorAPI) GetDatabaseCatalog(assetID uint) Result[*connector.DatabaseCatalog] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.DatabaseCatalog](err.Error())
+	}
+	catalog, err := a.svc.GetDatabaseCatalog(a.ctx, assetID)
+	if err != nil {
+		return Fail[*connector.DatabaseCatalog](err.Error())
+	}
+	return OK(catalog)
+}
+
 func (a *ConnectorAPI) ListDatabases(assetID uint) Result[[]string] {
 	if err := a.requireAdmin(); err != nil {
 		return Fail[[]string](err.Error())
@@ -73,6 +84,17 @@ func (a *ConnectorAPI) ListTables(req ListTablesReq) Result[[]string] {
 		return Fail[[]string](err.Error())
 	}
 	return OK(list)
+}
+
+func (a *ConnectorAPI) GetTableDetail(req connectorSvc.TableDetailRequest) Result[*connector.TableDetail] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*connector.TableDetail](err.Error())
+	}
+	result, err := a.svc.GetTableDetail(a.ctx, req)
+	if err != nil {
+		return Fail[*connector.TableDetail](err.Error())
+	}
+	return OK(result)
 }
 
 func (a *ConnectorAPI) ExecuteSQL(req connectorSvc.ExecuteSQLRequest) Result[*connector.QueryResult] {

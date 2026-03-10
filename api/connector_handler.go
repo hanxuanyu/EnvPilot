@@ -14,6 +14,22 @@ func NewConnectorHandler(svc *connectorSvc.ConnectorService) *ConnectorHandler {
 	return &ConnectorHandler{svc: svc}
 }
 
+// GET /api/connectors/{id}/catalog
+func (h *ConnectorHandler) GetDatabaseCatalog(w http.ResponseWriter, r *http.Request) {
+	id, err := pathUint(r, "id")
+	if err != nil {
+		writeFail(w, http.StatusBadRequest, "无效的 ID")
+		return
+	}
+
+	catalog, err := h.svc.GetDatabaseCatalog(r.Context(), id)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, catalog)
+}
+
 // POST /api/connectors/test
 func (h *ConnectorHandler) TestConnection(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -61,6 +77,22 @@ func (h *ConnectorHandler) ListTables(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeOK(w, list)
+}
+
+// POST /api/connectors/table-detail
+func (h *ConnectorHandler) GetTableDetail(w http.ResponseWriter, r *http.Request) {
+	var req connectorSvc.TableDetailRequest
+	if err := decodeJSON(r, &req); err != nil || req.AssetID == 0 || req.Table == "" {
+		writeFail(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+
+	result, err := h.svc.GetTableDetail(r.Context(), req)
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
 }
 
 // POST /api/connectors/sql

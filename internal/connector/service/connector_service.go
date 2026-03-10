@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	assetSvc "EnvPilot/internal/asset/service"
@@ -26,6 +25,12 @@ type ExecuteSQLRequest struct {
 	Database string `json:"database"`
 	Query    string `json:"query"`
 	Limit    int    `json:"limit"`
+}
+
+type TableDetailRequest struct {
+	AssetID  uint   `json:"asset_id"`
+	Database string `json:"database"`
+	Table    string `json:"table"`
 }
 
 type ExecuteRedisCommandRequest struct {
@@ -114,8 +119,101 @@ func (s *ConnectorService) ListTables(ctx context.Context, assetID uint, databas
 	return dbConn.ListTables(ctx, database)
 }
 
+func (s *ConnectorService) GetDatabaseCatalog(ctx context.Context, assetID uint) (*connector.DatabaseCatalog, error) {
+	target, err := s.resolveTarget(assetID)
+	if err != nil {
+		return nil, err
+	}
+
+	dbConn, cleanup, err := s.newDatabaseConnector(assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	databases, err := dbConn.ListDatabases(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	catalog := &connector.DatabaseCatalog{
+		DefaultDatabase: strings.TrimSpace(target.ExtConfig.GetString("database")),
+		Schema:          strings.TrimSpace(target.ExtConfig.GetString("schema")),
+		Databases:       make([]connector.DatabaseCatalogItem, 0, len(databases)),
+	}
+
+	for _, databaseName := range databases {
+		item := connector.DatabaseCatalogItem{Name: databaseName}
+		tables, tableErr := dbConn.ListTables(ctx, databaseName)
+		if tableErr != nil {
+			item.Error = tableErr.Error()
+		} else {
+			item.Tables = tables
+		}
+		catalog.Databases = append(catalog.Databases, item)
+	}
+
+	if len(catalog.Databases) == 0 && catalog.DefaultDatabase != "" {
+		item := connector.DatabaseCatalogItem{Name: catalog.DefaultDatabase}
+		tables, tableErr := dbConn.ListTables(ctx, catalog.DefaultDatabase)
+		if tableErr != nil {
+			item.Error = tableErr.Error()
+		} else {
+			item.Tables = tables
+		}
+		catalog.Databases = append(catalog.Databases, item)
+	}
+
+	return catalog, nil
+}
+
+func (s *ConnectorService) GetTableDetail(ctx context.Context, req TableDetailRequest) (*connector.TableDetail, error) {
+	if strings.TrimSpace(req.Table) == "" {
+		return nil, fmt.Errorf("数据表名不能为空")
+	}
+
+	dbConn, cleanup, err := s.newDatabaseConnector(req.AssetID)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+
+	detail, err := dbConn.GetTableDetail(ctx, strings.TrimSpace(req.Database), strings.TrimSpace(req.Table))
+	if err != nil {
+		s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+			Module:       "connector",
+			Action:       "describe_table",
+			ResourceType: "asset",
+			Success:      false,
+			Detail:       err.Error(),
+			Request: map[string]any{
+				"database": strings.TrimSpace(req.Database),
+				"table":    strings.TrimSpace(req.Table),
+			},
+		})
+		return nil, err
+	}
+
+	s.recordConnectorAudit(req.AssetID, auditSvc.RecordInput{
+		Module:       "connector",
+		Action:       "describe_table",
+		ResourceType: "asset",
+		Success:      true,
+		Detail:       "查看数据表详情成功",
+		Request: map[string]any{
+			"database": strings.TrimSpace(req.Database),
+			"table":    strings.TrimSpace(req.Table),
+		},
+		Result: map[string]any{
+			"column_count": len(detail.Columns),
+		},
+	})
+
+	return detail, nil
+}
+
 func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest) (*connector.QueryResult, error) {
-	query, err := sanitizeReadOnlySQL(req.Query)
+	query, err := normalizeSQL(req.Query)
 	if err != nil {
 		return nil, err
 	}
@@ -128,10 +226,10 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 
 	limit := req.Limit
 	if limit <= 0 {
-		limit = 200
+		limit = 500
 	}
-	if limit > 1000 {
-		limit = 1000
+	if limit > 5000 {
+		limit = 5000
 	}
 
 	result, err := dbConn.Execute(ctx, strings.TrimSpace(req.Database), query, limit)
@@ -161,7 +259,7 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 		Action:       "execute_sql",
 		ResourceType: "asset",
 		Success:      true,
-		Detail:       "执行只读 SQL 成功",
+		Detail:       "执行 SQL 成功",
 		Request: map[string]any{
 			"database": strings.TrimSpace(req.Database),
 			"query":    query,
@@ -346,41 +444,10 @@ func (s *ConnectorService) resolveTarget(assetID uint) (*connector.Target, error
 	}, nil
 }
 
-func sanitizeReadOnlySQL(query string) (string, error) {
+func normalizeSQL(query string) (string, error) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		return "", fmt.Errorf("SQL 不能为空")
-	}
-
-	trimmed = strings.TrimSuffix(trimmed, ";")
-	if strings.Contains(trimmed, ";") {
-		return "", fmt.Errorf("不允许执行多条 SQL")
-	}
-
-	fields := strings.Fields(trimmed)
-	if len(fields) == 0 {
-		return "", fmt.Errorf("SQL 不能为空")
-	}
-
-	allowedFirstTokens := map[string]struct{}{
-		"SELECT":   {},
-		"SHOW":     {},
-		"DESC":     {},
-		"DESCRIBE": {},
-		"EXPLAIN":  {},
-		"WITH":     {},
-	}
-
-	firstToken := strings.ToUpper(fields[0])
-	if _, ok := allowedFirstTokens[firstToken]; !ok {
-		return "", fmt.Errorf("仅允许执行只读 SQL")
-	}
-
-	if firstToken == "WITH" {
-		dangerous := regexp.MustCompile(`(?i)\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|replace)\b`)
-		if dangerous.MatchString(trimmed) {
-			return "", fmt.Errorf("WITH 语句仅允许只读查询")
-		}
 	}
 
 	return trimmed, nil
