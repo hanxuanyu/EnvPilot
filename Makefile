@@ -21,12 +21,10 @@ DESKTOP_PLATFORM ?=
 DESKTOP_OUTPUT   ?= $(APP_NAME)
 SERVER_OUTPUT    ?= $(SERVER_NAME)
 EXTRA_GO_LDFLAGS ?=
-GIT_COMMIT  := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-GIT_HEAD    := $(shell git rev-parse HEAD 2>/dev/null || echo)
-GIT_TAG     := $(shell git describe --tags --abbrev=0 2>/dev/null || echo)
-GIT_TAG_REF := $(shell if [ -n "$(GIT_TAG)" ]; then git rev-list -n 1 "$(GIT_TAG)" 2>/dev/null; fi)
-APP_VERSION := $(shell if [ -n "$(GIT_TAG)" ] && [ "$(GIT_HEAD)" = "$(GIT_TAG_REF)" ]; then echo "$(GIT_TAG)"; else echo dev; fi)
-LDFLAGS     := -s -w -X EnvPilot/pkg/buildinfo.Version=$(APP_VERSION) -X EnvPilot/pkg/buildinfo.Commit=$(GIT_COMMIT)
+BUILD_META_CMD := go run ./cmd/buildmeta
+GIT_COMMIT  := $(shell $(BUILD_META_CMD) -mode commit 2>/dev/null || echo unknown)
+APP_VERSION := $(shell $(BUILD_META_CMD) -mode version 2>/dev/null || echo dev)
+LDFLAGS     := -s -w
 GO_LDFLAGS  := $(strip $(LDFLAGS) $(EXTRA_GO_LDFLAGS))
 WAILS_BUILD_ARGS := -ldflags "$(GO_LDFLAGS)" -o $(DESKTOP_OUTPUT)
 ifneq ($(strip $(DESKTOP_PLATFORM)),)
@@ -44,7 +42,7 @@ endif
 
 .DEFAULT_GOAL := help
 
-.PHONY: test-core build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets
+.PHONY: test-core build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets prepare-build-metadata
 
 # ── 默认目标 ─────────────────────────────────────────────────────
 help:
@@ -70,9 +68,13 @@ test-core:
 	@echo ">>> 测试业务与基础包（跳过桌面/服务端入口层）..."
 	go test ./internal/... ./database/... ./pkg/...
 
+prepare-build-metadata:
+	@echo ">>> 同步构建元信息..."
+	$(BUILD_META_CMD) -mode sync
+
 # ── 桌面版构建（Wails）──────────────────────────────────────────
 # 流程：npm run build（desktop 模式）→ wails build
-build-desktop:
+build-desktop: prepare-build-metadata
 	@echo ">>> [1/2] 构建前端（桌面模式）..."
 	npm run build --prefix $(FRONTEND)
 	@echo ">>> [2/2] 构建 Wails 桌面应用..."
@@ -89,7 +91,7 @@ prepare-server-assets:
 	cp -r $(FRONTEND)/dist-server/. cmd/server/dist/
 
 build-server: SERVER_OUTPUT := $(SERVER_NAME)
-build-server: prepare-server-assets
+build-server: prepare-build-metadata prepare-server-assets
 	@echo ">>> [3/3] 编译 Go 服务端二进制..."
 	mkdir -p $(BIN_DIR)
 	$(GO_BUILD_ENV) go build \
@@ -101,7 +103,7 @@ build-server: prepare-server-assets
 
 # 内部辅助目标：供 CI / release 复用，不建议手工直接调用
 build-server-target: SERVER_OUTPUT := $(SERVER_NAME)-$(GOOS)-$(GOARCH)
-build-server-target: prepare-server-assets
+build-server-target: prepare-build-metadata prepare-server-assets
 	@echo ">>> [3/3] 编译目标平台服务端二进制 ($(GOOS)/$(GOARCH))..."
 	mkdir -p $(BIN_DIR)
 	$(GO_BUILD_ENV) go build \
@@ -122,11 +124,13 @@ build-all: build-desktop build-server
 # ── 开发模式 ─────────────────────────────────────────────────────
 dev:
 	@echo ">>> 启动桌面开发模式（wails dev）..."
+	$(BUILD_META_CMD) -mode sync
 	wails dev -ldflags "$(LDFLAGS)"
 
 dev-server:
 	@echo ">>> 启动服务端开发模式..."
 	@echo ">>> 请在另一个终端运行：npm run dev:server --prefix $(FRONTEND)"
+	$(BUILD_META_CMD) -mode sync
 	go run -ldflags "$(LDFLAGS)" ./cmd/server/ --addr :8080
 
 # ── 清理 ─────────────────────────────────────────────────────────

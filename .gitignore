@@ -4,6 +4,11 @@
 
 # ── Wails 构建产物 ──────────────────────────────────────────
 build/bin/
+build/darwin/Info.plist
+build/darwin/Info.dev.plist
+build/windows/info.json
+build/windows/wails.exe.manifest
+build/windows/installer/project.nsi
 
 # ── 服务端模式构建产物 ────────────────────────────────────────
 # cmd/server/dist 由 Makefile 从 frontend/dist-server 复制而来，不提交
@@ -54,3 +59,4 @@ Desktop.ini
 *.temp
 .env
 .env.local
+pkg/buildinfo/assets/override.json

@@ -6,6 +6,10 @@
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
+  "runNonNativeBuildHooks": true,
+  "preBuildHooks": {
+    "*/*": "go run ../../cmd/buildmeta -mode sync"
+  },
   "author": {
     "name": "hanxuanyu",
     "email": "2252193204@qq.com"
@@ -13,7 +17,7 @@
   "info": {
     "companyName": "EnvPilot",
     "productName": "EnvPilot",
-    "productVersion": "0.1.0",
+    "productVersion": "0.0.0",
     "copyright": "Copyright © 2026",
     "comments": "桌面端多环境运维管理工具"
   }

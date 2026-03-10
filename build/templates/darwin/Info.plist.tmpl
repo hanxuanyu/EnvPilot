@@ -10,11 +10,11 @@
         <key>CFBundleIdentifier</key>
         <string>com.wails.{{.Name}}</string>
         <key>CFBundleVersion</key>
-        <string>{{.Info.ProductVersion}}</string>
+        <string>[[xml .ProductVersion]]</string>
         <key>CFBundleGetInfoString</key>
-        <string>{{.Info.Comments}}</string>
+        <string>[[xml .Comments]]</string>
         <key>CFBundleShortVersionString</key>
-        <string>{{.Info.ProductVersion}}</string>
+        <string>[[xml .ProductVersion]]</string>
         <key>CFBundleIconFile</key>
         <string>iconfile</string>
         <key>LSMinimumSystemVersion</key>

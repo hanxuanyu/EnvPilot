@@ -88,6 +88,9 @@ npm run dev:server --prefix frontend
 # 桌面版（Wails，当前平台）
 make build-desktop
 
+# 直接使用 wails build 也会在构建前自动同步版本号和 commitid
+wails build
+
 # 服务端版（HTTP，当前平台）
 make build-server
 ./bin/envpilot-server --addr :8080
@@ -100,6 +103,8 @@ make build-all
 ```
 
 > 服务端版前端以静态资源形式内嵌到二进制文件，无需单独部署 Web 服务器。
+>
+> 构建元信息说明：`make build-*`、GitHub Release 工作流以及直接执行 `wails build` 都会先运行 `go run ./cmd/buildmeta -mode sync`，统一生成应用内版本号、短 commitid 以及桌面端包资源版本。未命中 Git tag 时版本号默认为 `dev`，桌面包资源版本回落为 `0.0.0`。
 
 ## CI / Release
 

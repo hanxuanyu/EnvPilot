@@ -202,12 +202,11 @@ jobs:
       - name: Build Windows desktop application
         shell: pwsh
         env:
-          TAG_NAME: ${{ github.ref_name }}
           ARCH: ${{ matrix.arch }}
         run: |
-          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
           npm run build --prefix frontend
-          wails build -ldflags "-s -w -X EnvPilot/pkg/buildinfo.Version=$env:TAG_NAME -X EnvPilot/pkg/buildinfo.Commit=$shortSha" -o EnvPilot-${{ matrix.arch }}.exe -platform windows/${{ matrix.arch }}
+          go run ./cmd/buildmeta -mode sync
+          wails build -ldflags "-s -w" -o EnvPilot-${{ matrix.arch }}.exe -platform windows/${{ matrix.arch }}
 
           $expectedExe = "build/bin/EnvPilot-$env:ARCH.exe"
           $legacyOutput = "build/bin/EnvPilot-$env:ARCH"
