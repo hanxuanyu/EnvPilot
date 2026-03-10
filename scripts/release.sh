@@ -56,8 +56,8 @@ fi
 
 current_branch="$(git rev-parse --abbrev-ref HEAD)"
 
-echo "Fetching origin/$release_branch and tags..."
-git fetch origin "$release_branch" --tags
+echo "Fetching origin/$release_branch..."
+git fetch origin "$release_branch"
 
 if [[ "$current_branch" != "$release_branch" ]]; then
   echo "Switching to $release_branch..."
@@ -66,6 +66,11 @@ fi
 
 echo "Updating local $release_branch to origin/$release_branch..."
 git pull --ff-only origin "$release_branch"
+
+if git show-ref --verify --quiet "refs/tags/$tag_name"; then
+  echo "Removing local tag before recreate: $tag_name"
+  git tag -d "$tag_name"
+fi
 
 echo "Creating annotated tag $tag_name..."
 git tag -a "$tag_name" -m "Release $tag_name"
