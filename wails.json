@@ -8,7 +8,7 @@
   "frontend:dev:serverUrl": "auto",
   "runNonNativeBuildHooks": true,
   "preBuildHooks": {
-    "*/*": "GOOS= GOARCH= CGO_ENABLED= go run ../../cmd/buildmeta -mode sync"
+    "*/*": "node ../../scripts/run-buildmeta.js -mode sync"
   },
   "author": {
     "name": "hanxuanyu",
