@@ -71,11 +71,12 @@ echo "Creating annotated tag $tag_name..."
 git tag -a "$tag_name" -m "Release $tag_name"
 
 if [[ "$remote_tag_exists" == "true" ]]; then
-  echo "Remote tag already exists, force updating: $tag_name"
+  echo "Remote tag already exists, deleting before recreate: $tag_name"
+  git push origin ":refs/tags/$tag_name"
 else
   echo "Pushing tag $tag_name to origin..."
 fi
-git push --force origin "$tag_name"
+git push --force origin "refs/tags/$tag_name:refs/tags/$tag_name"
 
 echo "Release tag pushed successfully: $tag_name"
 echo "GitHub Actions release workflow should start automatically."
