@@ -31,13 +31,13 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 if git show-ref --verify --quiet "refs/tags/$tag_name"; then
-  echo "Local tag already exists: $tag_name"
-  exit 1
+  echo "Local tag already exists, deleting and recreating: $tag_name"
+  git tag -d "$tag_name"
 fi
 
+remote_tag_exists=false
 if git ls-remote --tags origin "refs/tags/$tag_name" | grep -q "$tag_name"; then
-  echo "Remote tag already exists: $tag_name"
-  exit 1
+  remote_tag_exists=true
 fi
 
 release_branch="${RELEASE_BRANCH:-}"
@@ -70,8 +70,12 @@ git pull --ff-only origin "$release_branch"
 echo "Creating annotated tag $tag_name..."
 git tag -a "$tag_name" -m "Release $tag_name"
 
-echo "Pushing tag $tag_name to origin..."
-git push origin "$tag_name"
+if [[ "$remote_tag_exists" == "true" ]]; then
+  echo "Remote tag already exists, force updating: $tag_name"
+else
+  echo "Pushing tag $tag_name to origin..."
+fi
+git push --force origin "$tag_name"
 
 echo "Release tag pushed successfully: $tag_name"
 echo "GitHub Actions release workflow should start automatically."
