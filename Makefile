@@ -2,8 +2,11 @@
 # EnvPilot Makefile
 #
 # 目标：
+#   make help            查看命令说明
+#   make test-core       测试业务与基础包
 #   make build-desktop   桌面版（Wails，macOS/Windows/Linux GUI）
 #   make build-server    服务端版（HTTP，可部署到服务器）
+#   make build-server-linux  交叉编译 Linux amd64 服务端
 #   make build-all       同时构建两种模式
 #   make dev             启动桌面开发模式（热更新）
 #   make dev-server      启动服务端开发模式（Go + Vite 代理）
@@ -34,6 +37,8 @@ endif
 GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
+.DEFAULT_GOAL := help
+
 .PHONY: test-core build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets
 
 # ── 默认目标 ─────────────────────────────────────────────────────
@@ -41,23 +46,27 @@ help:
 	@echo ""
 	@echo "EnvPilot 构建脚本"
 	@echo "=================================="
+	@echo "  make help             查看命令说明"
+	@echo "  make test-core        测试业务与基础包（跳过入口打包层）"
 	@echo "  make build-desktop   构建桌面版（Wails）"
 	@echo "  make build-server    构建服务端版（HTTP）"
-	@echo "  make test-core       测试业务与基础包（跳过入口打包层）"
+	@echo "  make build-server-linux  交叉编译 Linux amd64 服务端"
 	@echo "  make build-all       构建两种模式"
 	@echo "  make dev             桌面开发模式（wails dev）"
 	@echo "  make dev-server      服务端开发模式"
 	@echo "  make clean           清理构建产物"
 	@echo ""
+	@echo "说明：build-server-target 与 prepare-server-assets 为内部辅助目标，不建议直接调用"
 	@echo "当前构建版本: $(APP_VERSION) ($(GIT_COMMIT))"
 	@echo ""
 
-# ── 桌面版构建（Wails）──────────────────────────────────────────
-# 流程：npm run build（desktop 模式）→ wails build
+# ── 测试 ─────────────────────────────────────────────────────────
 test-core:
 	@echo ">>> 测试业务与基础包（跳过桌面/服务端入口层）..."
 	go test ./internal/... ./database/... ./pkg/...
 
+# ── 桌面版构建（Wails）──────────────────────────────────────────
+# 流程：npm run build（desktop 模式）→ wails build
 build-desktop:
 	@echo ">>> [1/2] 构建前端（桌面模式）..."
 	npm run build --prefix $(FRONTEND)
@@ -85,6 +94,7 @@ build-server: prepare-server-assets
 	@echo ">>> 服务端版构建完成：$(BIN_DIR)/$(SERVER_OUTPUT)"
 	@echo ">>> 使用方式：./$(BIN_DIR)/$(SERVER_OUTPUT) --addr :8080"
 
+# 内部辅助目标：供 CI / release 复用，不建议手工直接调用
 build-server-target: SERVER_OUTPUT := $(SERVER_NAME)-$(GOOS)-$(GOARCH)
 build-server-target: prepare-server-assets
 	@echo ">>> [3/3] 编译目标平台服务端二进制 ($(GOOS)/$(GOARCH))..."
