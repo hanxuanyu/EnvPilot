@@ -34,7 +34,18 @@ func (r *AssetRepo) Create(a *model.Asset) error {
 }
 
 func (r *AssetRepo) Update(a *model.Asset) error {
-	return r.db.Save(a).Error
+	return r.db.Model(&model.Asset{}).
+		Where("id = ?", a.ID).
+		Updates(map[string]any{
+			"group_id":        a.GroupID,
+			"name":            a.Name,
+			"description":     a.Description,
+			"tags":            a.Tags,
+			"credential_id":   a.CredentialID,
+			"ext_config":      a.ExtConfig,
+			"status":          a.Status,
+			"last_checked_at": a.LastCheckedAt,
+		}).Error
 }
 
 func (r *AssetRepo) Delete(id uint) error {

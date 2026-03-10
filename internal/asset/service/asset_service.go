@@ -176,23 +176,27 @@ func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 	if err := s.syncLinkedDNSRecord(a, env.Name, req.DNSConfig); err != nil {
 		return nil, err
 	}
+	updated, err := s.repo.FindByID(a.ID)
+	if err != nil {
+		return nil, fmt.Errorf("重新加载资产失败: %w", err)
+	}
 
 	s.log.Info("更新资产", zap.Uint("id", req.ID))
 	s.recordAudit(auditSvc.RecordInput{
 		Module:       "asset",
 		Action:       "update_asset",
 		ResourceType: "asset",
-		ResourceID:   &a.ID,
-		ResourceName: a.Name,
-		PluginType:   a.PluginType,
+		ResourceID:   &updated.ID,
+		ResourceName: updated.Name,
+		PluginType:   updated.PluginType,
 		Success:      true,
 		Detail:       "更新资产",
 		Request: map[string]any{
-			"credential_id": a.CredentialID,
-			"tag_count":     len(a.Tags),
+			"credential_id": updated.CredentialID,
+			"tag_count":     len(updated.Tags),
 		},
 	})
-	return a, nil
+	return updated, nil
 }
 
 func (s *AssetService) Delete(id uint) error {
