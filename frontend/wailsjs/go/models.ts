@@ -2317,6 +2317,8 @@ export namespace executorapi {
 	    is_dir: boolean;
 	    size: number;
 	    mode: string;
+	    owner?: string;
+	    group?: string;
 	    // Go type: time
 	    mod_time: any;
 	
@@ -2331,6 +2333,8 @@ export namespace executorapi {
 	        this.is_dir = source["is_dir"];
 	        this.size = source["size"];
 	        this.mode = source["mode"];
+	        this.owner = source["owner"];
+	        this.group = source["group"];
 	        this.mod_time = this.convertValues(source["mod_time"], null);
 	    }
 	
