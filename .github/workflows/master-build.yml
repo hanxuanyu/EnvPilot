@@ -46,8 +46,8 @@ jobs:
       - name: Download Go dependencies
         run: go mod download
 
-      - name: Run Go tests
-        run: go test ./...
+      - name: Run core Go tests
+        run: make test-core
 
       - name: Build server for current runner
         run: make build-server

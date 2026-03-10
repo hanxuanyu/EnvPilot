@@ -16,9 +16,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-core-tests:
+    name: Verify Core Go Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run core Go tests
+        run: make test-core
+
   build-server-linux:
     name: Build Linux Server ${{ matrix.arch }}
     runs-on: ubuntu-latest
+    needs: verify-core-tests
     strategy:
       fail-fast: false
       matrix:
@@ -89,6 +108,7 @@ jobs:
   build-desktop-macos:
     name: Build macOS Desktop Universal
     runs-on: macos-latest
+    needs: verify-core-tests
 
     steps:
       - name: Checkout repository
@@ -148,6 +168,7 @@ jobs:
   build-desktop-windows:
     name: Build Windows Desktop ${{ matrix.arch }}
     runs-on: windows-latest
+    needs: verify-core-tests
     strategy:
       fail-fast: false
       matrix:
@@ -206,7 +227,6 @@ jobs:
           $exePath = 'build/bin/EnvPilot.exe'
           if (-not (Test-Path $exePath)) {
             throw "missing desktop executable: $exePath"
-          }
           New-Item -ItemType Directory -Force -Path release | Out-Null
           $archive = "release/EnvPilot-$env:TAG_NAME-windows-$env:ARCH.zip"
           Compress-Archive -Path $exePath -DestinationPath $archive -Force

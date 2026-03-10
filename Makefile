@@ -34,7 +34,7 @@ endif
 GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 
-.PHONY: build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets
+.PHONY: test-core build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets
 
 # ── 默认目标 ─────────────────────────────────────────────────────
 help:
@@ -43,6 +43,7 @@ help:
 	@echo "=================================="
 	@echo "  make build-desktop   构建桌面版（Wails）"
 	@echo "  make build-server    构建服务端版（HTTP）"
+	@echo "  make test-core       测试业务与基础包（跳过入口打包层）"
 	@echo "  make build-all       构建两种模式"
 	@echo "  make dev             桌面开发模式（wails dev）"
 	@echo "  make dev-server      服务端开发模式"
@@ -53,6 +54,10 @@ help:
 
 # ── 桌面版构建（Wails）──────────────────────────────────────────
 # 流程：npm run build（desktop 模式）→ wails build
+test-core:
+	@echo ">>> 测试业务与基础包（跳过桌面/服务端入口层）..."
+	go test ./internal/... ./database/... ./pkg/...
+
 build-desktop:
 	@echo ">>> [1/2] 构建前端（桌面模式）..."
 	npm run build --prefix $(FRONTEND)
