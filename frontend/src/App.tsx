@@ -1,11 +1,12 @@
 // App.tsx 前端应用根组件，配置路由系统
-import { Suspense, lazy } from 'react'
-import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom'
+import { Suspense, lazy, useEffect } from 'react'
+import { BrowserRouter, HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AuthProvider, ProtectedPage } from '@/components/common/AuthProvider'
 import { Layout } from '@/components/common/Layout'
 import { useWailsReady } from '@/hooks/useWailsReady'
 import { IS_SERVER_MODE } from '@/lib/apiClient'
+import { getDesktopLaunchContext } from '@/services/backendService'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
@@ -13,6 +14,7 @@ const EnvironmentPage = lazy(() => import('@/pages/EnvironmentPage'))
 const AssetPage = lazy(() => import('@/pages/AssetPage'))
 const ExecutorPage = lazy(() => import('@/pages/ExecutorPage'))
 const TerminalPage = lazy(() => import('@/pages/TerminalPage'))
+const TerminalWindowPage = lazy(() => import('@/pages/TerminalWindowPage'))
 const SftpPage = lazy(() => import('@/pages/SftpPage'))
 const ConnectorPage = lazy(() => import('@/pages/ConnectorPage'))
 const DnsPage = lazy(() => import('@/pages/DnsPage'))
@@ -43,6 +45,33 @@ function RouteLoading() {
   )
 }
 
+function DesktopLaunchRedirect() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    if (IS_SERVER_MODE) return
+
+    let cancelled = false
+    void getDesktopLaunchContext().then((launchContext) => {
+      if (cancelled || !launchContext?.route) return
+
+      const targetSearch = launchContext.auto_connect ? '?autoconnect=1' : ''
+      const targetUrl = `${launchContext.route}${targetSearch}`
+      const currentUrl = `${location.pathname}${location.search}`
+      if (currentUrl === targetUrl) return
+
+      navigate(targetUrl, { replace: true })
+    }).catch(() => {})
+
+    return () => {
+      cancelled = true
+    }
+  }, [location.pathname, location.search, navigate])
+
+  return null
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -59,6 +88,7 @@ function AppShell() {
 
   return (
     <Router>
+      <DesktopLaunchRedirect />
       {/* Sonner Toast 容器，放在最外层确保全局可用 */}
       <Toaster
         position="top-right"
@@ -79,6 +109,7 @@ function AppShell() {
         <AuthProvider>
           <Suspense fallback={<RouteLoading />}>
             <Routes>
+              <Route path="terminal-window/:assetId" element={<ProtectedPage title="在线终端" description="终端会话具备实时控制能力，必须先通过主密码解锁。"><TerminalWindowPage /></ProtectedPage>} />
               {/* 所有页面共享主布局（侧边栏 + 内容区） */}
               <Route path="/" element={<Layout />}>
                 <Route index element={<Dashboard />} />

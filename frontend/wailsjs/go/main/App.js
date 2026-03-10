@@ -6,8 +6,16 @@ export function GetHostInfo() {
   return window['go']['main']['App']['GetHostInfo']();
 }
 
+export function GetLaunchContext() {
+  return window['go']['main']['App']['GetLaunchContext']();
+}
+
 export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
+}
+
+export function OpenTerminalWindow(arg1) {
+  return window['go']['main']['App']['OpenTerminalWindow'](arg1);
 }
 
 export function Ping() {

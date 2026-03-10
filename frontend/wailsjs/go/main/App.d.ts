@@ -5,7 +5,11 @@ import {main} from '../models';
 
 export function GetHostInfo():Promise<hostinfo.Snapshot>;
 
+export function GetLaunchContext():Promise<main.LaunchContext>;
+
 export function GetVersion():Promise<Record<string, string>>;
+
+export function OpenTerminalWindow(arg1:number):Promise<void>;
 
 export function Ping():Promise<string>;
 

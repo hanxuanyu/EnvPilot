@@ -10,7 +10,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 
 	"EnvPilot/internal/app"
 	assetAPI "EnvPilot/internal/asset/api"
@@ -34,6 +36,7 @@ import (
 type App struct {
 	ctx          context.Context
 	container    *app.Container
+	launchCtx    LaunchContext
 	AuthAPI      *authAPI.AuthAPI
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
@@ -44,14 +47,21 @@ type App struct {
 	ExecutorAPI  *executorAPI.ExecutorAPI
 }
 
+type LaunchContext struct {
+	Route       string `json:"route"`
+	AutoConnect bool   `json:"auto_connect"`
+}
+
 // NewApp 创建应用实例（桌面模式入口）
 func NewApp() (*App, error) {
 	c, err := app.Bootstrap()
 	if err != nil {
 		return nil, err
 	}
+	launchCtx := parseLaunchContext(os.Args[1:])
 	return &App{
 		container:    c,
+		launchCtx:    launchCtx,
 		AuthAPI:      c.AuthAPI,
 		AssetAPI:     c.AssetAPI,
 		AuditAPI:     c.AuditAPI,
@@ -108,6 +118,29 @@ func (a *App) GetVersion() map[string]string {
 // GetHostInfo 获取当前主机资源与平台信息
 func (a *App) GetHostInfo() hostinfo.Snapshot {
 	return hostinfo.Collect()
+}
+
+func (a *App) GetLaunchContext() LaunchContext {
+	return a.launchCtx
+}
+
+func (a *App) OpenTerminalWindow(assetID uint) error {
+	if assetID == 0 {
+		return fmt.Errorf("资产 ID 不能为空")
+	}
+
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("获取应用路径失败: %w", err)
+	}
+
+	command := exec.Command(executable, "--route", fmt.Sprintf("/terminal-window/%d", assetID), "--autoconnect", "1")
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("打开桌面终端窗口失败: %w", err)
+	}
+
+	logger.Info("已启动桌面终端窗口实例", zap.Uint("assetID", assetID), zap.String("executable", executable))
+	return nil
 }
 
 type SaveExportFileReq struct {
@@ -170,4 +203,30 @@ func (a *App) SaveExportFile(req SaveExportFileReq) (string, error) {
 
 	logger.Info("导出文件已保存", zap.String("path", targetPath))
 	return targetPath, nil
+}
+
+func parseLaunchContext(args []string) LaunchContext {
+	ctx := LaunchContext{}
+	for index := 0; index < len(args); index += 1 {
+		switch args[index] {
+		case "--route":
+			if index+1 < len(args) {
+				ctx.Route = args[index+1]
+				index += 1
+			}
+		case "--autoconnect":
+			nextValue := "1"
+			if index+1 < len(args) && args[index+1] != "--route" && args[index+1] != "--autoconnect" {
+				nextValue = args[index+1]
+				index += 1
+			}
+			autoConnect, err := strconv.ParseBool(nextValue)
+			if err == nil {
+				ctx.AutoConnect = autoConnect
+				continue
+			}
+			ctx.AutoConnect = nextValue == "1"
+		}
+	}
+	return ctx
 }

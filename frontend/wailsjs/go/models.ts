@@ -2807,6 +2807,20 @@ export namespace hostinfo {
 
 export namespace main {
 	
+	export class LaunchContext {
+	    route: string;
+	    auto_connect: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LaunchContext(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.route = source["route"];
+	        this.auto_connect = source["auto_connect"];
+	    }
+	}
 	export class SaveExportFileReq {
 	    filename: string;
 	    data_base64: string;

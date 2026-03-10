@@ -31,6 +31,11 @@ export interface HostInfo {
   sampled_at_unix: number
 }
 
+export interface LaunchContext {
+  route?: string
+  auto_connect?: boolean
+}
+
 interface SaveDesktopExportFileReq {
   filename: string
   data_base64: string
@@ -130,4 +135,31 @@ export async function saveDesktopExportFile(input: {
   }
   setLastSaveDirectory(savedPath)
   return savedPath
+}
+
+export async function getDesktopLaunchContext(): Promise<LaunchContext | null> {
+  if (IS_SERVER_MODE) {
+    return null
+  }
+
+  const getLaunchContext = (window as any)?.go?.main?.App?.GetLaunchContext
+  if (typeof getLaunchContext !== 'function') {
+    return null
+  }
+
+  const context = await getLaunchContext()
+  return context as LaunchContext
+}
+
+export async function openDesktopTerminalWindow(assetId: number): Promise<void> {
+  if (IS_SERVER_MODE) {
+    throw new Error('openDesktopTerminalWindow 仅支持桌面模式')
+  }
+
+  const openWindow = (window as any)?.go?.main?.App?.OpenTerminalWindow
+  if (typeof openWindow !== 'function') {
+    throw new Error('桌面终端窗口接口尚未就绪，请重启桌面应用后重试')
+  }
+
+  await openWindow(assetId)
 }
