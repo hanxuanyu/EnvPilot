@@ -485,10 +485,10 @@ func (h *ExecutorHandler) TerminalWS(w http.ResponseWriter, r *http.Request) {
 
 // wsTerminalEmitter 将终端 Emitter 事件写入 WebSocket 连接
 type wsTerminalEmitter struct {
-	conn *websocket.Conn
-	mu   sync.Mutex
-	ctx  context.Context
-	queue chan map[string]interface{}
+	conn      *websocket.Conn
+	mu        sync.Mutex
+	ctx       context.Context
+	queue     chan map[string]interface{}
 	closeOnce sync.Once
 }
 

@@ -10,8 +10,8 @@ import (
 	assetModel "EnvPilot/internal/asset/model"
 	healthModel "EnvPilot/internal/health/model"
 
-	gossh "golang.org/x/crypto/ssh"
 	"go.uber.org/zap"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 func (s *HealthService) collectServerMetrics(ctx context.Context, asset *assetModel.Asset) (healthModel.Metrics, string, error) {
