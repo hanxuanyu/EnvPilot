@@ -2,6 +2,7 @@
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CopyButton } from '@/components/common/CopyButton'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -15,13 +16,47 @@ interface DynamicFieldProps {
   disabled?: boolean
 }
 
+function isAddressLikeField(field: ConfigField) {
+  if (field.secret || !['text', 'textarea'].includes(field.type)) {
+    return false
+  }
+
+  const keySource = field.key.toLowerCase()
+  const textSource = [field.label, field.placeholder, field.description]
+    .filter(Boolean)
+    .join(' ')
+
+  return /(^|_)(host|hostname|ip|ips|addr|addrs|address|endpoint|url|domain|dns|broker|brokers|server|servers)(_|$)/.test(keySource)
+    || /(地址|域名|主机|跳板机|NameServer|Broker|Endpoint|URL|\bIP\b)/i.test(textSource)
+}
+
+function renderCopyableField(field: ConfigField, text: string, control: React.ReactNode) {
+  if (!isAddressLikeField(field)) {
+    return control
+  }
+
+  const isTextarea = field.type === 'textarea'
+
+  return (
+    <div className={cn('flex gap-2', isTextarea ? 'items-start' : 'items-center')}>
+      <div className="min-w-0 flex-1">{control}</div>
+      <CopyButton
+        text={text}
+        label={field.label}
+        disabled={text.trim().length === 0}
+        className={cn(isTextarea ? 'mt-1 h-8 w-8' : 'h-9 w-9', 'text-muted-foreground')}
+      />
+    </div>
+  )
+}
+
 function DynamicField({ field, value, onChange, disabled }: DynamicFieldProps) {
   const strVal = value != null && value !== undefined ? String(value) : ''
 
   switch (field.type) {
     case 'text':
     case 'password':
-      return (
+      return renderCopyableField(field, strVal, (
         <Input
           type={field.type === 'password' ? 'password' : 'text'}
           value={strVal}
@@ -30,7 +65,7 @@ function DynamicField({ field, value, onChange, disabled }: DynamicFieldProps) {
           disabled={disabled}
           className={field.type === 'password' ? 'font-mono' : undefined}
         />
-      )
+      ))
 
     case 'number':
       return (
@@ -45,7 +80,7 @@ function DynamicField({ field, value, onChange, disabled }: DynamicFieldProps) {
       )
 
     case 'textarea':
-      return (
+      return renderCopyableField(field, strVal, (
         <Textarea
           value={strVal}
           onChange={e => onChange(e.target.value)}
@@ -54,7 +89,7 @@ function DynamicField({ field, value, onChange, disabled }: DynamicFieldProps) {
           rows={4}
           className="font-mono text-xs"
         />
-      )
+      ))
 
     case 'boolean':
       return (
@@ -105,14 +140,14 @@ function DynamicField({ field, value, onChange, disabled }: DynamicFieldProps) {
       )
 
     default:
-      return (
+      return renderCopyableField(field, strVal, (
         <Input
           value={strVal}
           onChange={e => onChange(e.target.value)}
           placeholder={field.placeholder}
           disabled={disabled}
         />
-      )
+      ))
   }
 }
 

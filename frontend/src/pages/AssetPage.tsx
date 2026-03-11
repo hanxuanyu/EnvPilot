@@ -7,6 +7,7 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/components/common/AuthProvider'
+import { CopyButton } from '@/components/common/CopyButton'
 import { useAssetStore } from '@/store/assetStore'
 import { StatusBadge } from '@/components/common/StatusBadge'
 import { HealthMetricBadges } from '@/components/common/HealthMetricBadges'
@@ -666,6 +667,7 @@ export default function AssetPage() {
                   const Icon = CATEGORY_ICONS[cat] ?? Box
                   const color = CATEGORY_COLORS[cat] ?? '#6b7280'
                   const plugin = plugins.find(p => p.type_id === asset.plugin_type)
+                  const assetAddress = getAssetAddress(asset)
                   return (
                     <tr
                       id={`asset-row-${asset.id}`}
@@ -697,8 +699,17 @@ export default function AssetPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                        {getAssetAddress(asset)}
+                      <td className="max-w-[280px] px-4 py-3 font-mono text-xs text-muted-foreground">
+                        <div className="flex items-start gap-1.5">
+                          <span className="min-w-0 break-all">{assetAddress}</span>
+                          {assetAddress !== '—' && (
+                            <CopyButton
+                              text={assetAddress}
+                              label="连接地址"
+                              className="h-6 w-6 text-muted-foreground"
+                            />
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {asset.environment && (
@@ -1352,14 +1363,22 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
                 {dnsSupported && dnsEnabled && (
                   <div className="grid grid-cols-2 gap-3">
                     <FormField label="推荐域名" required className="col-span-2">
-                      <Input
-                        value={dnsDomain}
-                        onChange={e => {
-                          setDnsDomain(e.target.value)
-                          setDnsDomainTouched(true)
-                        }}
-                        placeholder="例如 web-01.linux-server.dev.local"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={dnsDomain}
+                          onChange={e => {
+                            setDnsDomain(e.target.value)
+                            setDnsDomainTouched(true)
+                          }}
+                          placeholder="例如 web-01.linux-server.dev.local"
+                        />
+                        <CopyButton
+                          text={dnsDomain}
+                          label="推荐域名"
+                          disabled={dnsDomain.trim().length === 0}
+                          className="h-9 w-9 text-muted-foreground"
+                        />
+                      </div>
                       <p className="text-[11px] text-muted-foreground">
                         默认根据环境名、资产类型和资产名称生成，可手动调整。
                       </p>
@@ -1376,11 +1395,20 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
                     </FormField>
 
                     <FormField label="解析目标">
-                      <Input
-                        value={String(extConfig.host ?? '')}
-                        disabled
-                        placeholder="请先填写 host"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={String(extConfig.host ?? '')}
+                          disabled
+                          placeholder="请先填写 host"
+                          className="font-mono"
+                        />
+                        <CopyButton
+                          text={String(extConfig.host ?? '')}
+                          label="解析目标"
+                          disabled={String(extConfig.host ?? '').trim().length === 0}
+                          className="h-9 w-9 text-muted-foreground"
+                        />
+                      </div>
                     </FormField>
 
                     {asset && (

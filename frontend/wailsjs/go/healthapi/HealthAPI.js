@@ -17,3 +17,7 @@ export function GetSummary(arg1) {
 export function ListSnapshots(arg1) {
   return window['go']['healthapi']['HealthAPI']['ListSnapshots'](arg1);
 }
+
+export function SetContext(arg1) {
+  return window['go']['healthapi']['HealthAPI']['SetContext'](arg1);
+}
