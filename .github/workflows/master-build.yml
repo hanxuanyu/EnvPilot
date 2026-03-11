@@ -55,6 +55,9 @@ jobs:
       - name: Build linux amd64 server artifact
         run: make build-server-linux
 
+      - name: Build windows amd64 server artifact
+        run: make build-server-windows
+
   desktop-build:
     name: Desktop Build Validation
     runs-on: macos-latest

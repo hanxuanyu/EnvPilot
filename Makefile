@@ -7,6 +7,7 @@
 #   make build-desktop   桌面版（Wails，macOS/Windows/Linux GUI）
 #   make build-server    服务端版（HTTP，可部署到服务器）
 #   make build-server-linux  交叉编译 Linux amd64 服务端
+#   make build-server-windows  交叉编译 Windows amd64 服务端
 #   make build-all       同时构建两种模式
 #   make dev             启动桌面开发模式（热更新）
 #   make dev-server      启动服务端开发模式（Go + Vite 代理）
@@ -35,14 +36,12 @@ endif
 GOOS   ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 CGO_ENABLED ?=
-GO_BUILD_ENV := GOOS=$(GOOS) GOARCH=$(GOARCH)
-ifneq ($(strip $(CGO_ENABLED)),)
-GO_BUILD_ENV += CGO_ENABLED=$(CGO_ENABLED)
-endif
+GO_BUILD_ENV = GOOS=$(GOOS) GOARCH=$(GOARCH)$(if $(strip $(CGO_ENABLED)), CGO_ENABLED=$(CGO_ENABLED),)
+TARGET_SERVER_EXT = $(if $(filter windows,$(GOOS)),.exe,)
 
 .DEFAULT_GOAL := help
 
-.PHONY: test-core build-desktop build-server build-server-target build-server-linux build-all dev dev-server clean help prepare-server-assets prepare-build-metadata
+.PHONY: test-core build-desktop build-server build-server-target build-server-linux build-server-windows build-all dev dev-server clean help prepare-server-assets prepare-build-metadata
 
 # ── 默认目标 ─────────────────────────────────────────────────────
 help:
@@ -54,6 +53,7 @@ help:
 	@echo "  make build-desktop   构建桌面版（Wails）"
 	@echo "  make build-server    构建服务端版（HTTP）"
 	@echo "  make build-server-linux  交叉编译 Linux amd64 服务端"
+	@echo "  make build-server-windows  交叉编译 Windows amd64 服务端"
 	@echo "  make build-all       构建两种模式"
 	@echo "  make dev             桌面开发模式（wails dev）"
 	@echo "  make dev-server      服务端开发模式"
@@ -102,7 +102,7 @@ build-server: prepare-build-metadata prepare-server-assets
 	@echo ">>> 使用方式：./$(BIN_DIR)/$(SERVER_OUTPUT) --addr :8080"
 
 # 内部辅助目标：供 CI / release 复用，不建议手工直接调用
-build-server-target: SERVER_OUTPUT := $(SERVER_NAME)-$(GOOS)-$(GOARCH)
+build-server-target: SERVER_OUTPUT = $(SERVER_NAME)-$(GOOS)-$(GOARCH)$(TARGET_SERVER_EXT)
 build-server-target: prepare-build-metadata prepare-server-assets
 	@echo ">>> [3/3] 编译目标平台服务端二进制 ($(GOOS)/$(GOARCH))..."
 	mkdir -p $(BIN_DIR)
@@ -115,7 +115,14 @@ build-server-target: prepare-build-metadata prepare-server-assets
 # ── 交叉编译服务端（Linux amd64，适合 CI/Docker 部署）────────────
 build-server-linux: GOOS := linux
 build-server-linux: GOARCH := amd64
+build-server-linux: CGO_ENABLED := 0
 build-server-linux: build-server-target
+
+# ── 交叉编译服务端（Windows amd64）──────────────────────────────
+build-server-windows: GOOS := windows
+build-server-windows: GOARCH := amd64
+build-server-windows: CGO_ENABLED := 0
+build-server-windows: build-server-target
 
 # ── 同时构建两种模式 ─────────────────────────────────────────────
 build-all: build-desktop build-server
