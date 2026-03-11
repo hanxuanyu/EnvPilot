@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"EnvPilot/internal/executor/repository"
 	execSvc "EnvPilot/internal/executor/service"
@@ -27,6 +29,13 @@ var wsUpgrader = websocket.Upgrader{
 	// 服务端模式允许所有跨域来源（按需收紧）
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
+
+const (
+	sseHeartbeatInterval = 15 * time.Second
+	wsWriteTimeout       = 10 * time.Second
+	wsReadTimeout        = 65 * time.Second
+	wsPingInterval       = 30 * time.Second
+)
 
 // ExecutorHandler 命令执行 + 在线终端 HTTP handler
 type ExecutorHandler struct {
@@ -214,23 +223,23 @@ func (h *ExecutorHandler) StreamExecution(w http.ResponseWriter, r *http.Request
 		writeFail(w, http.StatusInternalServerError, "不支持 SSE")
 		return
 	}
+	heartbeatTicker := time.NewTicker(sseHeartbeatInterval)
+	defer heartbeatTicker.Stop()
 
 	for {
 		select {
-		case msg, open := <-outCh:
-			if !open {
-				return
-			}
+		case msg := <-outCh:
 			sseEvent(w, "output", msg.Data)
 			flusher.Flush()
 
-		case msg, open := <-doneCh:
-			if !open {
-				return
-			}
+		case msg := <-doneCh:
 			sseEvent(w, "done", msg.Data)
 			flusher.Flush()
 			return
+
+		case <-heartbeatTicker.C:
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
 
 		case <-r.Context().Done():
 			return
@@ -399,9 +408,17 @@ func (h *ExecutorHandler) TerminalWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+	conn.SetReadLimit(64 * 1024)
+	_ = conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsReadTimeout))
+	})
 
 	// wsEmitter 将终端事件写入 WebSocket 连接
-	emitter := &wsTerminalEmitter{conn: conn}
+	emitterCtx, cancelEmitter := context.WithCancel(r.Context())
+	defer cancelEmitter()
+	emitter := newWSTerminalEmitter(emitterCtx, conn)
+	defer emitter.Close()
 
 	sessionID, err := h.termSvc.StartTerminal(assetID, emitter)
 	if err != nil {
@@ -417,6 +434,19 @@ func (h *ExecutorHandler) TerminalWS(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		return
 	}
+
+	go func() {
+		ticker := time.NewTicker(wsPingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-emitterCtx.Done():
+				return
+			case <-ticker.C:
+				emitter.writeControl(websocket.PingMessage, []byte("ping"))
+			}
+		}
+	}()
 
 	// 读取客户端输入并转发到 SSH
 	for {
@@ -457,12 +487,22 @@ func (h *ExecutorHandler) TerminalWS(w http.ResponseWriter, r *http.Request) {
 type wsTerminalEmitter struct {
 	conn *websocket.Conn
 	mu   sync.Mutex
+	ctx  context.Context
+	queue chan map[string]interface{}
+	closeOnce sync.Once
+}
+
+func newWSTerminalEmitter(ctx context.Context, conn *websocket.Conn) *wsTerminalEmitter {
+	emitter := &wsTerminalEmitter{
+		conn:  conn,
+		ctx:   ctx,
+		queue: make(chan map[string]interface{}, 256),
+	}
+	go emitter.writeLoop()
+	return emitter
 }
 
 func (e *wsTerminalEmitter) Emit(ev string, data interface{}) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	var msg map[string]interface{}
 	switch {
 	case len(ev) > 16 && ev[:16] == "terminal:output:":
@@ -472,7 +512,43 @@ func (e *wsTerminalEmitter) Emit(ev string, data interface{}) {
 	default:
 		return
 	}
-	_ = e.conn.WriteJSON(msg)
+
+	select {
+	case <-e.ctx.Done():
+		return
+	case e.queue <- msg:
+	default:
+	}
+}
+
+func (e *wsTerminalEmitter) Close() {
+	e.closeOnce.Do(func() {
+		close(e.queue)
+	})
+}
+
+func (e *wsTerminalEmitter) writeLoop() {
+	for msg := range e.queue {
+		if err := e.writeJSON(msg); err != nil {
+			return
+		}
+	}
+}
+
+func (e *wsTerminalEmitter) writeJSON(msg map[string]interface{}) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout)); err != nil {
+		return err
+	}
+	return e.conn.WriteJSON(msg)
+}
+
+func (e *wsTerminalEmitter) writeControl(messageType int, payload []byte) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_ = e.conn.SetWriteDeadline(time.Now().Add(wsWriteTimeout))
+	_ = e.conn.WriteControl(messageType, payload, time.Now().Add(wsWriteTimeout))
 }
 
 // Ensure wsTerminalEmitter implements event.Emitter

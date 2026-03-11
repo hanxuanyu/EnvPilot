@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"runtime"
 	"sync"
 	"time"
 
@@ -54,6 +55,11 @@ type CheckAllRequest struct {
 type CheckAllResult struct {
 	Checked int `json:"checked"`
 }
+
+const (
+	defaultBatchHealthConcurrency = 4
+	slowHealthCheckThreshold      = 3 * time.Second
+)
 
 type HealthService struct {
 	repo      *healthRepo.HealthRepo
@@ -210,29 +216,140 @@ func (s *HealthService) CheckAll(ctx context.Context, req CheckAllRequest) (*Che
 		return nil, fmt.Errorf("查询资产失败: %w", err)
 	}
 
+	trigger := normalizeCheckTrigger(req.Trigger)
+	concurrency := batchHealthConcurrency(len(assets))
+	startedAt := time.Now()
+	s.log.Info("批量健康检查开始",
+		zap.String("trigger", trigger),
+		zap.Uint("environment_id", req.EnvironmentID),
+		zap.String("category", string(req.Category)),
+		zap.Int("asset_count", len(assets)),
+		zap.Int("concurrency", concurrency),
+		zap.Duration("timeout", s.checkTimeout()),
+	)
+
+	type assetCheckResult struct {
+		asset    *assetModel.Asset
+		snapshot *healthModel.HealthSnapshot
+		err      error
+		duration time.Duration
+	}
+
+	jobs := make(chan *assetModel.Asset)
+	results := make(chan assetCheckResult, len(assets))
+	var workerWG sync.WaitGroup
+
+	for workerIndex := 0; workerIndex < concurrency; workerIndex++ {
+		workerWG.Add(1)
+		go func() {
+			defer workerWG.Done()
+			for asset := range jobs {
+				checkStartedAt := time.Now()
+				snapshot, checkErr := s.checkAndPersistAsset(ctx, asset)
+				results <- assetCheckResult{
+					asset:    asset,
+					snapshot: snapshot,
+					err:      checkErr,
+					duration: time.Since(checkStartedAt),
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(jobs)
+		for index := range assets {
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- &assets[index]:
+			}
+		}
+	}()
+
+	go func() {
+		workerWG.Wait()
+		close(results)
+	}()
+
 	checked := 0
 	failedAssetIDs := make([]uint, 0)
-	for i := range assets {
-		snapshot, err := s.checkAndPersistAsset(ctx, &assets[i])
-		if err != nil {
-			s.log.Warn("批量健康检查失败", zap.Uint("asset_id", assets[i].ID), zap.Error(err))
-			failedAssetIDs = append(failedAssetIDs, assets[i].ID)
+	statusSummary := map[healthModel.HealthStatus]int{}
+	for result := range results {
+		if result.err != nil {
+			s.log.Warn("批量健康检查失败",
+				zap.Uint("asset_id", result.asset.ID),
+				zap.String("asset_name", result.asset.Name),
+				zap.String("plugin_type", result.asset.PluginType),
+				zap.String("category", string(result.asset.Category)),
+				zap.Duration("duration", result.duration),
+				zap.Error(result.err),
+			)
+			failedAssetIDs = append(failedAssetIDs, result.asset.ID)
 			if req.Trigger != "scheduled" {
-				s.recordAssetAudit(&assets[i], "check_health", false, err.Error(), map[string]any{
+				s.recordAssetAudit(result.asset, "check_health", false, result.err.Error(), map[string]any{
 					"mode":    "batch",
-					"trigger": normalizeCheckTrigger(req.Trigger),
+					"trigger": trigger,
 				}, nil)
 			}
 			continue
 		}
+
+		if result.snapshot != nil {
+			statusSummary[result.snapshot.Status]++
+		}
+		if result.duration >= slowHealthCheckThreshold || (result.snapshot != nil && result.snapshot.Status != healthModel.HealthStatusHealthy) {
+			fields := []zap.Field{
+				zap.Uint("asset_id", result.asset.ID),
+				zap.String("asset_name", result.asset.Name),
+				zap.String("plugin_type", result.asset.PluginType),
+				zap.String("category", string(result.asset.Category)),
+				zap.Duration("duration", result.duration),
+			}
+			if result.snapshot != nil {
+				fields = append(fields,
+					zap.String("status", string(result.snapshot.Status)),
+					zap.String("check_type", result.snapshot.CheckType),
+					zap.String("detail", result.snapshot.Detail),
+				)
+			}
+			s.log.Info("批量健康检查资产结果", fields...)
+		}
+
 		if req.Trigger != "scheduled" {
-			s.recordAssetAudit(&assets[i], "check_health", true, fmt.Sprintf("健康检查完成，状态=%s", snapshot.Status), map[string]any{
+			s.recordAssetAudit(result.asset, "check_health", true, fmt.Sprintf("健康检查完成，状态=%s", result.snapshot.Status), map[string]any{
 				"mode":    "batch",
-				"trigger": normalizeCheckTrigger(req.Trigger),
-			}, healthAuditResult(snapshot))
+				"trigger": trigger,
+			}, healthAuditResult(result.snapshot))
 		}
 		checked++
 	}
+
+	if err := ctx.Err(); err != nil {
+		s.log.Warn("批量健康检查上下文结束",
+			zap.String("trigger", trigger),
+			zap.Duration("duration", time.Since(startedAt)),
+			zap.Int("checked", checked),
+			zap.Int("failed", len(failedAssetIDs)),
+			zap.Error(err),
+		)
+	}
+
+	s.log.Info("批量健康检查完成",
+		zap.String("trigger", trigger),
+		zap.Uint("environment_id", req.EnvironmentID),
+		zap.String("category", string(req.Category)),
+		zap.Int("asset_count", len(assets)),
+		zap.Int("checked", checked),
+		zap.Int("failed", len(failedAssetIDs)),
+		zap.Int("healthy", statusSummary[healthModel.HealthStatusHealthy]),
+		zap.Int("warning", statusSummary[healthModel.HealthStatusWarning]),
+		zap.Int("critical", statusSummary[healthModel.HealthStatusCritical]),
+		zap.Int("unreachable", statusSummary[healthModel.HealthStatusUnreachable]),
+		zap.Int("unknown", statusSummary[healthModel.HealthStatusUnknown]),
+		zap.Duration("duration", time.Since(startedAt)),
+	)
+
 	s.recordAudit(auditSvc.RecordInput{
 		Module:       "health",
 		Action:       batchAuditAction(req.Trigger),
@@ -242,12 +359,18 @@ func (s *HealthService) CheckAll(ctx context.Context, req CheckAllRequest) (*Che
 		Request: map[string]any{
 			"environment_id": req.EnvironmentID,
 			"category":       req.Category,
-			"trigger":        normalizeCheckTrigger(req.Trigger),
+			"trigger":        trigger,
 		},
 		Result: map[string]any{
 			"checked":          checked,
 			"failed":           len(failedAssetIDs),
 			"failed_asset_ids": failedAssetIDs,
+			"healthy":          statusSummary[healthModel.HealthStatusHealthy],
+			"warning":          statusSummary[healthModel.HealthStatusWarning],
+			"critical":         statusSummary[healthModel.HealthStatusCritical],
+			"unreachable":      statusSummary[healthModel.HealthStatusUnreachable],
+			"unknown":          statusSummary[healthModel.HealthStatusUnknown],
+			"duration_ms":      time.Since(startedAt).Milliseconds(),
 		},
 	})
 	return &CheckAllResult{Checked: checked}, nil
@@ -309,6 +432,7 @@ func (s *HealthService) schedulerLoop(ctx context.Context, interval time.Duratio
 
 func (s *HealthService) runScheduledCheck(ctx context.Context) {
 	if !s.beginScheduledRun() {
+		s.log.Warn("自动健康检查跳过：上一轮仍在执行或调度器已停止")
 		return
 	}
 	defer s.endScheduledRun()
@@ -337,6 +461,26 @@ func (s *HealthService) endScheduledRun() {
 	s.schedulerMu.Lock()
 	s.schedulerBusy = false
 	s.schedulerMu.Unlock()
+}
+
+func batchHealthConcurrency(assetCount int) int {
+	if assetCount <= 1 {
+		return 1
+	}
+	concurrency := defaultBatchHealthConcurrency
+	if cpuBound := runtime.NumCPU() / 2; cpuBound > concurrency {
+		concurrency = cpuBound
+	}
+	if concurrency > 8 {
+		concurrency = 8
+	}
+	if concurrency > assetCount {
+		concurrency = assetCount
+	}
+	if concurrency <= 0 {
+		return 1
+	}
+	return concurrency
 }
 
 func (s *HealthService) runChecks(ctx context.Context, asset *assetModel.Asset) *healthModel.HealthSnapshot {

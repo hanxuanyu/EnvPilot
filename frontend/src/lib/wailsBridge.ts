@@ -19,6 +19,7 @@ const GO_CALL_TIMEOUT_MS = 12000
 const PING_PROBE_TIMEOUT_MS = 4000
 const PATCH_SCAN_INTERVAL_MS = 1000
 const PROBE_DEBOUNCE_MS = 1200
+const HEALTHCHECK_INTERVAL_MS = 30000
 
 const GO_BINDING_NAMESPACES = [
   'main',
@@ -275,6 +276,12 @@ export function installWailsBridgeMonitor() {
   window.setInterval(() => {
     patchWailsBindings()
   }, PATCH_SCAN_INTERVAL_MS)
+
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      patchAndProbe('interval-healthcheck')
+    }
+  }, HEALTHCHECK_INTERVAL_MS)
 
   window.addEventListener('focus', () => {
     patchAndProbe('window-focus')

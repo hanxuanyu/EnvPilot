@@ -13,11 +13,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"EnvPilot/api"
 	"EnvPilot/internal/app"
@@ -43,8 +45,12 @@ func main() {
 
 	// ── 启动 HTTP 服务 ──
 	server := &http.Server{
-		Addr:    *addr,
-		Handler: router,
+		Addr:              *addr,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       90 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	logger.Info("EnvPilot 服务端模式启动", zap.String("addr", *addr))
@@ -63,5 +69,10 @@ func main() {
 	<-quit
 
 	logger.Info("收到退出信号，正在关闭...")
-	_ = server.Close()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Warn("HTTP 服务优雅关闭失败，执行强制关闭", zap.Error(err))
+		_ = server.Close()
+	}
 }

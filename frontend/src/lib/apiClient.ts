@@ -19,6 +19,9 @@ const BASE = typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : ''
 
 export const API_BASE = BASE
 
+const HTTP_REQUEST_TIMEOUT_MS = 20000
+const TERMINAL_WS_START_TIMEOUT_MS = 10000
+
 export function buildApiURL(
   path: string,
   query?: Record<string, string | number | undefined>,
@@ -60,17 +63,31 @@ async function request<T>(
   query?: Record<string, string | number | undefined>,
 ): Promise<T> {
   const url = buildApiURL(path, query)
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), HTTP_REQUEST_TIMEOUT_MS)
 
   const opts: RequestInit = {
     method,
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
+    signal: controller.signal,
   }
   if (body !== undefined) {
     opts.body = JSON.stringify(body)
   }
 
-  const resp = await fetch(url.toString(), opts)
+  let resp: Response
+  try {
+    resp = await fetch(url.toString(), opts)
+  } catch (error: any) {
+    window.clearTimeout(timeout)
+    if (error?.name === 'AbortError') {
+      throw new Error(`请求超时 (${HTTP_REQUEST_TIMEOUT_MS}ms)`)
+    }
+    throw error
+  }
+  window.clearTimeout(timeout)
+
   const json = await resp.json().catch(() => null) as ApiResult<T> | null
 
   if (!resp.ok) {
@@ -157,6 +174,18 @@ class TerminalWebSocketManager {
       const ws = new WebSocket(wsURL(`/ws/terminal?asset_id=${assetId}`))
       let sessionId = ''
       let resolved = false
+      let closeNotified = false
+      const startupTimer = window.setTimeout(() => {
+        if (resolved) return
+        ws.close()
+        reject(new Error('终端连接启动超时'))
+      }, TERMINAL_WS_START_TIMEOUT_MS)
+
+      const notifyClosed = () => {
+        if (closeNotified) return
+        closeNotified = true
+        callbacks.onClosed()
+      }
 
       ws.onopen = () => {
         // WebSocket 建立后服务端会自动发送 started 消息
@@ -172,6 +201,7 @@ class TerminalWebSocketManager {
 
         switch (msg.type) {
           case 'started':
+            window.clearTimeout(startupTimer)
             sessionId = msg.session_id!
             this.sockets.set(sessionId, ws)
             resolved = true
@@ -181,12 +211,13 @@ class TerminalWebSocketManager {
             if (resolved) callbacks.onOutput(msg.data || '')
             break
           case 'closed':
-            if (resolved) callbacks.onClosed()
+            if (resolved) notifyClosed()
             this.sockets.delete(sessionId)
             ws.close()
             break
           case 'error':
             if (!resolved) {
+              window.clearTimeout(startupTimer)
               reject(new Error(msg.message || '终端连接失败'))
             } else {
               callbacks.onError?.(msg.message || '终端错误')
@@ -196,13 +227,17 @@ class TerminalWebSocketManager {
       }
 
       ws.onerror = () => {
-        if (!resolved) reject(new Error('WebSocket 连接失败'))
+        if (!resolved) {
+          window.clearTimeout(startupTimer)
+          reject(new Error('WebSocket 连接失败'))
+        }
       }
 
       ws.onclose = () => {
+        window.clearTimeout(startupTimer)
         if (sessionId) {
           this.sockets.delete(sessionId)
-          callbacks.onClosed()
+          notifyClosed()
         }
       }
     })
@@ -218,7 +253,9 @@ class TerminalWebSocketManager {
   close(sessionId: string): void {
     const ws = this.sockets.get(sessionId)
     if (ws) {
-      ws.send(JSON.stringify({ type: 'close' }))
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'close' }))
+      }
       ws.close()
       this.sockets.delete(sessionId)
     }

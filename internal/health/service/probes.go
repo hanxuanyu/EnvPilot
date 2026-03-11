@@ -5,16 +5,25 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	assetModel "EnvPilot/internal/asset/model"
 	healthModel "EnvPilot/internal/health/model"
 
 	gossh "golang.org/x/crypto/ssh"
+	"go.uber.org/zap"
 )
 
 func (s *HealthService) collectServerMetrics(ctx context.Context, asset *assetModel.Asset) (healthModel.Metrics, string, error) {
+	startedAt := time.Now()
 	client, err := s.pool.GetClient(asset.ID)
 	if err != nil {
+		s.log.Warn("SSH 指标采集失败：获取连接失败",
+			zap.Uint("asset_id", asset.ID),
+			zap.String("asset_name", asset.Name),
+			zap.String("plugin_type", asset.PluginType),
+			zap.Error(err),
+		)
 		return nil, "", err
 	}
 	result := make(healthModel.Metrics)
@@ -87,6 +96,13 @@ func (s *HealthService) collectServerMetrics(ctx context.Context, asset *assetMo
 
 	if successCount == 0 {
 		s.pool.Remove(asset.ID)
+		s.log.Warn("SSH 指标采集失败：未采集到有效指标",
+			zap.Uint("asset_id", asset.ID),
+			zap.String("asset_name", asset.Name),
+			zap.String("plugin_type", asset.PluginType),
+			zap.Duration("duration", time.Since(startedAt)),
+			zap.Strings("failures", failures),
+		)
 		if len(failures) == 0 {
 			return nil, "", fmt.Errorf("SSH 登录成功，但未采集到任何系统指标")
 		}
@@ -112,6 +128,20 @@ func (s *HealthService) collectServerMetrics(ctx context.Context, asset *assetMo
 	detail := "SSH 指标采集完成"
 	if len(detailParts) > 0 {
 		detail += "：" + strings.Join(detailParts, "，")
+	}
+	if len(failures) > 0 || time.Since(startedAt) >= slowHealthCheckThreshold {
+		fields := []zap.Field{
+			zap.Uint("asset_id", asset.ID),
+			zap.String("asset_name", asset.Name),
+			zap.String("plugin_type", asset.PluginType),
+			zap.Int("success_metrics", successCount),
+			zap.Int("failed_metrics", len(failures)),
+			zap.Duration("duration", time.Since(startedAt)),
+		}
+		if len(failures) > 0 {
+			fields = append(fields, zap.Strings("failures", failures))
+		}
+		s.log.Info("SSH 指标采集结果", fields...)
 	}
 	return result, detail, nil
 }
