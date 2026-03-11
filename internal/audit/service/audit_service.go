@@ -3,9 +3,11 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	auditModel "EnvPilot/internal/audit/model"
 	auditRepo "EnvPilot/internal/audit/repository"
+	configModel "EnvPilot/internal/config/model"
 	"EnvPilot/pkg/logger"
 
 	"go.uber.org/zap"
@@ -43,10 +45,20 @@ type ListResult struct {
 type AuditService struct {
 	repo *auditRepo.AuditRepo
 	log  *zap.Logger
+
+	policyMu      sync.RWMutex
+	cleanupPolicy CleanupPolicy
+	schedulerMu   sync.Mutex
+	schedulerBusy bool
+	schedulerStop func()
 }
 
 func NewAuditService(repo *auditRepo.AuditRepo) *AuditService {
-	return &AuditService{repo: repo, log: logger.Named("audit")}
+	return &AuditService{
+		repo:          repo,
+		log:           logger.Named("audit"),
+		cleanupPolicy: DefaultCleanupPolicy(),
+	}
 }
 
 func (s *AuditService) Record(input RecordInput) error {
@@ -100,6 +112,23 @@ func (s *AuditService) List(req ListRequest) (*ListResult, error) {
 		return nil, err
 	}
 	return &ListResult{Items: items, Total: total}, nil
+}
+
+func (s *AuditService) UpdateConfig(cfg configModel.AuditSection) {
+	policy := cleanupPolicyFromConfig(cfg)
+	s.policyMu.Lock()
+	s.cleanupPolicy = policy
+	s.policyMu.Unlock()
+
+	s.StopCleanupScheduler()
+	if policy.AutoCleanup {
+		s.StartCleanupScheduler()
+	} else {
+		s.log.Info("审计日志自动清理未启用",
+			zap.Int("retention_days", policy.RetentionDays),
+			zap.Int("max_records", policy.MaxRecords),
+		)
+	}
 }
 
 func marshalAuditValue(value any) string {

@@ -27,6 +27,7 @@ export function ConfirmDialog({
   onConfirm,
   children,
 }: ConfirmDialogProps) {
+  const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const handleConfirm = async () => {
@@ -34,12 +35,13 @@ export function ConfirmDialog({
     try {
       await onConfirm()
     } finally {
+      setOpen(false)
       setLoading(false)
     }
   }
 
   return (
-    <AlertDialog>
+    <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>

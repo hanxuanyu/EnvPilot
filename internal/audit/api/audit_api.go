@@ -21,6 +21,13 @@ func (a *AuditAPI) requireProtectedPage() error {
 	return a.auth.RequireProtectedPage("")
 }
 
+func (a *AuditAPI) requireAdmin() error {
+	if a.auth == nil {
+		return nil
+	}
+	return a.auth.RequireAdmin("")
+}
+
 type ListAuditLogsReq struct {
 	Module     string `json:"module"`
 	Action     string `json:"action"`
@@ -38,6 +45,17 @@ func (a *AuditAPI) ListAuditLogs(req ListAuditLogsReq) Result[*auditSvc.ListResu
 	result, err := a.svc.List(auditSvc.ListRequest(req))
 	if err != nil {
 		return Fail[*auditSvc.ListResult](err.Error())
+	}
+	return OK(result)
+}
+
+func (a *AuditAPI) CleanupAuditLogs() Result[*auditSvc.CleanupResult] {
+	if err := a.requireAdmin(); err != nil {
+		return Fail[*auditSvc.CleanupResult](err.Error())
+	}
+	result, err := a.svc.CleanupNow()
+	if err != nil {
+		return Fail[*auditSvc.CleanupResult](err.Error())
 	}
 	return OK(result)
 }

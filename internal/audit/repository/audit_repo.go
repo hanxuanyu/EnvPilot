@@ -2,6 +2,7 @@ package repository
 
 import (
 	auditModel "EnvPilot/internal/audit/model"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -14,6 +15,13 @@ type AuditFilter struct {
 	Keyword    string
 	Limit      int
 	Offset     int
+}
+
+type CleanupSummary struct {
+	TotalBefore    int64
+	DeletedByAge   int64
+	DeletedByCount int64
+	TotalAfter     int64
 }
 
 type AuditRepo struct {
@@ -67,4 +75,49 @@ func (r *AuditRepo) List(filter AuditFilter) ([]auditModel.AuditLog, int64, erro
 	var list []auditModel.AuditLog
 	err := query.Order("created_at desc").Limit(limit).Offset(offset).Find(&list).Error
 	return list, total, err
+}
+
+func (r *AuditRepo) Cleanup(cutoff time.Time, maxRecords int) (*CleanupSummary, error) {
+	summary := &CleanupSummary{}
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&auditModel.AuditLog{}).Count(&summary.TotalBefore).Error; err != nil {
+			return err
+		}
+
+		if !cutoff.IsZero() {
+			result := tx.Where("created_at < ?", cutoff).Delete(&auditModel.AuditLog{})
+			if result.Error != nil {
+				return result.Error
+			}
+			summary.DeletedByAge = result.RowsAffected
+		}
+
+		if maxRecords > 0 {
+			var remaining int64
+			if err := tx.Model(&auditModel.AuditLog{}).Count(&remaining).Error; err != nil {
+				return err
+			}
+			if remaining > int64(maxRecords) {
+				keepIDs := tx.Model(&auditModel.AuditLog{}).
+					Select("id").
+					Order("created_at DESC").
+					Order("id DESC").
+					Limit(maxRecords)
+				result := tx.Where("id NOT IN (?)", keepIDs).Delete(&auditModel.AuditLog{})
+				if result.Error != nil {
+					return result.Error
+				}
+				summary.DeletedByCount = result.RowsAffected
+			}
+		}
+
+		if err := tx.Model(&auditModel.AuditLog{}).Count(&summary.TotalAfter).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return summary, nil
 }

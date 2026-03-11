@@ -431,7 +431,7 @@ export default function ConfigPage() {
               <FieldBlock label="日志文件名">
                 <Input value={draft.log.filename} onChange={(e) => setDraft({ ...draft, log: { ...draft.log, filename: e.target.value } })} placeholder="日志文件名" />
               </FieldBlock>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid gap-3 md:grid-cols-3">
                 <FieldBlock label="单文件 MB">
                   <Input type="number" value={draft.log.max_size} onChange={(e) => setDraft({ ...draft, log: { ...draft.log, max_size: Number(e.target.value) } })} placeholder="大小 MB" />
                 </FieldBlock>
@@ -549,6 +549,48 @@ export default function ConfigPage() {
                 <FieldBlock label="超时（秒）">
                   <Input type="number" value={draft.health.timeout} onChange={(e) => setDraft({ ...draft, health: { ...draft.health, timeout: Number(e.target.value) } })} placeholder="超时（秒）" />
                 </FieldBlock>
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-border bg-card p-4 space-y-4">
+              <h2 className="text-sm font-semibold text-foreground">审计清理</h2>
+              <SwitchRow
+                label="自动清理审计日志"
+                hint="保存后立即重建审计清理调度器；手动清理按钮仍可随时执行。"
+                checked={draft.audit.auto_cleanup}
+                onCheckedChange={(checked) => setDraft({ ...draft, audit: { ...draft.audit, auto_cleanup: checked } })}
+              />
+              <div className="grid grid-cols-3 gap-3">
+                <FieldBlock label="保留天数">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.audit.retention_days}
+                    onChange={(e) => setDraft({ ...draft, audit: { ...draft.audit, retention_days: Number(e.target.value) } })}
+                    placeholder="保留天数"
+                  />
+                </FieldBlock>
+                <FieldBlock label="最大保留条数">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.audit.max_records}
+                    onChange={(e) => setDraft({ ...draft, audit: { ...draft.audit, max_records: Number(e.target.value) } })}
+                    placeholder="最大保留条数"
+                  />
+                </FieldBlock>
+                <FieldBlock label="清理周期（小时）">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={draft.audit.cleanup_interval_hours}
+                    onChange={(e) => setDraft({ ...draft, audit: { ...draft.audit, cleanup_interval_hours: Number(e.target.value) } })}
+                    placeholder="清理周期（小时）"
+                  />
+                </FieldBlock>
+              </div>
+              <div className="rounded-lg border border-dashed border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                默认策略保留最近 90 天且最多 50,000 条；如果你希望更激进地控库体积，可优先缩短保留天数，其次再收紧最大条数。
               </div>
             </section>
           </div>

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
-import { Globe, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Copy, Globe, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '@/components/common/AuthProvider'
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import { assetService, environmentService } from '@/services/assetService'
 import { dnsService } from '@/services/dnsService'
+import { writeClipboardText } from '@/lib/clipboard'
 import type { Asset, Environment } from '@/types/asset'
 import type {
   CreateDNSRecordReq,
@@ -47,12 +48,74 @@ const EMPTY_FORM: FormState = {
   enabled: true,
 }
 
-function recordTarget(record: DNSRecord): string {
+function getRecordResolvedValue(record: DNSRecord): string {
   if (record.asset) {
-    const host = record.asset.ext_config?.host as string | undefined
-    return host ? `${record.asset.name} -> ${host}` : `${record.asset.name} -> ${record.value}`
+    const host = typeof record.asset.ext_config?.host === 'string' ? record.asset.ext_config.host.trim() : ''
+    if (host) {
+      return host
+    }
   }
-  return record.value
+  return String(record.value ?? '').trim()
+}
+
+function recordTarget(record: DNSRecord): string {
+  const target = getRecordResolvedValue(record)
+  if (record.asset) {
+    return target ? `${record.asset.name} -> ${target}` : `${record.asset.name} -> —`
+  }
+  return target || '—'
+}
+
+function isHostsIpTarget(value: string): boolean {
+  const normalized = value.trim()
+  if (!normalized) {
+    return false
+  }
+
+  const ipv4Segments = normalized.split('.')
+  if (ipv4Segments.length === 4 && ipv4Segments.every(segment => /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.test(segment))) {
+    return true
+  }
+
+  return /^[0-9a-fA-F:]+$/.test(normalized) && normalized.includes(':')
+}
+
+function buildHostsContent(records: DNSRecord[], options?: { environmentName?: string; keyword?: string }) {
+  const lines: string[] = []
+  const seen = new Set<string>()
+  let skippedCount = 0
+
+  for (const record of records) {
+    const domain = record.domain.trim()
+    const target = getRecordResolvedValue(record)
+
+    if (!domain || !isHostsIpTarget(target)) {
+      skippedCount += 1
+      continue
+    }
+
+    const line = `${target} ${domain}`
+    if (!seen.has(line)) {
+      seen.add(line)
+      lines.push(line)
+    }
+  }
+
+  const generatedAt = new Date().toLocaleString('zh-CN')
+  const environmentName = options?.environmentName?.trim() || '全部环境'
+  const keyword = options?.keyword?.trim() || '无'
+  const header = [
+    '# EnvPilot hosts export',
+    `# 导出时间: ${generatedAt}`,
+    `# 环境: ${environmentName}`,
+    `# 关键词: ${keyword}`,
+  ]
+
+  return {
+    text: [...header, '', ...lines].join('\n'),
+    lineCount: lines.length,
+    skippedCount,
+  }
 }
 
 export default function DnsPage() {
@@ -72,6 +135,7 @@ export default function DnsPage() {
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [selectedEnv, setSelectedEnv] = useState<number | 'all'>('all')
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('__all__')
+  const [copyingHosts, setCopyingHosts] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editingRecord, setEditingRecord] = useState<DNSRecord | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -322,6 +386,42 @@ export default function DnsPage() {
     }
   }
 
+  const handleCopyHostsConfig = async () => {
+    setCopyingHosts(true)
+    try {
+      const enabledRecords = await dnsService.list({
+        environment_id: selectedEnvId,
+        keyword: appliedKeyword || undefined,
+        enabled: true,
+      })
+      const selectedEnvironmentName = selectedEnvId
+        ? environments.find(env => env.id === selectedEnvId)?.name
+        : '全部环境'
+      const { text, lineCount, skippedCount } = buildHostsContent(enabledRecords, {
+        environmentName: selectedEnvironmentName,
+        keyword: appliedKeyword,
+      })
+
+      if (!text) {
+        toast.warning('没有可复制的 hosts 配置', {
+          description: '当前启用记录里没有目标为 IP 的条目。',
+        })
+        return
+      }
+
+      await writeClipboardText(text)
+      toast.success('已复制 hosts 配置', {
+        description: skippedCount > 0
+          ? `已生成 ${lineCount} 条，跳过 ${skippedCount} 条非 IP 记录。`
+          : `已生成 ${lineCount} 条 hosts 记录。`,
+      })
+    } catch (error: any) {
+      toast.error('复制 hosts 配置失败', { description: error?.message || '复制失败' })
+    } finally {
+      setCopyingHosts(false)
+    }
+  }
+
   return (
     <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -335,6 +435,15 @@ export default function DnsPage() {
           <Button variant="outline" onClick={refreshAll} disabled={loading || logLoading || statusLoading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void handleCopyHostsConfig()}
+            loading={copyingHosts}
+            title="复制当前筛选范围内启用且目标为 IP 的记录为 hosts 格式"
+          >
+            <Copy className="h-4 w-4" />
+            复制 hosts
           </Button>
           {!isReadOnly ? (
             <Button onClick={openCreateForm}>

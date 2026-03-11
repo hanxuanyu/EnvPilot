@@ -82,7 +82,7 @@ func (s *ConfigService) Load() error {
 		return fmt.Errorf("读取配置文件失败 [%s]: %w", absPath, err)
 	}
 
-	var cfg model.AppConfig
+	cfg := *model.Default()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("解析 YAML 失败: %w", err)
 	}
@@ -171,6 +171,15 @@ func validate(cfg *model.AppConfig) error {
 	if cfg.DNS.DefaultTTL == 0 && cfg.DNS.Enabled {
 		return errors.New("dns.default_ttl 启用 DNS 时不能为 0")
 	}
+	if cfg.Audit.RetentionDays <= 0 {
+		return errors.New("audit.retention_days 必须大于 0")
+	}
+	if cfg.Audit.MaxRecords <= 0 {
+		return errors.New("audit.max_records 必须大于 0")
+	}
+	if cfg.Audit.CleanupIntervalHours <= 0 {
+		return errors.New("audit.cleanup_interval_hours 必须大于 0")
+	}
 
 	return nil
 }
@@ -233,6 +242,17 @@ func applyDefaults(cfg *model.AppConfig) {
 	}
 	if cfg.Health.Timeout <= 0 {
 		cfg.Health.Timeout = d.Health.Timeout
+	}
+
+	// Audit
+	if cfg.Audit.RetentionDays <= 0 {
+		cfg.Audit.RetentionDays = d.Audit.RetentionDays
+	}
+	if cfg.Audit.MaxRecords <= 0 {
+		cfg.Audit.MaxRecords = d.Audit.MaxRecords
+	}
+	if cfg.Audit.CleanupIntervalHours <= 0 {
+		cfg.Audit.CleanupIntervalHours = d.Audit.CleanupIntervalHours
 	}
 
 	// Security

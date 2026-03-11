@@ -36,3 +36,12 @@ func (h *AuditHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	writeOK(w, result)
 }
+
+func (h *AuditHandler) CleanupAuditLogs(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.CleanupNow()
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, result)
+}

@@ -83,6 +83,9 @@ func (c *Container) Cleanup() {
 	if c.HealthSvc != nil {
 		c.HealthSvc.StopScheduler()
 	}
+	if c.AuditSvc != nil {
+		c.AuditSvc.StopCleanupScheduler()
+	}
 	if c.ExecutorAPI != nil {
 		c.ExecutorAPI.Cleanup()
 	}
@@ -171,6 +174,7 @@ func Bootstrap() (*Container, error) {
 	sharedCredRepo := assetRepo.NewCredentialRepo(db)
 	auditRepoInst := auditRepo.NewAuditRepo(db)
 	auditSvcInst := auditSvc.NewAuditService(auditRepoInst)
+	auditSvcInst.UpdateConfig(cfg.Audit)
 	configSnapshotRepoInst := configRepo.NewConfigSnapshotRepo(db)
 	cfgSvc.AttachSnapshotStore(configSnapshotRepoInst, auditSvcInst)
 	if err := cfgSvc.EnsureInitialSnapshot(); err != nil {
@@ -207,7 +211,7 @@ func Bootstrap() (*Container, error) {
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
 	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, auditSvcInst, pool, cfg.Health)
 	healthSvcInst.StartScheduler()
-	cfgSvc.AttachRuntimeApplier(newConfigRuntimeApplier(dataBase, db, dnsRuntime, healthSvcInst))
+	cfgSvc.AttachRuntimeApplier(newConfigRuntimeApplier(dataBase, db, dnsRuntime, healthSvcInst, auditSvcInst))
 	healthAPIInst := healthAPI.NewHealthAPI(healthSvcInst, authSvc)
 	execRepo := executorRepo.NewExecutionRepo(db)
 	execSvc := executorSvc.NewExecutorService(pool, execRepo, sharedAssetRepo, auditSvcInst)

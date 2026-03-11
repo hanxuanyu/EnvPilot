@@ -633,6 +633,40 @@ export namespace auditapi {
 	        this.offset = source["offset"];
 	    }
 	}
+	export class Result__EnvPilot_internal_audit_service_CleanupResult_ {
+	    success: boolean;
+	    data?: service.CleanupResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_audit_service_CleanupResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.CleanupResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result__EnvPilot_internal_audit_service_ListResult_ {
 	    success: boolean;
 	    data?: service.ListResult;
@@ -2848,6 +2882,24 @@ export namespace main {
 
 export namespace model {
 	
+	export class AuditSection {
+	    auto_cleanup: boolean;
+	    retention_days: number;
+	    max_records: number;
+	    cleanup_interval_hours: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuditSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.auto_cleanup = source["auto_cleanup"];
+	        this.retention_days = source["retention_days"];
+	        this.max_records = source["max_records"];
+	        this.cleanup_interval_hours = source["cleanup_interval_hours"];
+	    }
+	}
 	export class HealthSection {
 	    check_interval: number;
 	    timeout: number;
@@ -2959,6 +3011,7 @@ export namespace model {
 	    security: SecuritySection;
 	    dns: DNSSection;
 	    health: HealthSection;
+	    audit: AuditSection;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppConfig(source);
@@ -2972,6 +3025,7 @@ export namespace model {
 	        this.security = this.convertValues(source["security"], SecuritySection);
 	        this.dns = this.convertValues(source["dns"], DNSSection);
 	        this.health = this.convertValues(source["health"], HealthSection);
+	        this.audit = this.convertValues(source["audit"], AuditSection);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -3247,6 +3301,7 @@ export namespace model {
 		    return a;
 		}
 	}
+	
 	export class ConfigSnapshot {
 	    id: number;
 	    version: number;
@@ -3738,6 +3793,57 @@ export namespace service {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.checked = source["checked"];
 	    }
+	}
+	export class CleanupResult {
+	    trigger: string;
+	    retention_days: number;
+	    max_records: number;
+	    cleanup_interval_hours: number;
+	    deleted_by_age: number;
+	    deleted_by_count: number;
+	    deleted_total: number;
+	    total_before: number;
+	    total_after: number;
+	    recorded: boolean;
+	    // Go type: time
+	    cleaned_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new CleanupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.trigger = source["trigger"];
+	        this.retention_days = source["retention_days"];
+	        this.max_records = source["max_records"];
+	        this.cleanup_interval_hours = source["cleanup_interval_hours"];
+	        this.deleted_by_age = source["deleted_by_age"];
+	        this.deleted_by_count = source["deleted_by_count"];
+	        this.deleted_total = source["deleted_total"];
+	        this.total_before = source["total_before"];
+	        this.total_after = source["total_after"];
+	        this.recorded = source["recorded"];
+	        this.cleaned_at = this.convertValues(source["cleaned_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class HotReloadResult {
 	    applied?: string[];

@@ -100,6 +100,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/connectors/cache/key-delete", authz.RequireAdmin(connH.DeleteCacheKey))
 	mux.HandleFunc("POST /api/connectors/mq", authz.RequireAdmin(connH.SendMQMessage))
 	mux.HandleFunc("GET /api/audits", authz.RequireProtectedPage(auditH.ListAuditLogs))
+	mux.HandleFunc("POST /api/audits/cleanup", authz.RequireAdmin(auditH.CleanupAuditLogs))
 	mux.HandleFunc("GET /api/config", authz.RequireProtectedPage(configH.GetCurrent))
 	mux.HandleFunc("PUT /api/config", authz.RequireAdmin(configH.Update))
 	mux.HandleFunc("GET /api/config/snapshots", authz.RequireProtectedPage(configH.ListSnapshots))

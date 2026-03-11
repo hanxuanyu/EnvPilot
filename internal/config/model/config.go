@@ -10,6 +10,7 @@ type AppConfig struct {
 	Security SecuritySection `yaml:"security" json:"security"`
 	DNS      DNSSection      `yaml:"dns" json:"dns"`
 	Health   HealthSection   `yaml:"health" json:"health"`
+	Audit    AuditSection    `yaml:"audit" json:"audit"`
 }
 
 // AppSection 应用基础配置
@@ -58,6 +59,14 @@ type HealthSection struct {
 	AutoCheck     bool `yaml:"auto_check" json:"auto_check"`
 }
 
+// AuditSection 审计日志保留与清理配置
+type AuditSection struct {
+	AutoCleanup          bool `yaml:"auto_cleanup" json:"auto_cleanup"`
+	RetentionDays        int  `yaml:"retention_days" json:"retention_days"`
+	MaxRecords           int  `yaml:"max_records" json:"max_records"`
+	CleanupIntervalHours int  `yaml:"cleanup_interval_hours" json:"cleanup_interval_hours"`
+}
+
 // Default 返回填充了所有默认值的 AppConfig 实例。
 //
 // 这是全局唯一的默认值来源：
@@ -100,6 +109,12 @@ func Default() *AppConfig {
 			CheckInterval: 60,
 			Timeout:       10,
 			AutoCheck:     true,
+		},
+		Audit: AuditSection{
+			AutoCleanup:          true,
+			RetentionDays:        90,
+			MaxRecords:           50000,
+			CleanupIntervalHours: 24,
 		},
 	}
 }

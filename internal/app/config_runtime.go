@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	auditSvc "EnvPilot/internal/audit/service"
 	configModel "EnvPilot/internal/config/model"
 	configService "EnvPilot/internal/config/service"
 	dnsSvc "EnvPilot/internal/dns/service"
@@ -21,14 +22,16 @@ type configRuntimeApplier struct {
 	db          *gorm.DB
 	dnsRuntime  *dnsSvc.ServerRuntime
 	healthSvc   *healthSvc.HealthService
+	auditSvc    *auditSvc.AuditService
 }
 
-func newConfigRuntimeApplier(resolveBase string, db *gorm.DB, dnsRuntime *dnsSvc.ServerRuntime, health *healthSvc.HealthService) *configRuntimeApplier {
+func newConfigRuntimeApplier(resolveBase string, db *gorm.DB, dnsRuntime *dnsSvc.ServerRuntime, health *healthSvc.HealthService, audit *auditSvc.AuditService) *configRuntimeApplier {
 	return &configRuntimeApplier{
 		resolveBase: resolveBase,
 		db:          db,
 		dnsRuntime:  dnsRuntime,
 		healthSvc:   health,
+		auditSvc:    audit,
 	}
 }
 
@@ -97,6 +100,11 @@ func (a *configRuntimeApplier) ApplyConfig(prev, next *configModel.AppConfig) (*
 	if prev.Health != next.Health {
 		a.healthSvc.UpdateConfig(resolvedNext.Health)
 		result.Applied = appendUnique(result.Applied, "health")
+	}
+
+	if prev.Audit != next.Audit {
+		a.auditSvc.UpdateConfig(resolvedNext.Audit)
+		result.Applied = appendUnique(result.Applied, "audit")
 	}
 
 	if len(errMessages) > 0 {

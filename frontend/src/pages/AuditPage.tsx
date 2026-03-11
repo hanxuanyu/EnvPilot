@@ -1,8 +1,12 @@
 ﻿import { useEffect, useState } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth } from '@/components/common/AuthProvider'
+import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { auditService } from '@/services/auditService'
+import { configService } from '@/services/configService'
 import type { AuditLog } from '@/types/audit'
+import type { AuditSection } from '@/types/config'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -11,11 +15,18 @@ import {
 import { Badge } from '@/components/ui/badge'
 
 const PAGE_SIZE_OPTIONS = [20, 50, 100]
+const DEFAULT_AUDIT_POLICY: AuditSection = {
+  auto_cleanup: true,
+  retention_days: 90,
+  max_records: 50000,
+  cleanup_interval_hours: 24,
+}
 
 const MODULE_OPTIONS = [
   { value: '__all__', label: '全部模块' },
   { value: 'asset', label: '资产管理' },
   { value: 'connector', label: '中间件连接器' },
+  { value: 'audit', label: '审计管理' },
 ]
 
 const STATUS_OPTIONS = [
@@ -34,6 +45,7 @@ function parseJSONPreview(input?: string): string {
 }
 
 export default function AuditPage() {
+  const { isReadOnly } = useAuth()
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -43,8 +55,18 @@ export default function AuditPage() {
   const [appliedKeyword, setAppliedKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [auditPolicy, setAuditPolicy] = useState<AuditSection>(DEFAULT_AUDIT_POLICY)
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  const loadAuditPolicy = async () => {
+    try {
+      const result = await configService.getCurrent()
+      setAuditPolicy(result.config.audit ?? DEFAULT_AUDIT_POLICY)
+    } catch (error: any) {
+      toast.error('加载审计清理策略失败', { description: error.message })
+    }
+  }
 
   const loadLogs = async () => {
     setLoading(true)
@@ -66,8 +88,12 @@ export default function AuditPage() {
   }
 
   useEffect(() => {
-    loadLogs()
+    void loadLogs()
   }, [page, pageSize, appliedKeyword, moduleFilter, statusFilter])
+
+  useEffect(() => {
+    void loadAuditPolicy()
+  }, [])
 
   const handleSearch = async () => {
     const nextKeyword = keyword.trim()
@@ -82,6 +108,26 @@ export default function AuditPage() {
     }
   }
 
+  const handleCleanup = async () => {
+    try {
+      const result = await auditService.cleanup()
+      const deleted = result.deleted_total.toLocaleString('zh-CN')
+      const remaining = result.total_after.toLocaleString('zh-CN')
+      toast.success('审计日志清理完成', {
+        description: result.deleted_total > 0
+          ? `已删除 ${deleted} 条，当前保留 ${remaining} 条。`
+          : `没有命中过期或超量记录，当前保留 ${remaining} 条。`,
+      })
+      if (page !== 1) {
+        setPage(1)
+      } else {
+        await loadLogs()
+      }
+    } catch (error: any) {
+      toast.error('清理审计日志失败', { description: error.message })
+    }
+  }
+
   return (
     <div className="w-full min-w-0 space-y-5 animate-in fade-in-0 duration-200">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -91,10 +137,30 @@ export default function AuditPage() {
             统一查看资产变更、凭据操作和中间件连接行为，便于回溯问题与追踪接入过程。
           </p>
         </div>
-        <Button variant="outline" onClick={loadLogs} disabled={loading}>
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          刷新审计
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => { void loadLogs(); void loadAuditPolicy() }} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            刷新审计
+          </Button>
+          {!isReadOnly ? (
+            <ConfirmDialog
+              title="立即清理审计日志"
+              description={`将立即删除超过 ${auditPolicy.retention_days} 天的历史审计，并在剩余记录中仅保留最新 ${auditPolicy.max_records.toLocaleString('zh-CN')} 条。此操作不可撤销。`}
+              confirmText="立即清理"
+              danger
+              onConfirm={handleCleanup}
+            >
+              <Button variant="outline" disabled={loading}>
+                <Trash2 className="h-4 w-4" />
+                立即清理
+              </Button>
+            </ConfirmDialog>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-dashed border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground">
+        当前默认保留最近 {auditPolicy.retention_days} 天，且最多保留 {auditPolicy.max_records.toLocaleString('zh-CN')} 条审计日志；自动清理 {auditPolicy.auto_cleanup ? `已启用，每 ${auditPolicy.cleanup_interval_hours} 小时执行一次。` : '已关闭。'} 手动清理会立即执行当前策略。
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-border bg-card p-3.5">
@@ -131,13 +197,13 @@ export default function AuditPage() {
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => e.key === 'Enter' && void handleSearch()}
             placeholder="搜索资源名、错误信息或结果摘要"
             className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
         </div>
 
-        <Button onClick={handleSearch} loading={loading} className="w-full sm:w-auto shrink-0">查询</Button>
+        <Button onClick={() => void handleSearch()} loading={loading} className="w-full sm:w-auto shrink-0">查询</Button>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card">

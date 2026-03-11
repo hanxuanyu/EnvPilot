@@ -38,6 +38,13 @@ export interface HealthSection {
   auto_check: boolean
 }
 
+export interface AuditSection {
+  auto_cleanup: boolean
+  retention_days: number
+  max_records: number
+  cleanup_interval_hours: number
+}
+
 export interface AppConfig {
   app: AppSection
   log: LogSection
@@ -45,6 +52,7 @@ export interface AppConfig {
   security: SecuritySection
   dns: DNSSection
   health: HealthSection
+  audit: AuditSection
 }
 
 export interface HotReloadResult {

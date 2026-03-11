@@ -15,7 +15,7 @@ database:
     max_idle_conns: 2
     max_open_conns: 10
 security:
-    master_password_enabled: true
+    master_password_enabled: false
     salt_file: .salt
     dangerous_commands:
         - rm -rf
@@ -32,3 +32,8 @@ health:
     check_interval: 60
     timeout: 10
     auto_check: false
+audit:
+    auto_cleanup: true
+    retention_days: 90
+    max_records: 50000
+    cleanup_interval_hours: 24

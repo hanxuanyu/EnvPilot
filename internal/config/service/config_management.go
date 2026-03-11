@@ -112,7 +112,7 @@ func (s *ConfigService) UpdateRaw(req UpdateRawConfigRequest) (*CurrentConfigRes
 		return nil, err
 	}
 
-	var nextConfig configModel.AppConfig
+	nextConfig := *configModel.Default()
 	buf, err := json.Marshal(req.Config)
 	if err != nil {
 		return nil, fmt.Errorf("配置序列化失败: %w", err)
@@ -258,7 +258,7 @@ func (s *ConfigService) Rollback(req RollbackConfigRequest) (*CurrentConfigResul
 }
 
 func parseConfigBytes(data []byte) (*configModel.AppConfig, error) {
-	var cfg configModel.AppConfig
+	cfg := *configModel.Default()
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("解析 YAML 失败: %w", err)
 	}
