@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	assetSvc "EnvPilot/internal/asset/service"
 	auditSvc "EnvPilot/internal/audit/service"
@@ -19,6 +20,12 @@ type ConnectorService struct {
 	auditSvc *auditSvc.AuditService
 	log      *zap.Logger
 }
+
+const (
+	defaultConnectorOpTimeout = 15 * time.Second
+	catalogConnectorOpTimeout = 30 * time.Second
+	sqlConnectorOpTimeout     = 60 * time.Second
+)
 
 type ExecuteSQLRequest struct {
 	AssetID  uint   `json:"asset_id"`
@@ -80,6 +87,9 @@ func NewConnectorService(assetSvc *assetSvc.AssetService, credSvc *assetSvc.Cred
 }
 
 func (s *ConnectorService) TestConnection(ctx context.Context, assetID uint) error {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	target, targetErr := s.resolveTarget(assetID)
 	conn, err := s.newConnector(assetID)
 	if err != nil {
@@ -126,6 +136,9 @@ func (s *ConnectorService) TestConnection(ctx context.Context, assetID uint) err
 }
 
 func (s *ConnectorService) ListDatabases(ctx context.Context, assetID uint) ([]string, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	dbConn, cleanup, err := s.newDatabaseConnector(assetID)
 	if err != nil {
 		return nil, err
@@ -136,6 +149,9 @@ func (s *ConnectorService) ListDatabases(ctx context.Context, assetID uint) ([]s
 }
 
 func (s *ConnectorService) ListTables(ctx context.Context, assetID uint, database string) ([]string, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	dbConn, cleanup, err := s.newDatabaseConnector(assetID)
 	if err != nil {
 		return nil, err
@@ -146,6 +162,9 @@ func (s *ConnectorService) ListTables(ctx context.Context, assetID uint, databas
 }
 
 func (s *ConnectorService) GetDatabaseCatalog(ctx context.Context, assetID uint) (*connector.DatabaseCatalog, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, catalogConnectorOpTimeout)
+	defer cancel()
+
 	target, err := s.resolveTarget(assetID)
 	if err != nil {
 		return nil, err
@@ -194,6 +213,9 @@ func (s *ConnectorService) GetDatabaseCatalog(ctx context.Context, assetID uint)
 }
 
 func (s *ConnectorService) GetTableDetail(ctx context.Context, req TableDetailRequest) (*connector.TableDetail, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	if strings.TrimSpace(req.Table) == "" {
 		return nil, fmt.Errorf("数据表名不能为空")
 	}
@@ -239,6 +261,9 @@ func (s *ConnectorService) GetTableDetail(ctx context.Context, req TableDetailRe
 }
 
 func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest) (*connector.QueryResult, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, sqlConnectorOpTimeout)
+	defer cancel()
+
 	query, err := normalizeSQL(req.Query)
 	if err != nil {
 		return nil, err
@@ -301,6 +326,9 @@ func (s *ConnectorService) ExecuteSQL(ctx context.Context, req ExecuteSQLRequest
 }
 
 func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteRedisCommandRequest) (*connector.CommandResult, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	command := strings.ToUpper(strings.TrimSpace(req.Command))
 	if command == "" {
 		return nil, fmt.Errorf("Redis 命令不能为空")
@@ -350,6 +378,9 @@ func (s *ConnectorService) ExecuteRedisCommand(ctx context.Context, req ExecuteR
 }
 
 func (s *ConnectorService) GetCacheCatalog(ctx context.Context, assetID uint) (*connector.CacheCatalog, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	cacheConn, cleanup, err := s.newCacheConnector(assetID)
 	if err != nil {
 		return nil, err
@@ -360,6 +391,9 @@ func (s *ConnectorService) GetCacheCatalog(ctx context.Context, assetID uint) (*
 }
 
 func (s *ConnectorService) ListCacheKeys(ctx context.Context, req CacheKeyListRequest) (*connector.CacheKeyPage, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
 	if err != nil {
 		return nil, err
@@ -405,6 +439,9 @@ func (s *ConnectorService) ListCacheKeys(ctx context.Context, req CacheKeyListRe
 }
 
 func (s *ConnectorService) GetCacheKeyDetail(ctx context.Context, req CacheKeyDetailRequest) (*connector.CacheKeyDetail, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	if strings.TrimSpace(req.Key) == "" {
 		return nil, fmt.Errorf("缓存键名不能为空")
 	}
@@ -451,6 +488,9 @@ func (s *ConnectorService) GetCacheKeyDetail(ctx context.Context, req CacheKeyDe
 }
 
 func (s *ConnectorService) SaveCacheKey(ctx context.Context, req CacheKeySaveRequest) (*connector.CacheMutationResult, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	cacheConn, cleanup, err := s.newCacheConnector(req.AssetID)
 	if err != nil {
 		return nil, err
@@ -483,6 +523,9 @@ func (s *ConnectorService) SaveCacheKey(ctx context.Context, req CacheKeySaveReq
 }
 
 func (s *ConnectorService) DeleteCacheKey(ctx context.Context, req CacheKeyDeleteRequest) (*connector.CacheMutationResult, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	if strings.TrimSpace(req.Key) == "" {
 		return nil, fmt.Errorf("缓存键名不能为空")
 	}
@@ -525,6 +568,9 @@ func (s *ConnectorService) DeleteCacheKey(ctx context.Context, req CacheKeyDelet
 }
 
 func (s *ConnectorService) SendMQMessage(ctx context.Context, req SendMQMessageRequest) (*connector.SendResult, error) {
+	ctx, cancel := withTimeoutIfAbsent(ctx, defaultConnectorOpTimeout)
+	defer cancel()
+
 	mqConn, cleanup, err := s.newMQConnector(req.AssetID)
 	if err != nil {
 		return nil, err
@@ -645,6 +691,16 @@ func (s *ConnectorService) resolveTarget(assetID uint) (*connector.Target, error
 		ExtConfig:  asset.ExtConfig,
 		Credential: credential,
 	}, nil
+}
+
+func withTimeoutIfAbsent(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		return context.WithTimeout(context.Background(), timeout)
+	}
+	if _, ok := parent.Deadline(); ok {
+		return context.WithCancel(parent)
+	}
+	return context.WithTimeout(parent, timeout)
 }
 
 func normalizeSQL(query string) (string, error) {

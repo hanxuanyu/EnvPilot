@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"EnvPilot/internal/connector"
 
@@ -300,6 +301,9 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	parsedDSN.DBName = wantedDB
 	parsedDSN.ParseTime = true
 	parsedDSN.MultiStatements = true
+	parsedDSN.Timeout = 10 * time.Second
+	parsedDSN.ReadTimeout = 30 * time.Second
+	parsedDSN.WriteTimeout = 30 * time.Second
 	if parsedDSN.Params == nil {
 		parsedDSN.Params = make(map[string]string)
 	}
@@ -321,7 +325,22 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 		}
 		for key, values := range params {
 			if len(values) > 0 {
-				parsedDSN.Params[key] = values[0]
+				switch key {
+				case "timeout":
+					if duration, parseErr := time.ParseDuration(values[0]); parseErr == nil {
+						parsedDSN.Timeout = duration
+					}
+				case "readTimeout":
+					if duration, parseErr := time.ParseDuration(values[0]); parseErr == nil {
+						parsedDSN.ReadTimeout = duration
+					}
+				case "writeTimeout":
+					if duration, parseErr := time.ParseDuration(values[0]); parseErr == nil {
+						parsedDSN.WriteTimeout = duration
+					}
+				default:
+					parsedDSN.Params[key] = values[0]
+				}
 			}
 		}
 	}
@@ -330,6 +349,10 @@ func (c *mysqlConnector) ensureDB(ctx context.Context, database string) (*sql.DB
 	if err != nil {
 		return nil, fmt.Errorf("打开 MySQL 连接失败: %w", err)
 	}
+	db.SetMaxOpenConns(4)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxIdleTime(2 * time.Minute)
+	db.SetConnMaxLifetime(10 * time.Minute)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("连接 MySQL 失败: %w", err)

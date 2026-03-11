@@ -409,7 +409,15 @@ func (s *SFTPService) newClient(assetID uint) (*pkgsftp.Client, func(), error) {
 
 	client, err := pkgsftp.NewClient(sshClient)
 	if err != nil {
-		return nil, nil, fmt.Errorf("建立 SFTP 会话失败: %w", err)
+		s.pool.Remove(assetID)
+		sshClient, retryErr := s.pool.GetClient(assetID)
+		if retryErr != nil {
+			return nil, nil, fmt.Errorf("建立 SFTP 会话失败: %w", err)
+		}
+		client, err = pkgsftp.NewClient(sshClient)
+		if err != nil {
+			return nil, nil, fmt.Errorf("建立 SFTP 会话失败: %w", err)
+		}
 	}
 
 	return client, func() {

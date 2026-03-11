@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 
 	healthModel "EnvPilot/internal/health/model"
@@ -53,7 +52,7 @@ func (h *HealthHandler) CheckAsset(w http.ResponseWriter, r *http.Request) {
 		writeFail(w, http.StatusBadRequest, "无效的资产 ID")
 		return
 	}
-	result, err := h.svc.CheckAsset(context.Background(), assetID)
+	result, err := h.svc.CheckAsset(r.Context(), assetID)
 	if err != nil {
 		writeFail(w, http.StatusInternalServerError, err.Error())
 		return
@@ -67,7 +66,7 @@ func (h *HealthHandler) CheckAll(w http.ResponseWriter, r *http.Request) {
 		writeFail(w, http.StatusBadRequest, "请求格式错误")
 		return
 	}
-	result, err := h.svc.CheckAll(context.Background(), req)
+	result, err := h.svc.CheckAll(r.Context(), req)
 	if err != nil {
 		writeFail(w, http.StatusInternalServerError, err.Error())
 		return

@@ -2,6 +2,7 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -48,15 +49,16 @@ func NewPool(ar *assetRepo.AssetRepo, cs *assetSvc.CredentialService) *Pool {
 // GetClient 获取（复用或新建）SSH 客户端
 func (p *Pool) GetClient(assetID uint) (*gossh.Client, error) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if entry, ok := p.conns[assetID]; ok {
-		if p.isAlive(entry.client) {
-			entry.lastUsed = time.Now()
-			return entry.client, nil
+		entry.lastUsed = time.Now()
+		client := entry.client
+		p.mu.Unlock()
+		if p.isAlive(client) {
+			return client, nil
 		}
-		_ = entry.client.Close()
-		delete(p.conns, assetID)
+		p.Remove(assetID)
+	} else {
+		p.mu.Unlock()
 	}
 
 	client, err := p.dial(assetID)
@@ -64,6 +66,13 @@ func (p *Pool) GetClient(assetID uint) (*gossh.Client, error) {
 		return nil, err
 	}
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if entry, ok := p.conns[assetID]; ok {
+		entry.lastUsed = time.Now()
+		_ = client.Close()
+		return entry.client, nil
+	}
 	p.conns[assetID] = &poolEntry{client: client, lastUsed: time.Now()}
 	return client, nil
 }
@@ -161,8 +170,25 @@ func buildAuth(cred *assetModel.Credential, secret string) (gossh.AuthMethod, er
 
 // isAlive 通过发送 keepalive 请求探测连接是否存活
 func (p *Pool) isAlive(client *gossh.Client) bool {
-	_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
-	return err == nil
+	if client == nil {
+		return false
+	}
+
+	probeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	resultCh := make(chan error, 1)
+	go func() {
+		_, _, err := client.SendRequest("keepalive@openssh.com", true, nil)
+		resultCh <- err
+	}()
+
+	select {
+	case <-probeCtx.Done():
+		return false
+	case err := <-resultCh:
+		return err == nil
+	}
 }
 
 // cleanupLoop 定期清理超时空闲连接

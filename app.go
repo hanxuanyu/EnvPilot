@@ -78,6 +78,7 @@ func NewApp() (*App, error) {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.ConnectorAPI.SetContext(ctx)
+	a.HealthAPI.SetContext(ctx)
 	a.ExecutorAPI.SetContext(ctx)
 	logger.Info("应用窗口已就绪")
 }

@@ -10,6 +10,7 @@ import (
 )
 
 type HealthAPI struct {
+	ctx  context.Context
 	svc  *healthSvc.HealthService
 	auth *authSvc.Service
 }
@@ -23,6 +24,10 @@ func (a *HealthAPI) requireAdmin() error {
 		return nil
 	}
 	return a.auth.RequireAdmin("")
+}
+
+func (a *HealthAPI) SetContext(ctx context.Context) {
+	a.ctx = ctx
 }
 
 type ListSnapshotsReq struct {
@@ -54,7 +59,7 @@ func (a *HealthAPI) CheckAsset(assetID uint) Result[*healthModel.HealthSnapshot]
 	if err := a.requireAdmin(); err != nil {
 		return Fail[*healthModel.HealthSnapshot](err.Error())
 	}
-	result, err := a.svc.CheckAsset(context.Background(), assetID)
+	result, err := a.svc.CheckAsset(a.requestContext(), assetID)
 	if err != nil {
 		return Fail[*healthModel.HealthSnapshot](err.Error())
 	}
@@ -70,7 +75,7 @@ func (a *HealthAPI) CheckAll(req CheckAllReq) Result[*healthSvc.CheckAllResult] 
 	if err := a.requireAdmin(); err != nil {
 		return Fail[*healthSvc.CheckAllResult](err.Error())
 	}
-	result, err := a.svc.CheckAll(context.Background(), healthSvc.CheckAllRequest{
+	result, err := a.svc.CheckAll(a.requestContext(), healthSvc.CheckAllRequest{
 		EnvironmentID: req.EnvironmentID,
 		Category:      req.Category,
 	})
@@ -78,4 +83,11 @@ func (a *HealthAPI) CheckAll(req CheckAllReq) Result[*healthSvc.CheckAllResult] 
 		return Fail[*healthSvc.CheckAllResult](err.Error())
 	}
 	return OK(result)
+}
+
+func (a *HealthAPI) requestContext() context.Context {
+	if a == nil || a.ctx == nil {
+		return context.Background()
+	}
+	return a.ctx
 }
