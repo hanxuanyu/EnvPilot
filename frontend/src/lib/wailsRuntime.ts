@@ -21,6 +21,7 @@ import {
   EventsOff as _EventsOff,
   EventsOnce as _EventsOnce,
 } from '@wailsjs/runtime/runtime'
+import { subscribeWailsBridgeStatus } from '@/lib/wailsBridge'
 
 // ── 环境检测 ──────────────────────────────────────────────────────
 
@@ -35,6 +36,48 @@ export const isWailsGo = (): boolean =>
 /** 当前是否处于某种 Wails 运行环境（桥接或 Go 绑定任意一个存在） */
 export const isWailsEnv = (): boolean => isWailsBridge() || isWailsGo()
 
+const persistentEventRegistry = new Map<string, Set<(...data: any[]) => void>>()
+let registryRecoveryHookInstalled = false
+
+function rememberPersistentEvent(eventName: string, callback: (...data: any[]) => void) {
+  const callbacks = persistentEventRegistry.get(eventName) ?? new Set<(...data: any[]) => void>()
+  callbacks.add(callback)
+  persistentEventRegistry.set(eventName, callbacks)
+}
+
+function forgetPersistentEvents(eventNames: string[]) {
+  eventNames.forEach((eventName) => {
+    persistentEventRegistry.delete(eventName)
+  })
+}
+
+function rebindPersistentEvents() {
+  if (!isWailsBridge()) return
+
+  for (const eventName of persistentEventRegistry.keys()) {
+    _EventsOff(eventName)
+  }
+
+  for (const [eventName, callbacks] of persistentEventRegistry.entries()) {
+    callbacks.forEach((callback) => {
+      _EventsOn(eventName, callback)
+    })
+  }
+}
+
+function ensureRegistryRecoveryHook() {
+  if (registryRecoveryHookInstalled || typeof window === 'undefined') return
+  registryRecoveryHookInstalled = true
+
+  subscribeWailsBridgeStatus((detail) => {
+    if (detail.status === 'healthy') {
+      rebindPersistentEvents()
+    }
+  })
+}
+
+ensureRegistryRecoveryHook()
+
 // ── 浏览器安全的事件 API ──────────────────────────────────────────
 
 /**
@@ -45,6 +88,7 @@ export const EventsOn = (
   eventName: string,
   callback: (...data: any[]) => void,
 ): void => {
+  rememberPersistentEvent(eventName, callback)
   if (isWailsBridge()) _EventsOn(eventName, callback)
 }
 
@@ -53,6 +97,7 @@ export const EventsOn = (
  * 在浏览器模式下静默忽略。
  */
 export const EventsOff = (eventName: string, ...additionalEventNames: string[]): void => {
+  forgetPersistentEvents([eventName, ...additionalEventNames])
   if (isWailsBridge()) _EventsOff(eventName, ...additionalEventNames)
 }
 

@@ -6,6 +6,8 @@ import { AuthProvider, ProtectedPage } from '@/components/common/AuthProvider'
 import { Layout } from '@/components/common/Layout'
 import { useWailsReady } from '@/hooks/useWailsReady'
 import { IS_SERVER_MODE } from '@/lib/apiClient'
+import { probeWailsBridge } from '@/lib/wailsBridge'
+import { EventsOff, EventsOn } from '@/lib/wailsRuntime'
 import { getDesktopLaunchContext } from '@/services/backendService'
 import { ThemeProvider, useTheme } from '@/lib/theme'
 
@@ -85,6 +87,21 @@ function AppShell() {
   const wailsReady = useWailsReady()
   const Router = IS_SERVER_MODE ? BrowserRouter : HashRouter
   const { resolvedTheme } = useTheme()
+
+  useEffect(() => {
+    if (IS_SERVER_MODE) return
+
+    const handleResume = () => {
+      void probeWailsBridge('host-resume')
+    }
+
+    EventsOn('host:resume', handleResume)
+    void probeWailsBridge('app-shell-mounted')
+
+    return () => {
+      EventsOff('host:resume')
+    }
+  }, [])
 
   return (
     <Router>

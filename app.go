@@ -88,6 +88,21 @@ func (a *App) domReady(ctx context.Context) {
 	wailsruntime.EventsEmit(ctx, "backend:ready")
 }
 
+func (a *App) handleSuspend() {
+	logger.Info("Windows 进入挂起/低功耗，前后端桥接可能暂时不可用")
+	if a.ctx != nil {
+		wailsruntime.EventsEmit(a.ctx, "host:suspend")
+	}
+}
+
+func (a *App) handleResume() {
+	logger.Info("Windows 已恢复，通知前端重新探测桥接状态")
+	if a.ctx != nil {
+		wailsruntime.EventsEmit(a.ctx, "host:resume")
+		wailsruntime.EventsEmit(a.ctx, "backend:ready")
+	}
+}
+
 func (a *App) shutdown(ctx context.Context) {
 	logger.Info("EnvPilot 正在关闭，清理资源...")
 	a.container.Cleanup()

@@ -52,6 +52,8 @@ func main() {
 			WebviewIsTransparent: false,
 			WindowIsTranslucent:  false,
 			DisableWindowIcon:    false,
+			OnSuspend:            app.handleSuspend,
+			OnResume:             app.handleResume,
 		},
 	})
 
