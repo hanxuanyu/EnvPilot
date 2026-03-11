@@ -34,10 +34,28 @@ jobs:
       - name: Run core Go tests
         run: make test-core
 
+  server-release-stage:
+    name: Server Release Stage
+    runs-on: ubuntu-latest
+    needs: verify-core-tests
+
+    steps:
+      - name: Enter server release stage
+        run: echo "Server release stage is ready"
+
+  desktop-release-stage:
+    name: Desktop Release Stage
+    runs-on: ubuntu-latest
+    needs: verify-core-tests
+
+    steps:
+      - name: Enter desktop release stage
+        run: echo "Desktop release stage is ready"
+
   build-server-linux:
     name: Build Linux Server ${{ matrix.arch }}
     runs-on: ubuntu-latest
-    needs: verify-core-tests
+    needs: server-release-stage
     strategy:
       fail-fast: false
       matrix:
@@ -98,7 +116,7 @@ jobs:
   build-server-windows:
     name: Build Windows Server amd64
     runs-on: ubuntu-latest
-    needs: verify-core-tests
+    needs: server-release-stage
 
     steps:
       - name: Checkout repository
@@ -148,7 +166,7 @@ jobs:
   build-desktop-macos:
     name: Build macOS Desktop Universal
     runs-on: macos-latest
-    needs: verify-core-tests
+    needs: desktop-release-stage
 
     steps:
       - name: Checkout repository
@@ -208,7 +226,7 @@ jobs:
   build-desktop-windows:
     name: Build Windows Desktop ${{ matrix.arch }}
     runs-on: windows-latest
-    needs: verify-core-tests
+    needs: desktop-release-stage
     strategy:
       fail-fast: false
       matrix:
@@ -290,14 +308,34 @@ jobs:
           path: release/*
           if-no-files-found: error
 
-  publish-release:
-    name: Publish GitHub Release
+  server-release-ready:
+    name: Server Release Ready
     runs-on: ubuntu-latest
     needs:
       - build-server-linux
       - build-server-windows
+
+    steps:
+      - name: Confirm server artifacts completed
+        run: echo "Server artifacts are ready"
+
+  desktop-release-ready:
+    name: Desktop Release Ready
+    runs-on: ubuntu-latest
+    needs:
       - build-desktop-macos
       - build-desktop-windows
+
+    steps:
+      - name: Confirm desktop artifacts completed
+        run: echo "Desktop artifacts are ready"
+
+  publish-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - server-release-ready
+      - desktop-release-ready
 
     steps:
       - name: Download build artifacts
