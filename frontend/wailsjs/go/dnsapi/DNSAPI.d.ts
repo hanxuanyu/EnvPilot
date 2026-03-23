@@ -10,7 +10,7 @@ export function GetRecordByAssetID(arg1:number):Promise<dnsapi.Result_EnvPilot_i
 
 export function GetStatus():Promise<dnsapi.Result_EnvPilot_internal_dns_service_RuntimeStatus_>;
 
-export function ListQueryLogs(arg1:dnsapi.ListDNSQueryLogsReq):Promise<dnsapi.Result_EnvPilot_internal_dns_service_ListQueryLogsResult_>;
+export function ListQueryLogs(arg1:dnsapi.ListDNSQueryLogsReq):Promise<dnsapi.Result_EnvPilot_internal_dns_service_ListQuerySummariesResult_>;
 
 export function ListRecords(arg1:dnsapi.ListDNSRecordsReq):Promise<dnsapi.Result___EnvPilot_internal_dns_model_DNSRecord_>;
 

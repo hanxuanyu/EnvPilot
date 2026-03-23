@@ -1772,6 +1772,7 @@ export namespace dnsapi {
 	    asset_id?: number;
 	    domain: string;
 	    record_type: string;
+	    match_mode: string;
 	    value: string;
 	    ttl: number;
 	    enabled: boolean;
@@ -1786,6 +1787,7 @@ export namespace dnsapi {
 	        this.asset_id = source["asset_id"];
 	        this.domain = source["domain"];
 	        this.record_type = source["record_type"];
+	        this.match_mode = source["match_mode"];
 	        this.value = source["value"];
 	        this.ttl = source["ttl"];
 	        this.enabled = source["enabled"];
@@ -1861,19 +1863,19 @@ export namespace dnsapi {
 		    return a;
 		}
 	}
-	export class Result__EnvPilot_internal_dns_service_ListQueryLogsResult_ {
+	export class Result__EnvPilot_internal_dns_service_ListQuerySummariesResult_ {
 	    success: boolean;
-	    data?: service.ListQueryLogsResult;
+	    data?: service.ListQuerySummariesResult;
 	    message?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Result__EnvPilot_internal_dns_service_ListQueryLogsResult_(source);
+	        return new Result__EnvPilot_internal_dns_service_ListQuerySummariesResult_(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.success = source["success"];
-	        this.data = this.convertValues(source["data"], service.ListQueryLogsResult);
+	        this.data = this.convertValues(source["data"], service.ListQuerySummariesResult);
 	        this.message = source["message"];
 	    }
 	
@@ -1984,6 +1986,7 @@ export namespace dnsapi {
 	    asset_id?: number;
 	    domain: string;
 	    record_type: string;
+	    match_mode: string;
 	    value: string;
 	    ttl: number;
 	    enabled: boolean;
@@ -1998,6 +2001,7 @@ export namespace dnsapi {
 	        this.asset_id = source["asset_id"];
 	        this.domain = source["domain"];
 	        this.record_type = source["record_type"];
+	        this.match_mode = source["match_mode"];
 	        this.value = source["value"];
 	        this.ttl = source["ttl"];
 	        this.enabled = source["enabled"];
@@ -2951,6 +2955,13 @@ export namespace model {
 	    }
 	}
 	export class DatabaseSection {
+	    driver: string;
+	    host: string;
+	    port: number;
+	    username: string;
+	    password: string;
+	    dbname: string;
+	    params: string;
 	    filename: string;
 	    max_idle_conns: number;
 	    max_open_conns: number;
@@ -2961,6 +2972,13 @@ export namespace model {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.driver = source["driver"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.dbname = source["dbname"];
+	        this.params = source["params"];
 	        this.filename = source["filename"];
 	        this.max_idle_conns = source["max_idle_conns"];
 	        this.max_open_conns = source["max_open_conns"];
@@ -3344,40 +3362,48 @@ export namespace model {
 		}
 	}
 	
-	export class DNSQueryLog {
+	export class DNSQuerySummary {
 	    id: number;
-	    environment_id?: number;
 	    domain: string;
 	    question_type: string;
-	    response_code: string;
-	    answer_summary: string;
 	    source: string;
-	    hit_local: boolean;
-	    upstream_used: boolean;
-	    client_ip: string;
-	    duration_ms: number;
+	    environment_id?: number;
+	    total_count: number;
+	    last_response_code: string;
+	    last_answer_summary: string;
+	    last_hit_local: boolean;
+	    last_upstream_used: boolean;
+	    last_client_ip: string;
+	    last_duration_ms: number;
 	    // Go type: time
-	    queried_at: any;
+	    last_queried_at: any;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
 	    environment?: Environment;
 	
 	    static createFrom(source: any = {}) {
-	        return new DNSQueryLog(source);
+	        return new DNSQuerySummary(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
-	        this.environment_id = source["environment_id"];
 	        this.domain = source["domain"];
 	        this.question_type = source["question_type"];
-	        this.response_code = source["response_code"];
-	        this.answer_summary = source["answer_summary"];
 	        this.source = source["source"];
-	        this.hit_local = source["hit_local"];
-	        this.upstream_used = source["upstream_used"];
-	        this.client_ip = source["client_ip"];
-	        this.duration_ms = source["duration_ms"];
-	        this.queried_at = this.convertValues(source["queried_at"], null);
+	        this.environment_id = source["environment_id"];
+	        this.total_count = source["total_count"];
+	        this.last_response_code = source["last_response_code"];
+	        this.last_answer_summary = source["last_answer_summary"];
+	        this.last_hit_local = source["last_hit_local"];
+	        this.last_upstream_used = source["last_upstream_used"];
+	        this.last_client_ip = source["last_client_ip"];
+	        this.last_duration_ms = source["last_duration_ms"];
+	        this.last_queried_at = this.convertValues(source["last_queried_at"], null);
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.environment = this.convertValues(source["environment"], Environment);
 	    }
 	
@@ -3405,6 +3431,7 @@ export namespace model {
 	    asset_id?: number;
 	    domain: string;
 	    record_type: string;
+	    match_mode: string;
 	    value: string;
 	    ttl: number;
 	    enabled: boolean;
@@ -3426,6 +3453,7 @@ export namespace model {
 	        this.asset_id = source["asset_id"];
 	        this.domain = source["domain"];
 	        this.record_type = source["record_type"];
+	        this.match_mode = source["match_mode"];
 	        this.value = source["value"];
 	        this.ttl = source["ttl"];
 	        this.enabled = source["enabled"];
@@ -3938,17 +3966,17 @@ export namespace service {
 	    }
 	}
 	
-	export class ListQueryLogsResult {
-	    items: model.DNSQueryLog[];
+	export class ListQuerySummariesResult {
+	    items: model.DNSQuerySummary[];
 	    total: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new ListQueryLogsResult(source);
+	        return new ListQuerySummariesResult(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.items = this.convertValues(source["items"], model.DNSQueryLog);
+	        this.items = this.convertValues(source["items"], model.DNSQuerySummary);
 	        this.total = source["total"];
 	    }
 	

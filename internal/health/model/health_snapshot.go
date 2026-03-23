@@ -30,15 +30,23 @@ func (m Metrics) Value() (driver.Value, error) {
 }
 
 func (m *Metrics) Scan(value interface{}) error {
-	s, ok := value.(string)
-	if !ok {
-		return fmt.Errorf("Metrics.Scan: 期望 string，实际 %T", value)
+	var data []byte
+	switch v := value.(type) {
+	case string:
+		data = []byte(v)
+	case []byte:
+		data = v
+	case nil:
+		*m = make(Metrics)
+		return nil
+	default:
+		return fmt.Errorf("Metrics.Scan: 不支持的类型 %T", value)
 	}
-	if s == "" || s == "null" {
+	if len(data) == 0 || string(data) == "null" {
 		*m = make(Metrics)
 		return nil
 	}
-	return json.Unmarshal([]byte(s), m)
+	return json.Unmarshal(data, m)
 }
 
 type HealthSnapshot struct {
@@ -49,7 +57,7 @@ type HealthSnapshot struct {
 	CheckType     string       `gorm:"size:50;not null;index" json:"check_type"`
 	LatencyMS     int64        `gorm:"not null;default:0" json:"latency_ms"`
 	Detail        string       `gorm:"size:500" json:"detail"`
-	Metrics       Metrics      `gorm:"type:text;default:'{}'" json:"metrics"`
+	Metrics       Metrics      `gorm:"type:text" json:"metrics"`
 	CheckedAt     time.Time    `gorm:"not null;index" json:"checked_at"`
 	CreatedAt     time.Time    `json:"created_at"`
 

@@ -164,6 +164,26 @@ func validate(cfg *model.AppConfig) error {
 		return fmt.Errorf("log.level 无效值: %s（有效值：debug/info/warn/error）", cfg.Log.Level)
 	}
 
+	// 数据库驱动校验
+	switch cfg.Database.Driver {
+	case "mysql":
+		if cfg.Database.Host == "" {
+			return errors.New("database.host 使用 mysql 驱动时不能为空")
+		}
+		if cfg.Database.Port <= 0 {
+			return errors.New("database.port 使用 mysql 驱动时必须大于 0")
+		}
+		if cfg.Database.DBName == "" {
+			return errors.New("database.dbname 使用 mysql 驱动时不能为空")
+		}
+	case "sqlite":
+		if cfg.Database.Filename == "" {
+			return errors.New("database.filename 使用 sqlite 驱动时不能为空")
+		}
+	default:
+		return fmt.Errorf("database.driver 无效值: %s（有效值：mysql / sqlite）", cfg.Database.Driver)
+	}
+
 	if cfg.Health.CheckInterval < 0 {
 		return errors.New("health.check_interval 不能为负数")
 	}
@@ -215,6 +235,24 @@ func applyDefaults(cfg *model.AppConfig) {
 	}
 
 	// Database
+	if cfg.Database.Driver == "" {
+		cfg.Database.Driver = d.Database.Driver
+	}
+	if cfg.Database.Host == "" {
+		cfg.Database.Host = d.Database.Host
+	}
+	if cfg.Database.Port <= 0 {
+		cfg.Database.Port = d.Database.Port
+	}
+	if cfg.Database.Username == "" {
+		cfg.Database.Username = d.Database.Username
+	}
+	if cfg.Database.DBName == "" {
+		cfg.Database.DBName = d.Database.DBName
+	}
+	if cfg.Database.Params == "" {
+		cfg.Database.Params = d.Database.Params
+	}
 	if cfg.Database.Filename == "" {
 		cfg.Database.Filename = d.Database.Filename
 	}

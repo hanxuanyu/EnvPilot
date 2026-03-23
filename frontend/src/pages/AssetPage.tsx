@@ -946,6 +946,7 @@ export default function AssetPage() {
         credentials={credentials}
         plugins={plugins}
         onClose={() => setShowAssetForm(false)}
+        onCredentialCreated={async () => { await loadCredentials() }}
         onSave={async (data) => {
           try {
             if (editingAsset) {
@@ -990,7 +991,7 @@ export default function AssetPage() {
 
 // ── 资产表单弹窗 ──
 
-function AssetFormModal({ open, asset, environments, credentials, plugins, onClose, onSave }: {
+function AssetFormModal({ open, asset, environments, credentials, plugins, onClose, onSave, onCredentialCreated }: {
   open: boolean
   asset: Asset | null
   environments: Environment[]
@@ -998,6 +999,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   plugins: PluginDef[]
   onClose: () => void
   onSave: (data: any) => Promise<void>
+  onCredentialCreated?: (id: number) => void
 }) {
   const [envId, setEnvId] = useState<string>('')
   const [category, setCategory] = useState<AssetCategory>('server')
@@ -1014,6 +1016,14 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   const [linkedDNSRecord, setLinkedDNSRecord] = useState<DNSRecord | null>(null)
   const [dnsLoading, setDnsLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // 内联创建凭据
+  const [showInlineCredForm, setShowInlineCredForm] = useState(false)
+  const [inlineCredSaving, setInlineCredSaving] = useState(false)
+  const [inlineCredName, setInlineCredName] = useState('')
+  const [inlineCredType, setInlineCredType] = useState<CredentialType>('password')
+  const [inlineCredUsername, setInlineCredUsername] = useState('')
+  const [inlineCredSecret, setInlineCredSecret] = useState('')
 
   // 当前选中的插件定义
   const selectedPlugin = plugins.find(p => p.type_id === pluginType)
@@ -1137,7 +1147,50 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
     })
   }
 
-  const handleSubmit = async () => {
+  const openInlineCredForm = () => {
+    const supportedTypes = selectedPlugin?.credential_types ?? []
+    setInlineCredName('')
+    setInlineCredType(supportedTypes.length > 0 ? supportedTypes[0] : 'password')
+    setInlineCredUsername('')
+    setInlineCredSecret('')
+    setShowInlineCredForm(true)
+  }
+
+  const handleInlineCredSubmit = async () => {
+    if (!inlineCredName.trim()) { toast.warning('凭据名称不能为空'); return }
+    if (!inlineCredSecret) { toast.warning('密钥/密码不能为空'); return }
+    setInlineCredSaving(true)
+    try {
+      const created = await credentialService.create({
+        name: inlineCredName.trim(),
+        type: inlineCredType,
+        username: inlineCredUsername,
+        secret: inlineCredSecret,
+      })
+      toast.success(`凭据「${created.name}」已创建`)
+      setShowInlineCredForm(false)
+      onCredentialCreated?.(created.id)
+      setCredId(created.id.toString())
+    } catch (error: any) {
+      toast.error('创建凭据失败', { description: error.message })
+    } finally {
+      setInlineCredSaving(false)
+    }
+  }
+
+  const inlineCredNeedsIdentity = inlineCredType === 'password' || inlineCredType === 'access_key_secret' || inlineCredType === 'sasl'
+  const inlineCredSecretLabel = (() => {
+    switch (inlineCredType) {
+      case 'ssh_key': return 'SSH 私钥'
+      case 'token': return 'Token / 密钥'
+      case 'access_key_secret': return 'SecretKey'
+      case 'sasl': return 'SASL 密钥'
+      default: return '密码'
+    }
+  })()
+  const inlineCredSupportedTypes = selectedPlugin?.credential_types ?? []
+
+  const handleAssetSubmit = async () => {
     if (!name.trim()) { toast.warning('资产名称不能为空'); return }
     if (!envId) { toast.warning('请选择环境'); return }
     if (!pluginType) { toast.warning('请选择资产类型'); return }
@@ -1165,6 +1218,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={onClose}
@@ -1172,7 +1226,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       footer={
         <>
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={handleSubmit} loading={saving}>保存</Button>
+          <Button onClick={handleAssetSubmit} loading={saving}>保存</Button>
         </>
       }
     >
@@ -1270,23 +1324,31 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
         </div>
 
         <FormField label="凭据">
-          <Select
-            value={credId || '__none__'}
-            onValueChange={v => setCredId(v === '__none__' ? '' : v)}
-          >
-            <SelectTrigger><SelectValue placeholder="不绑定凭据" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">不绑定凭据</SelectItem>
-              {compatibleCredentials.map(c => (
-                <SelectItem key={c.id} value={c.id.toString()}>
-                  <span className="flex items-center gap-2">
-                    <KeyRound className="w-3 h-3" />
-                    {c.name} · {CREDENTIAL_TYPE_LABELS[c.type]}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <Select
+                value={credId || '__none__'}
+                onValueChange={v => setCredId(v === '__none__' ? '' : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="不绑定凭据" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">不绑定凭据</SelectItem>
+                  {compatibleCredentials.map(c => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      <span className="flex items-center gap-2">
+                        <KeyRound className="w-3 h-3" />
+                        {c.name} · {CREDENTIAL_TYPE_LABELS[c.type]}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" onClick={openInlineCredForm} className="shrink-0">
+              <Plus className="h-3.5 w-3.5" />
+              新建
+            </Button>
+          </div>
           {selectedPlugin && (
             <p className="mt-1 text-xs text-muted-foreground">
               {selectedPlugin.credential_required ? '当前插件要求绑定凭据。' : '当前插件可选绑定凭据。'}
@@ -1426,10 +1488,92 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
 
       </div>
     </Modal>
+
+    {/* 内联创建凭据弹窗 */}
+    <Modal
+      open={showInlineCredForm}
+      onClose={() => setShowInlineCredForm(false)}
+      title="新建凭据"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => setShowInlineCredForm(false)}>取消</Button>
+          <Button onClick={handleInlineCredSubmit} loading={inlineCredSaving}>创建</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormField label="凭据名称" required>
+          <Input
+            value={inlineCredName}
+            onChange={e => setInlineCredName(e.target.value)}
+            placeholder="例如：生产服务器 root"
+          />
+        </FormField>
+        <FormField label="类型" required>
+          <Select value={inlineCredType} onValueChange={v => setInlineCredType(v as CredentialType)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(inlineCredSupportedTypes.length > 0
+                ? [
+                    { value: 'password', label: '用户名 + 密码' },
+                    { value: 'ssh_key', label: 'SSH 私钥' },
+                    { value: 'token', label: 'Token / 访问密钥' },
+                    { value: 'access_key_secret', label: 'AccessKey + SecretKey' },
+                    { value: 'sasl', label: 'SASL 用户名 + 密钥' },
+                  ].filter(item => inlineCredSupportedTypes.includes(item.value as CredentialType))
+                : [
+                    { value: 'password', label: '用户名 + 密码' },
+                    { value: 'ssh_key', label: 'SSH 私钥' },
+                    { value: 'token', label: 'Token / 访问密钥' },
+                    { value: 'access_key_secret', label: 'AccessKey + SecretKey' },
+                    { value: 'sasl', label: 'SASL 用户名 + 密钥' },
+                  ]
+              ).map(item => (
+                <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+        {inlineCredNeedsIdentity && (
+          <FormField label="用户名">
+            <Input
+              value={inlineCredUsername}
+              onChange={e => setInlineCredUsername(e.target.value)}
+              placeholder={inlineCredType === 'access_key_secret' ? 'AccessKey' : inlineCredType === 'sasl' ? 'SASL 用户名' : 'root / admin'}
+            />
+          </FormField>
+        )}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium">
+            {inlineCredSecretLabel}
+            <span className="text-destructive ml-0.5">*</span>
+          </Label>
+          <Textarea
+            value={inlineCredSecret}
+            onChange={e => setInlineCredSecret(e.target.value)}
+            placeholder={
+              inlineCredType === 'ssh_key'
+                ? '-----BEGIN RSA PRIVATE KEY-----\n...'
+                : inlineCredType === 'token'
+                  ? 'token-xxxx'
+                  : inlineCredType === 'access_key_secret'
+                    ? 'SecretKey'
+                    : inlineCredType === 'sasl'
+                      ? 'SASL password or secret'
+                      : '••••••••'
+            }
+            rows={inlineCredType === 'ssh_key' ? 5 : 1}
+            className="font-mono"
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          密钥使用 AES-256-GCM 加密存储，展示时自动脱敏
+        </p>
+      </div>
+    </Modal>
+    </>
   )
 }
-
-// ── 凭据表单弹窗 ──
 
 function CredFormModal({ open, cred, onClose, onSave }: {
   open: boolean

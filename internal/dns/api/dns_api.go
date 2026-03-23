@@ -59,6 +59,7 @@ type CreateDNSRecordReq struct {
 	AssetID       *uint            `json:"asset_id"`
 	Domain        string           `json:"domain"`
 	RecordType    model.RecordType `json:"record_type"`
+	MatchMode     model.MatchMode  `json:"match_mode"`
 	Value         string           `json:"value"`
 	TTL           int              `json:"ttl"`
 	Enabled       bool             `json:"enabled"`
@@ -68,7 +69,16 @@ func (a *DNSAPI) CreateRecord(req CreateDNSRecordReq) Result[*model.DNSRecord] {
 	if err := a.requireAdmin(); err != nil {
 		return Fail[*model.DNSRecord](err.Error())
 	}
-	record, err := a.svc.Create(service.CreateDNSRecordRequest(req))
+	record, err := a.svc.Create(service.CreateDNSRecordRequest{
+		EnvironmentID: req.EnvironmentID,
+		AssetID:       req.AssetID,
+		Domain:        req.Domain,
+		RecordType:    req.RecordType,
+		MatchMode:     req.MatchMode,
+		Value:         req.Value,
+		TTL:           req.TTL,
+		Enabled:       req.Enabled,
+	})
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())
 	}
@@ -80,6 +90,7 @@ type UpdateDNSRecordReq struct {
 	AssetID    *uint            `json:"asset_id"`
 	Domain     string           `json:"domain"`
 	RecordType model.RecordType `json:"record_type"`
+	MatchMode  model.MatchMode  `json:"match_mode"`
 	Value      string           `json:"value"`
 	TTL        int              `json:"ttl"`
 	Enabled    bool             `json:"enabled"`
@@ -89,7 +100,16 @@ func (a *DNSAPI) UpdateRecord(req UpdateDNSRecordReq) Result[*model.DNSRecord] {
 	if err := a.requireAdmin(); err != nil {
 		return Fail[*model.DNSRecord](err.Error())
 	}
-	record, err := a.svc.Update(service.UpdateDNSRecordRequest(req))
+	record, err := a.svc.Update(service.UpdateDNSRecordRequest{
+		ID:         req.ID,
+		AssetID:    req.AssetID,
+		Domain:     req.Domain,
+		RecordType: req.RecordType,
+		MatchMode:  req.MatchMode,
+		Value:      req.Value,
+		TTL:        req.TTL,
+		Enabled:    req.Enabled,
+	})
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())
 	}
@@ -125,10 +145,10 @@ type ListDNSQueryLogsReq struct {
 	Offset        int    `json:"offset"`
 }
 
-func (a *DNSAPI) ListQueryLogs(req ListDNSQueryLogsReq) Result[*service.ListQueryLogsResult] {
+func (a *DNSAPI) ListQueryLogs(req ListDNSQueryLogsReq) Result[*service.ListQuerySummariesResult] {
 	result, err := a.svc.ListQueryLogs(service.ListQueryLogsRequest(req))
 	if err != nil {
-		return Fail[*service.ListQueryLogsResult](err.Error())
+		return Fail[*service.ListQuerySummariesResult](err.Error())
 	}
 	return OK(result)
 }

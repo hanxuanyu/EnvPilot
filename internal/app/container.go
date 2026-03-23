@@ -144,17 +144,24 @@ func Bootstrap() (*Container, error) {
 	)
 
 	// ── 3. 数据库 ─────────────────────────────────────────────────
-	dbPath := filepath.Join(cfg.App.DataDir, cfg.Database.Filename)
-	db, err := database.NewDB(database.Config{
-		FilePath:     dbPath,
+	dbCfg := database.Config{
+		Driver:       cfg.Database.Driver,
+		FilePath:     filepath.Join(cfg.App.DataDir, cfg.Database.Filename),
+		Host:         cfg.Database.Host,
+		Port:         cfg.Database.Port,
+		Username:     cfg.Database.Username,
+		Password:     cfg.Database.Password,
+		DBName:       cfg.Database.DBName,
+		Params:       cfg.Database.Params,
 		MaxIdleConns: cfg.Database.MaxIdleConns,
 		MaxOpenConns: cfg.Database.MaxOpenConns,
 		LogLevel:     "warn",
-	})
+	}
+	db, err := database.NewDB(dbCfg)
 	if err != nil {
 		return nil, fmt.Errorf("数据库初始化失败: %w", err)
 	}
-	logger.Info("数据库连接成功", zap.String("path", dbPath))
+	logger.Info("数据库连接成功", zap.String("driver", cfg.Database.Driver), zap.String("dsn", database.DSNDisplay(dbCfg)))
 
 	// ── 4. 迁移 ───────────────────────────────────────────────────
 	if err := migration.NewMigrator(db).Run(); err != nil {
@@ -187,8 +194,8 @@ func Bootstrap() (*Container, error) {
 	envSvc := assetSvc.NewEnvironmentService(envRepo)
 	grpSvc := assetSvc.NewGroupService(grpRepo, envRepo)
 	dnsRepoInst := dnsRepo.NewDNSRepo(db)
-	dnsQueryLogRepoInst := dnsRepo.NewDNSQueryLogRepo(db)
-	dnsSvcInst := dnsSvc.NewDNSService(dnsRepoInst, dnsQueryLogRepoInst, envRepo, sharedAssetRepo, auditSvcInst)
+	dnsQuerySummaryRepoInst := dnsRepo.NewDNSQuerySummaryRepo(db)
+	dnsSvcInst := dnsSvc.NewDNSService(dnsRepoInst, dnsQuerySummaryRepoInst, envRepo, sharedAssetRepo, auditSvcInst)
 	healthRepoInst := healthRepo.NewHealthRepo(db)
 	dnsRuntime := dnsSvc.NewServerRuntime(cfg.DNS, dnsSvcInst)
 	dnsSvcInst.AttachRuntime(dnsRuntime)

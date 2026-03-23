@@ -19,6 +19,7 @@ require (
 	golang.org/x/crypto v0.41.0
 	gopkg.in/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v3 v3.0.1
+	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.1
 )
 

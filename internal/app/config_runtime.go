@@ -54,8 +54,15 @@ func (a *configRuntimeApplier) ApplyConfig(prev, next *configModel.AppConfig) (*
 	if prev.App.DataDir != next.App.DataDir {
 		result.RestartRequired = appendUnique(result.RestartRequired, "app.data_dir")
 	}
-	if prev.Database.Filename != next.Database.Filename {
-		result.RestartRequired = appendUnique(result.RestartRequired, "database.filename")
+	if prev.Database.Filename != next.Database.Filename ||
+		prev.Database.Driver != next.Database.Driver ||
+		prev.Database.Host != next.Database.Host ||
+		prev.Database.Port != next.Database.Port ||
+		prev.Database.Username != next.Database.Username ||
+		prev.Database.Password != next.Database.Password ||
+		prev.Database.DBName != next.Database.DBName ||
+		prev.Database.Params != next.Database.Params {
+		result.RestartRequired = appendUnique(result.RestartRequired, "database")
 	}
 	if prev.Security.SaltFile != next.Security.SaltFile {
 		result.RestartRequired = appendUnique(result.RestartRequired, "security.salt_file")

@@ -21,13 +21,13 @@ function normalizeRecordList(value: unknown): DNSRecord[] {
 	return Array.isArray(value) ? value as DNSRecord[] : []
 }
 
-function normalizeLogResult(value: unknown): ListDNSQueryLogsResult {
+function normalizeSummaryResult(value: unknown): ListDNSQueryLogsResult {
 	if (!value || typeof value !== 'object') {
 		return { items: [], total: 0 }
 	}
 	const result = value as Partial<ListDNSQueryLogsResult>
 	return {
-		items: Array.isArray(result.items) ? result.items as any[] as DNSRecord[] as never : [],
+		items: Array.isArray(result.items) ? result.items : [],
 		total: typeof result.total === 'number' ? result.total : 0,
 	}
 }
@@ -85,10 +85,10 @@ export const dnsService = {
 	},
 	listQueryLogs: async (req: ListDNSQueryLogsReq = {}) => {
 		if (IS_SERVER_MODE) {
-			return normalizeLogResult(await http.get<ListDNSQueryLogsResult>('/api/dns/logs', req as any))
+			return normalizeSummaryResult(await http.get<ListDNSQueryLogsResult>('/api/dns/logs', req as any))
 		}
 		const result = await getDesktopAPI().ListQueryLogs(req)
-		return normalizeLogResult(unwrapResult(result as any))
+		return normalizeSummaryResult(unwrapResult(result as any))
 	},
 	getStatus: async () => {
 		if (IS_SERVER_MODE) {

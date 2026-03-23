@@ -18,9 +18,10 @@ import type { Asset, Environment } from '@/types/asset'
 import type {
   CreateDNSRecordReq,
   DNSRecord,
-  DNSQueryLog,
+  DNSQuerySummary,
   DNSRuntimeStatus,
   DNSRecordType,
+  DNSMatchMode,
   UpdateDNSRecordReq,
 } from '@/types/dns'
 
@@ -34,6 +35,7 @@ interface FormState {
   asset_id?: number
   domain: string
   record_type: DNSRecordType
+  match_mode: DNSMatchMode
   value: string
   ttl: number
   enabled: boolean
@@ -43,6 +45,7 @@ const EMPTY_FORM: FormState = {
   environment_id: 0,
   domain: '',
   record_type: 'A',
+  match_mode: 'exact',
   value: '',
   ttl: 300,
   enabled: true,
@@ -125,7 +128,7 @@ export default function DnsPage() {
   const [environments, setEnvironments] = useState<Environment[]>([])
   const [assets, setAssets] = useState<Asset[]>([])
   const [runtimeStatus, setRuntimeStatus] = useState<DNSRuntimeStatus | null>(null)
-  const [queryLogs, setQueryLogs] = useState<DNSQueryLog[]>([])
+  const [queryLogs, setQueryLogs] = useState<DNSQuerySummary[]>([])
   const [queryLogTotal, setQueryLogTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [statusLoading, setStatusLoading] = useState(false)
@@ -296,6 +299,7 @@ export default function DnsPage() {
       asset_id: record.asset_id,
       domain: record.domain,
       record_type: record.record_type,
+      match_mode: record.match_mode || 'exact',
       value: record.value,
       ttl: record.ttl,
       enabled: record.enabled,
@@ -335,6 +339,7 @@ export default function DnsPage() {
           asset_id: targetMode === 'asset' ? form.asset_id : undefined,
           domain: form.domain,
           record_type: form.record_type,
+          match_mode: form.match_mode,
           value: targetMode === 'asset' ? '' : form.value,
           ttl: Number(form.ttl),
           enabled: form.enabled,
@@ -347,6 +352,7 @@ export default function DnsPage() {
           asset_id: targetMode === 'asset' ? form.asset_id : undefined,
           domain: form.domain,
           record_type: form.record_type,
+          match_mode: form.match_mode,
           value: targetMode === 'asset' ? '' : form.value,
           ttl: Number(form.ttl),
           enabled: form.enabled,
@@ -428,7 +434,7 @@ export default function DnsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">DNS 管理</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            维护环境隔离的 A / CNAME 记录。A 记录支持直接绑定资产并自动使用资产 host。
+            维护环境隔离的 A / CNAME 记录，支持精确匹配、通配符和正则表达式。A 记录支持直接绑定资产并自动使用资产 host。
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -534,7 +540,7 @@ export default function DnsPage() {
           <table className="min-w-[980px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
-                {['域名', '环境', '类型', '目标值', 'TTL', '状态', ...(!isReadOnly ? ['操作'] : [])].map((header) => (
+                {['域名', '环境', '类型', '匹配模式', '目标值', 'TTL', '状态', ...(!isReadOnly ? ['操作'] : [])].map((header) => (
                   <th key={header} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{header}</th>
                 ))}
               </tr>
@@ -542,7 +548,7 @@ export default function DnsPage() {
             <tbody>
               {records.length === 0 ? (
                 <tr>
-                    <td colSpan={isReadOnly ? 6 : 7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                    <td colSpan={isReadOnly ? 7 : 8} className="px-4 py-16 text-center text-sm text-muted-foreground">
                     还没有 DNS 记录，点击「新增记录」开始维护。
                   </td>
                 </tr>
@@ -565,6 +571,11 @@ export default function DnsPage() {
                   <td className="px-4 py-3 text-muted-foreground">{record.environment?.name || '—'}</td>
                   <td className="px-4 py-3">
                     <Badge variant="outline">{record.record_type}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge variant={record.match_mode === 'exact' ? 'outline' : 'secondary'}>
+                      {record.match_mode === 'exact' ? '精确' : record.match_mode === 'wildcard' ? '通配符' : '正则'}
+                    </Badge>
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-mono text-xs text-foreground">{recordTarget(record)}</div>
@@ -621,7 +632,7 @@ export default function DnsPage() {
           <table className="min-w-[1040px] w-full text-sm">
             <thead>
               <tr className="bg-secondary/60 border-b border-border">
-                {['时间', '域名', '环境', '类型', '来源', '响应', '耗时'].map((header) => (
+                {['最后查询', '域名', '环境', '类型', '来源', '响应', '查询次数', '耗时'].map((header) => (
                   <th key={header} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{header}</th>
                 ))}
               </tr>
@@ -629,28 +640,29 @@ export default function DnsPage() {
             <tbody>
               {queryLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {logLoading ? '正在加载查询日志...' : '暂无查询日志。'}
                   </td>
                 </tr>
               ) : queryLogs.map(log => (
                 <tr key={log.id} className="border-t border-border align-top">
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {new Date(log.queried_at).toLocaleString('zh-CN')}
+                    {new Date(log.last_queried_at).toLocaleString('zh-CN')}
                   </td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-foreground">{log.domain}</div>
-                    {log.answer_summary && (
-                      <div className="mt-1 max-w-xl truncate text-xs text-muted-foreground">{log.answer_summary}</div>
+                    {log.last_answer_summary && (
+                      <div className="mt-1 max-w-xl truncate text-xs text-muted-foreground">{log.last_answer_summary}</div>
                     )}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{log.environment?.name || '未命中环境'}</td>
                   <td className="px-4 py-3"><Badge variant="outline">{log.question_type}</Badge></td>
                   <td className="px-4 py-3 text-muted-foreground">{log.source}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={log.hit_local ? 'secondary' : 'outline'}>{log.response_code}</Badge>
+                    <Badge variant={log.last_hit_local ? 'secondary' : 'outline'}>{log.last_response_code}</Badge>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{log.duration_ms}ms</td>
+                  <td className="px-4 py-3 font-medium text-foreground">{log.total_count}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{log.last_duration_ms}ms</td>
                 </tr>
               ))}
             </tbody>
@@ -730,8 +742,19 @@ export default function DnsPage() {
             <Input
               value={form.domain}
               onChange={(e) => setForm(prev => ({ ...prev, domain: e.target.value }))}
-              placeholder="例如 api.dev.local"
+              placeholder={form.match_mode === 'wildcard' ? '例如 *.dev.local' : form.match_mode === 'regex' ? '例如 [a-z]+\\.dev\\.local' : '例如 api.dev.local'}
             />
+          </FormField>
+
+          <FormField label="匹配模式" required>
+            <Select value={form.match_mode} onValueChange={(value) => setForm(prev => ({ ...prev, match_mode: value as DNSMatchMode }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="exact">精确匹配</SelectItem>
+                <SelectItem value="wildcard">通配符</SelectItem>
+                <SelectItem value="regex">正则表达式</SelectItem>
+              </SelectContent>
+            </Select>
           </FormField>
 
           <FormField label="目标来源" required>

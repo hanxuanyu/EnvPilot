@@ -26,6 +26,7 @@ type CreateDNSRecordRequest struct {
 	AssetID       *uint            `json:"asset_id"`
 	Domain        string           `json:"domain"`
 	RecordType    model.RecordType `json:"record_type"`
+	MatchMode     model.MatchMode  `json:"match_mode"`
 	Value         string           `json:"value"`
 	TTL           int              `json:"ttl"`
 	Enabled       bool             `json:"enabled"`
@@ -36,6 +37,7 @@ type UpdateDNSRecordRequest struct {
 	AssetID    *uint            `json:"asset_id"`
 	Domain     string           `json:"domain"`
 	RecordType model.RecordType `json:"record_type"`
+	MatchMode  model.MatchMode  `json:"match_mode"`
 	Value      string           `json:"value"`
 	TTL        int              `json:"ttl"`
 	Enabled    bool             `json:"enabled"`
@@ -55,9 +57,9 @@ type ListQueryLogsRequest struct {
 	Offset        int
 }
 
-type ListQueryLogsResult struct {
-	Items []model.DNSQueryLog `json:"items"`
-	Total int64               `json:"total"`
+type ListQuerySummariesResult struct {
+	Items []model.DNSQuerySummary `json:"items"`
+	Total int64                   `json:"total"`
 }
 
 type QueryLogInput struct {
@@ -83,23 +85,23 @@ type LocalResolveResult struct {
 }
 
 type DNSService struct {
-	repo         *repository.DNSRepo
-	queryLogRepo *repository.DNSQueryLogRepo
-	envRepo      *assetRepo.EnvironmentRepo
-	astRepo      *assetRepo.AssetRepo
-	runtime      *ServerRuntime
-	audit        *auditSvc.AuditService
-	log          *zap.Logger
+	repo             *repository.DNSRepo
+	querySummaryRepo *repository.DNSQuerySummaryRepo
+	envRepo          *assetRepo.EnvironmentRepo
+	astRepo          *assetRepo.AssetRepo
+	runtime          *ServerRuntime
+	audit            *auditSvc.AuditService
+	log              *zap.Logger
 }
 
-func NewDNSService(repo *repository.DNSRepo, queryLogRepo *repository.DNSQueryLogRepo, envRepo *assetRepo.EnvironmentRepo, astRepo *assetRepo.AssetRepo, audit *auditSvc.AuditService) *DNSService {
+func NewDNSService(repo *repository.DNSRepo, querySummaryRepo *repository.DNSQuerySummaryRepo, envRepo *assetRepo.EnvironmentRepo, astRepo *assetRepo.AssetRepo, audit *auditSvc.AuditService) *DNSService {
 	return &DNSService{
-		repo:         repo,
-		queryLogRepo: queryLogRepo,
-		envRepo:      envRepo,
-		astRepo:      astRepo,
-		audit:        audit,
-		log:          logger.Named("dns"),
+		repo:             repo,
+		querySummaryRepo: querySummaryRepo,
+		envRepo:          envRepo,
+		astRepo:          astRepo,
+		audit:            audit,
+		log:              logger.Named("dns"),
 	}
 }
 
@@ -117,6 +119,7 @@ func (s *DNSService) Create(req CreateDNSRecordRequest) (*model.DNSRecord, error
 		AssetID:       req.AssetID,
 		Domain:        req.Domain,
 		RecordType:    req.RecordType,
+		MatchMode:     req.MatchMode,
 		Value:         req.Value,
 		TTL:           req.TTL,
 		Enabled:       req.Enabled,
@@ -144,6 +147,7 @@ func (s *DNSService) Create(req CreateDNSRecordRequest) (*model.DNSRecord, error
 		Request: map[string]any{
 			"environment_id": created.EnvironmentID,
 			"record_type":    created.RecordType,
+			"match_mode":     created.MatchMode,
 			"asset_id":       created.AssetID,
 		},
 	})
@@ -159,6 +163,7 @@ func (s *DNSService) Update(req UpdateDNSRecordRequest) (*model.DNSRecord, error
 	record.AssetID = req.AssetID
 	record.Domain = req.Domain
 	record.RecordType = req.RecordType
+	record.MatchMode = req.MatchMode
 	record.Value = req.Value
 	record.TTL = req.TTL
 	record.Enabled = req.Enabled
@@ -174,6 +179,10 @@ func (s *DNSService) Update(req UpdateDNSRecordRequest) (*model.DNSRecord, error
 		return nil, fmt.Errorf("查询更新后的 DNS 记录失败: %w", err)
 	}
 	s.syncResolvedValue(updated)
+	// 通配符/正则记录变更时清除正则缓存
+	if updated.MatchMode == model.MatchModeRegex {
+		regexCache.Delete(updated.Domain)
+	}
 	s.log.Info("更新 DNS 记录", zap.Uint("id", updated.ID), zap.String("domain", updated.Domain))
 	s.recordAudit(auditSvc.RecordInput{
 		Module:       "dns",
@@ -185,6 +194,7 @@ func (s *DNSService) Update(req UpdateDNSRecordRequest) (*model.DNSRecord, error
 		Detail:       "更新 DNS 记录",
 		Request: map[string]any{
 			"record_type": updated.RecordType,
+			"match_mode":  updated.MatchMode,
 			"asset_id":    updated.AssetID,
 			"enabled":     updated.Enabled,
 		},
@@ -199,6 +209,10 @@ func (s *DNSService) Delete(id uint) error {
 	}
 	if err := s.repo.Delete(id); err != nil {
 		return fmt.Errorf("删除 DNS 记录失败: %w", err)
+	}
+	// 清除正则缓存
+	if record.MatchMode == model.MatchModeRegex {
+		regexCache.Delete(record.Domain)
 	}
 	s.log.Info("删除 DNS 记录", zap.Uint("id", id), zap.String("domain", record.Domain))
 	s.recordAudit(auditSvc.RecordInput{
@@ -300,21 +314,20 @@ func (s *DNSService) DeleteByAssetID(assetID uint) error {
 }
 
 func (s *DNSService) RecordQueryLog(input QueryLogInput) error {
-	if s.queryLogRepo == nil {
+	if s.querySummaryRepo == nil {
 		return nil
 	}
-	return s.queryLogRepo.Create(&model.DNSQueryLog{
-		EnvironmentID: input.EnvironmentID,
-		Domain:        normalizeDomain(input.Domain),
-		QuestionType:  input.QuestionType,
-		ResponseCode:  input.ResponseCode,
-		AnswerSummary: input.AnswerSummary,
-		Source:        input.Source,
-		HitLocal:      input.HitLocal,
-		UpstreamUsed:  input.UpstreamUsed,
-		ClientIP:      input.ClientIP,
-		DurationMs:    input.DurationMs,
-		QueriedAt:     timeNow(),
+	return s.querySummaryRepo.Upsert(&model.DNSQuerySummary{
+		Domain:            normalizeDomain(input.Domain),
+		QuestionType:      input.QuestionType,
+		Source:            input.Source,
+		EnvironmentID:     input.EnvironmentID,
+		LastResponseCode:  input.ResponseCode,
+		LastAnswerSummary: input.AnswerSummary,
+		LastHitLocal:      input.HitLocal,
+		LastUpstreamUsed:  input.UpstreamUsed,
+		LastClientIP:      input.ClientIP,
+		LastDurationMs:    input.DurationMs,
 	})
 }
 
@@ -331,6 +344,7 @@ func (s *DNSService) ResolveLocal(questionName string, qType uint16, defaultTTL 
 		return nil, err
 	}
 
+	// 1. 精确匹配
 	var records []model.DNSRecord
 	if matchedEnv != nil {
 		records, err = s.repo.ListEnabledByEnvironmentAndDomain(matchedEnv.ID, domain)
@@ -340,6 +354,25 @@ func (s *DNSService) ResolveLocal(questionName string, qType uint16, defaultTTL 
 	if err != nil {
 		return nil, fmt.Errorf("查询本地 DNS 记录失败: %w", err)
 	}
+
+	// 2. 精确匹配未命中时，尝试通配符/正则匹配
+	if len(records) == 0 {
+		var nonExactRecords []model.DNSRecord
+		if matchedEnv != nil {
+			nonExactRecords, err = s.repo.ListEnabledNonExactByEnvironment(matchedEnv.ID)
+		} else {
+			nonExactRecords, err = s.repo.ListEnabledNonExact()
+		}
+		if err != nil {
+			return nil, fmt.Errorf("查询通配/正则 DNS 记录失败: %w", err)
+		}
+		for _, r := range nonExactRecords {
+			if matchesDomain(r, domain) {
+				records = append(records, r)
+			}
+		}
+	}
+
 	if len(records) == 0 {
 		return &LocalResolveResult{Found: false, Domain: domain, EnvironmentID: envPtr(matchedEnv), Source: missSource(matchedEnv)}, nil
 	}
@@ -377,6 +410,23 @@ func (s *DNSService) fillAndValidate(record *model.DNSRecord, excludeID uint) er
 	if record.Domain == "" {
 		return fmt.Errorf("域名不能为空")
 	}
+
+	// 匹配模式校验
+	switch record.MatchMode {
+	case model.MatchModeWildcard:
+		if !validateWildcardPattern(record.Domain) {
+			return fmt.Errorf("通配符格式无效，应为 *.example.com 格式")
+		}
+	case model.MatchModeRegex:
+		if !validateRegexPattern(record.Domain) {
+			return fmt.Errorf("正则表达式格式无效")
+		}
+	case model.MatchModeExact:
+		// 精确匹配保持现有校验
+	default:
+		return fmt.Errorf("不支持的匹配模式: %s", record.MatchMode)
+	}
+
 	if record.RecordType != model.RecordTypeA && record.RecordType != model.RecordTypeCNAME {
 		return fmt.Errorf("仅支持 A 或 CNAME 记录")
 	}
@@ -435,11 +485,11 @@ func (s *DNSService) recordAudit(input auditSvc.RecordInput) {
 	s.audit.RecordBestEffort(input)
 }
 
-func (s *DNSService) ListQueryLogs(req ListQueryLogsRequest) (*ListQueryLogsResult, error) {
-	if s.queryLogRepo == nil {
-		return &ListQueryLogsResult{Items: []model.DNSQueryLog{}, Total: 0}, nil
+func (s *DNSService) ListQueryLogs(req ListQueryLogsRequest) (*ListQuerySummariesResult, error) {
+	if s.querySummaryRepo == nil {
+		return &ListQuerySummariesResult{Items: []model.DNSQuerySummary{}, Total: 0}, nil
 	}
-	items, total, err := s.queryLogRepo.List(repository.DNSQueryLogFilter{
+	items, total, err := s.querySummaryRepo.List(repository.DNSQuerySummaryFilter{
 		EnvironmentID: req.EnvironmentID,
 		Keyword:       req.Keyword,
 		Source:        req.Source,
@@ -450,9 +500,9 @@ func (s *DNSService) ListQueryLogs(req ListQueryLogsRequest) (*ListQueryLogsResu
 		return nil, fmt.Errorf("查询 DNS 日志失败: %w", err)
 	}
 	if items == nil {
-		items = []model.DNSQueryLog{}
+		items = []model.DNSQuerySummary{}
 	}
-	return &ListQueryLogsResult{Items: items, Total: total}, nil
+	return &ListQuerySummariesResult{Items: items, Total: total}, nil
 }
 
 func (s *DNSService) matchEnvironmentFromDomain(domain string) (*assetModel.Environment, error) {

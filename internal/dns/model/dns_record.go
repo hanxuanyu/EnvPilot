@@ -14,12 +14,21 @@ const (
 	RecordTypeCNAME RecordType = "CNAME"
 )
 
+type MatchMode string
+
+const (
+	MatchModeExact    MatchMode = "exact"
+	MatchModeWildcard MatchMode = "wildcard"
+	MatchModeRegex    MatchMode = "regex"
+)
+
 type DNSRecord struct {
 	ID            uint       `gorm:"primaryKey;autoIncrement" json:"id"`
 	EnvironmentID uint       `gorm:"not null;index" json:"environment_id"`
 	AssetID       *uint      `gorm:"index" json:"asset_id,omitempty"`
 	Domain        string     `gorm:"size:255;not null;index" json:"domain"`
 	RecordType    RecordType `gorm:"size:20;not null;default:'A';index" json:"record_type"`
+	MatchMode     MatchMode  `gorm:"size:20;not null;default:'exact';index" json:"match_mode"`
 	Value         string     `gorm:"size:500;not null" json:"value"`
 	TTL           int        `gorm:"not null;default:300" json:"ttl"`
 	Enabled       bool       `gorm:"not null;default:true;index" json:"enabled"`
@@ -35,6 +44,9 @@ func (r *DNSRecord) Normalize() {
 	r.Value = strings.TrimSpace(r.Value)
 	if r.RecordType == "" {
 		r.RecordType = RecordTypeA
+	}
+	if r.MatchMode == "" {
+		r.MatchMode = MatchModeExact
 	}
 	if r.TTL <= 0 {
 		r.TTL = 300

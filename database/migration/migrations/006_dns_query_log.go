@@ -7,5 +7,5 @@ import (
 )
 
 func MigrateDNSQueryLog(db *gorm.DB) error {
-	return db.AutoMigrate(&dnsModel.DNSQueryLog{})
+	return db.AutoMigrate(&dnsModel.DNSQuerySummary{})
 }

@@ -32,7 +32,14 @@ type LogSection struct {
 
 // DatabaseSection 数据库配置
 type DatabaseSection struct {
-	Filename     string `yaml:"filename" json:"filename"`
+	Driver       string `yaml:"driver" json:"driver"`     // "mysql" 或 "sqlite"
+	Host         string `yaml:"host" json:"host"`         // MySQL 主机地址
+	Port         int    `yaml:"port" json:"port"`         // MySQL 端口
+	Username     string `yaml:"username" json:"username"` // MySQL 用户名
+	Password     string `yaml:"password" json:"password"` // MySQL 密码
+	DBName       string `yaml:"dbname" json:"dbname"`     // MySQL 数据库名
+	Params       string `yaml:"params" json:"params"`     // MySQL DSN 额外参数
+	Filename     string `yaml:"filename" json:"filename"` // SQLite 文件路径（driver=sqlite 时使用）
 	MaxIdleConns int    `yaml:"max_idle_conns" json:"max_idle_conns"`
 	MaxOpenConns int    `yaml:"max_open_conns" json:"max_open_conns"`
 }
@@ -90,9 +97,16 @@ func Default() *AppConfig {
 			Compress:   true,
 		},
 		Database: DatabaseSection{
+			Driver:       "mysql",
+			Host:         "127.0.0.1",
+			Port:         3306,
+			Username:     "root",
+			Password:     "",
+			DBName:       "envpilot",
+			Params:       "charset=utf8mb4&parseTime=True&loc=UTC",
 			Filename:     "envpilot.db",
-			MaxIdleConns: 2,
-			MaxOpenConns: 10,
+			MaxIdleConns: 5,
+			MaxOpenConns: 20,
 		},
 		Security: SecuritySection{
 			MasterPasswordEnabled: false,

@@ -114,3 +114,27 @@ func (r *DNSRepo) ExistsByUniqueKey(environmentID uint, domain string, recordTyp
 func (r *DNSRepo) DeleteByAssetID(assetID uint) error {
 	return r.db.Where("asset_id = ?", assetID).Delete(&model.DNSRecord{}).Error
 }
+
+// ListEnabledNonExact 查询所有启用的非精确匹配记录（通配符/正则）
+func (r *DNSRepo) ListEnabledNonExact() ([]model.DNSRecord, error) {
+	var list []model.DNSRecord
+	err := r.db.
+		Preload("Environment").
+		Preload("Asset").
+		Preload("Asset.Environment").
+		Where("enabled = ? AND match_mode != ?", true, "exact").
+		Find(&list).Error
+	return list, err
+}
+
+// ListEnabledNonExactByEnvironment 查询指定环境下启用的非精确匹配记录
+func (r *DNSRepo) ListEnabledNonExactByEnvironment(environmentID uint) ([]model.DNSRecord, error) {
+	var list []model.DNSRecord
+	err := r.db.
+		Preload("Environment").
+		Preload("Asset").
+		Preload("Asset.Environment").
+		Where("environment_id = ? AND enabled = ? AND match_mode != ?", environmentID, true, "exact").
+		Find(&list).Error
+	return list, err
+}

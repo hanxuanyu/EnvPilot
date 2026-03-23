@@ -11,9 +11,16 @@ log:
     max_age: 30
     compress: true
 database:
+    driver: mysql
+    host: 192.168.31.40
+    port: 3306
+    username: envpilot_test
+    password: "S4RNEFxWD2YwaieA"
+    dbname: envpilot_test
+    params: "charset=utf8mb4&parseTime=True&loc=UTC"
     filename: envpilot.db
-    max_idle_conns: 2
-    max_open_conns: 10
+    max_idle_conns: 5
+    max_open_conns: 20
 security:
     master_password_enabled: false
     salt_file: .salt
