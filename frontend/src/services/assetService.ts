@@ -48,6 +48,12 @@ export const groupService = {
     const r = await AssetAPIJs.ListGroupsByEnvironment(envId)
     return wailsUnwrap(r as any) ?? []
   },
+  listAll: async () => {
+    if (IS_SERVER_MODE)
+      return http.get<any[]>('/api/groups/all') ?? []
+    const r = await AssetAPIJs.ListAllGroups()
+    return wailsUnwrap(r as any) ?? []
+  },
   create: async (req: { environment_id: number; name: string; description: string }) => {
     if (IS_SERVER_MODE) return http.post<any>('/api/groups', req)
     const r = await AssetAPIJs.CreateGroup(req as any)
@@ -74,6 +80,7 @@ export const assetService = {
     category?: string
     plugin_type?: string
     keyword?: string
+    tag?: string
   } = {}) => {
     if (IS_SERVER_MODE)
       return http.get<any[]>('/api/assets', req as any) ?? []
@@ -83,6 +90,7 @@ export const assetService = {
       category: req.category ?? '',
       plugin_type: req.plugin_type ?? '',
       keyword: req.keyword ?? '',
+      tag: req.tag ?? '',
     } as any)
     return wailsUnwrap(r as any) ?? []
   },

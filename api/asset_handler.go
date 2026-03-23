@@ -128,6 +128,16 @@ func (h *AssetHandler) ListGroups(w http.ResponseWriter, r *http.Request) {
 	writeOK(w, list)
 }
 
+// GET /api/groups/all
+func (h *AssetHandler) ListAllGroups(w http.ResponseWriter, r *http.Request) {
+	list, err := h.grpSvc.ListAll()
+	if err != nil {
+		writeFail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeOK(w, list)
+}
+
 // POST /api/groups
 func (h *AssetHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -186,7 +196,7 @@ func (h *AssetHandler) DeleteGroup(w http.ResponseWriter, r *http.Request) {
 
 // ── 资产 ──────────────────────────────────────────────────────────
 
-// GET /api/assets?environment_id=&group_id=&category=&plugin_type=&keyword=
+// GET /api/assets?environment_id=&group_id=&category=&plugin_type=&keyword=&tag=
 func (h *AssetHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	list, err := h.astSvc.List(repository.AssetFilter{
@@ -195,6 +205,7 @@ func (h *AssetHandler) ListAssets(w http.ResponseWriter, r *http.Request) {
 		Category:      plugin.AssetCategory(q.Get("category")),
 		PluginType:    q.Get("plugin_type"),
 		Keyword:       q.Get("keyword"),
+		Tag:           q.Get("tag"),
 	})
 	if err != nil {
 		writeFail(w, http.StatusInternalServerError, err.Error())

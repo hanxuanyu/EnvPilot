@@ -26,7 +26,7 @@ import { Switch } from '@/components/ui/switch'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { assetService, credentialService, groupService } from '@/services/assetService'
+import { assetService, credentialService, environmentService, groupService } from '@/services/assetService'
 import { dnsService } from '@/services/dnsService'
 import { healthService } from '@/services/healthService'
 import type {
@@ -96,6 +96,9 @@ export default function AssetPage() {
   const [credentialKeyword, setCredentialKeyword] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<AssetCategory | ''>('')
   const [pluginFilter, setPluginFilter] = useState('')
+  const [groupFilter, setGroupFilter] = useState<number | ''>('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [filterGroups, setFilterGroups] = useState<Group[]>([])
 
   const [showAssetForm, setShowAssetForm] = useState(false)
   const [showCredForm, setShowCredForm] = useState(false)
@@ -171,11 +174,24 @@ export default function AssetPage() {
     if (tab !== 'assets') return
     loadAssets({
       environment_id: selectedEnvId ?? undefined,
+      group_id: groupFilter || undefined,
       category: categoryFilter || undefined,
       plugin_type: pluginFilter || undefined,
       keyword: appliedKeyword || undefined,
+      tag: tagFilter || undefined,
     })
-  }, [tab, selectedEnvId, categoryFilter, pluginFilter, appliedKeyword])
+  }, [tab, selectedEnvId, groupFilter, tagFilter, categoryFilter, pluginFilter, appliedKeyword])
+
+  useEffect(() => {
+    setGroupFilter('')
+    if (!selectedEnvId) {
+      setFilterGroups([])
+      return
+    }
+    groupService.listByEnvironment(selectedEnvId)
+      .then((list) => setFilterGroups(list as Group[]))
+      .catch(() => setFilterGroups([]))
+  }, [selectedEnvId])
 
   useEffect(() => {
     if (tab !== 'assets') return
@@ -472,6 +488,11 @@ export default function AssetPage() {
   const filteredPlugins = categoryFilter
     ? plugins.filter(p => p.category === categoryFilter)
     : plugins
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>()
+    assets.forEach(a => a.tags?.forEach(t => tagSet.add(t)))
+    return Array.from(tagSet).sort()
+  }, [assets])
   const filteredCredentials = useMemo(() => {
     const value = credentialKeyword.trim().toLowerCase()
     if (!value) return credentials
@@ -632,6 +653,44 @@ export default function AssetPage() {
               </Select>
             </div>
 
+            {selectedEnvId && filterGroups.length > 0 && (
+              <div className="w-full sm:w-[150px] lg:w-[160px]">
+                <Select
+                  value={groupFilter ? groupFilter.toString() : '__all__'}
+                  onValueChange={v => setGroupFilter(v === '__all__' ? '' : Number(v))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="全部分组" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">全部分组</SelectItem>
+                    {filterGroups.map(g => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {allTags.length > 0 && (
+              <div className="w-full sm:w-[150px] lg:w-[160px]">
+                <Select
+                  value={tagFilter || '__all__'}
+                  onValueChange={v => setTagFilter(v === '__all__' ? '' : v)}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="全部标签" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">全部标签</SelectItem>
+                    {allTags.map(t => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex min-w-[220px] flex-1 basis-[260px] items-center gap-2 rounded-md border border-border bg-background px-3">
               <Search className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
               <input
@@ -650,7 +709,7 @@ export default function AssetPage() {
             <table className="min-w-[1120px] w-full text-sm">
               <thead>
                 <tr className="bg-secondary border-b border-border">
-                  {['资产名称', '类型', '连接地址', '环境', '状态', '健康', ...(!isReadOnly ? ['操作'] : [])].map(h => (
+                  {['资产名称', '类型', '连接地址', '环境', '分组', '状态', '健康', ...(!isReadOnly ? ['操作'] : [])].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                   ))}
                 </tr>
@@ -658,7 +717,7 @@ export default function AssetPage() {
               <tbody>
                 {assets.length === 0 ? (
                   <tr>
-                    <td colSpan={isReadOnly ? 6 : 7} className="px-4 py-16 text-center text-sm text-muted-foreground">
+                    <td colSpan={isReadOnly ? 7 : 8} className="px-4 py-16 text-center text-sm text-muted-foreground">
                       暂无资产，点击「添加资产」开始
                     </td>
                   </tr>
@@ -719,6 +778,9 @@ export default function AssetPage() {
                             <span className="text-muted-foreground">{asset.environment.name}</span>
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {asset.group?.name ?? '—'}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={asset.status as any} />
@@ -947,6 +1009,7 @@ export default function AssetPage() {
         plugins={plugins}
         onClose={() => setShowAssetForm(false)}
         onCredentialCreated={async () => { await loadCredentials() }}
+        onEnvironmentCreated={async () => { await loadEnvironments() }}
         onSave={async (data) => {
           try {
             if (editingAsset) {
@@ -991,7 +1054,7 @@ export default function AssetPage() {
 
 // ── 资产表单弹窗 ──
 
-function AssetFormModal({ open, asset, environments, credentials, plugins, onClose, onSave, onCredentialCreated }: {
+function AssetFormModal({ open, asset, environments, credentials, plugins, onClose, onSave, onCredentialCreated, onEnvironmentCreated }: {
   open: boolean
   asset: Asset | null
   environments: Environment[]
@@ -1000,8 +1063,11 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   onClose: () => void
   onSave: (data: any) => Promise<void>
   onCredentialCreated?: (id: number) => void
+  onEnvironmentCreated?: () => Promise<void>
 }) {
   const [envId, setEnvId] = useState<string>('')
+  const [groupId, setGroupId] = useState<string>('')
+  const [formGroups, setFormGroups] = useState<Group[]>([])
   const [category, setCategory] = useState<AssetCategory>('server')
   const [pluginType, setPluginType] = useState<string>('linux_server')
   const [name, setName] = useState('')
@@ -1024,6 +1090,19 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   const [inlineCredType, setInlineCredType] = useState<CredentialType>('password')
   const [inlineCredUsername, setInlineCredUsername] = useState('')
   const [inlineCredSecret, setInlineCredSecret] = useState('')
+
+  // 内联创建环境
+  const [showInlineEnvForm, setShowInlineEnvForm] = useState(false)
+  const [inlineEnvSaving, setInlineEnvSaving] = useState(false)
+  const [inlineEnvName, setInlineEnvName] = useState('')
+  const [inlineEnvDesc, setInlineEnvDesc] = useState('')
+  const [inlineEnvColor, setInlineEnvColor] = useState('#3b82f6')
+
+  // 内联创建分组
+  const [showInlineGroupForm, setShowInlineGroupForm] = useState(false)
+  const [inlineGroupSaving, setInlineGroupSaving] = useState(false)
+  const [inlineGroupName, setInlineGroupName] = useState('')
+  const [inlineGroupDesc, setInlineGroupDesc] = useState('')
 
   // 当前选中的插件定义
   const selectedPlugin = plugins.find(p => p.type_id === pluginType)
@@ -1053,6 +1132,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
     if (!open) return
     if (asset) {
       setEnvId(asset.environment_id?.toString() ?? '')
+      setGroupId(asset.group_id?.toString() ?? '')
       setCategory(asset.category as AssetCategory)
       setPluginType(asset.plugin_type)
       setName(asset.name)
@@ -1067,6 +1147,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       setLinkedDNSRecord(null)
     } else {
       setEnvId(environments[0]?.id?.toString() ?? '')
+      setGroupId('')
       setCategory('server')
       setPluginType('linux_server')
       setName('')
@@ -1081,6 +1162,17 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       setLinkedDNSRecord(null)
     }
   }, [open, asset, environments, plugins])
+
+  // 切换环境时加载分组
+  useEffect(() => {
+    if (!envId) {
+      setFormGroups([])
+      return
+    }
+    groupService.listByEnvironment(Number(envId))
+      .then((list) => setFormGroups(list as Group[]))
+      .catch(() => setFormGroups([]))
+  }, [envId])
 
   useEffect(() => {
   if (!open || !asset) return
@@ -1147,6 +1239,39 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
     })
   }
 
+  const handleInlineEnvSubmit = async () => {
+    if (!inlineEnvName.trim()) { toast.warning('环境名称不能为空'); return }
+    setInlineEnvSaving(true)
+    try {
+      const created = await environmentService.create({ name: inlineEnvName.trim(), description: inlineEnvDesc, color: inlineEnvColor })
+      toast.success(`环境「${created.name}」已创建`)
+      setShowInlineEnvForm(false)
+      await onEnvironmentCreated?.()
+      setEnvId(created.id.toString())
+    } catch (error: any) {
+      toast.error('创建环境失败', { description: error.message })
+    } finally {
+      setInlineEnvSaving(false)
+    }
+  }
+
+  const handleInlineGroupSubmit = async () => {
+    if (!inlineGroupName.trim()) { toast.warning('分组名称不能为空'); return }
+    if (!envId) { toast.warning('请先选择环境'); return }
+    setInlineGroupSaving(true)
+    try {
+      const created = await groupService.create({ environment_id: Number(envId), name: inlineGroupName.trim(), description: inlineGroupDesc })
+      toast.success(`分组「${created.name}」已创建`)
+      setShowInlineGroupForm(false)
+      setFormGroups(await groupService.listByEnvironment(Number(envId)) as Group[])
+      setGroupId(created.id.toString())
+    } catch (error: any) {
+      toast.error('创建分组失败', { description: error.message })
+    } finally {
+      setInlineGroupSaving(false)
+    }
+  }
+
   const openInlineCredForm = () => {
     const supportedTypes = selectedPlugin?.credential_types ?? []
     setInlineCredName('')
@@ -1199,6 +1324,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       const tags = tagInput.split(',').map(t => t.trim()).filter(Boolean)
       await onSave({
         environment_id: Number(envId),
+        group_id: groupId ? Number(groupId) : undefined,
         category,
         plugin_type: pluginType,
         name: name.trim(),
@@ -1234,20 +1360,28 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
         {/* 环境 + 类别 */}
         <div className="grid grid-cols-2 gap-3">
           <FormField label="环境" required>
-            <Select value={envId || '__none__'} onValueChange={v => setEnvId(v === '__none__' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="选择环境" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">请选择环境</SelectItem>
-                {environments.map(e => (
-                  <SelectItem key={e.id} value={e.id.toString()}>
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
-                      {e.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select value={envId || '__none__'} onValueChange={v => { setEnvId(v === '__none__' ? '' : v); setGroupId('') }}>
+                  <SelectTrigger><SelectValue placeholder="选择环境" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">请选择环境</SelectItem>
+                    {environments.map(e => (
+                      <SelectItem key={e.id} value={e.id.toString()}>
+                        <span className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: e.color }} />
+                          {e.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => { setInlineEnvName(''); setInlineEnvDesc(''); setInlineEnvColor('#3b82f6'); setShowInlineEnvForm(true) }} className="shrink-0">
+                <Plus className="h-3.5 w-3.5" />
+                新建
+              </Button>
+            </div>
           </FormField>
           <FormField label="类别" required>
             <Select
@@ -1280,6 +1414,29 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
             </SelectContent>
           </Select>
         </FormField>
+
+        {/* 分组（可选） */}
+        {envId && (
+          <FormField label="分组">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select value={groupId || '__none__'} onValueChange={v => setGroupId(v === '__none__' ? '' : v)}>
+                  <SelectTrigger><SelectValue placeholder="不分组" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">不分组</SelectItem>
+                    {formGroups.map(g => (
+                      <SelectItem key={g.id} value={g.id.toString()}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => { setInlineGroupName(''); setInlineGroupDesc(''); setShowInlineGroupForm(true) }} className="shrink-0">
+                <Plus className="h-3.5 w-3.5" />
+                新建
+              </Button>
+            </div>
+          </FormField>
+        )}
 
         {/* 资产名称 */}
         <FormField label="名称" required>
@@ -1569,6 +1726,69 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
         <p className="text-xs text-muted-foreground">
           密钥使用 AES-256-GCM 加密存储，展示时自动脱敏
         </p>
+      </div>
+    </Modal>
+
+    {/* 内联创建环境弹窗 */}
+    <Modal
+      open={showInlineEnvForm}
+      onClose={() => setShowInlineEnvForm(false)}
+      title="新建环境"
+      className="max-w-sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => setShowInlineEnvForm(false)}>取消</Button>
+          <Button onClick={handleInlineEnvSubmit} loading={inlineEnvSaving}>创建</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormField label="环境名称" required>
+          <Input value={inlineEnvName} onChange={e => setInlineEnvName(e.target.value)} placeholder="例如：生产环境" />
+        </FormField>
+        <FormField label="描述">
+          <Input value={inlineEnvDesc} onChange={e => setInlineEnvDesc(e.target.value)} placeholder="可选" />
+        </FormField>
+        <FormField label="标识颜色">
+          <div className="flex gap-2 flex-wrap pt-0.5">
+            {['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'].map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setInlineEnvColor(c)}
+                className="w-6 h-6 rounded-full transition-transform focus-visible:outline-none"
+                style={{
+                  backgroundColor: c,
+                  transform: inlineEnvColor === c ? 'scale(1.3)' : 'scale(1)',
+                  boxShadow: inlineEnvColor === c ? `0 0 0 2px var(--color-background), 0 0 0 4px ${c}` : 'none',
+                }}
+              />
+            ))}
+          </div>
+        </FormField>
+      </div>
+    </Modal>
+
+    {/* 内联创建分组弹窗 */}
+    <Modal
+      open={showInlineGroupForm}
+      onClose={() => setShowInlineGroupForm(false)}
+      title="新建分组"
+      className="max-w-sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={() => setShowInlineGroupForm(false)}>取消</Button>
+          <Button onClick={handleInlineGroupSubmit} loading={inlineGroupSaving}>创建</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormField label="分组名称" required>
+          <Input value={inlineGroupName} onChange={e => setInlineGroupName(e.target.value)} placeholder="例如：Web 层" />
+        </FormField>
+        <FormField label="描述">
+          <Input value={inlineGroupDesc} onChange={e => setInlineGroupDesc(e.target.value)} placeholder="可选" />
+        </FormField>
       </div>
     </Modal>
     </>

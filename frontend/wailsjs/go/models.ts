@@ -104,6 +104,7 @@ export namespace assetapi {
 	    category: string;
 	    plugin_type: string;
 	    keyword: string;
+	    tag: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ListAssetsReq(source);
@@ -116,6 +117,7 @@ export namespace assetapi {
 	        this.category = source["category"];
 	        this.plugin_type = source["plugin_type"];
 	        this.keyword = source["keyword"];
+	        this.tag = source["tag"];
 	    }
 	}
 	export class Result__EnvPilot_internal_asset_model_Asset_ {

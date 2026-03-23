@@ -421,44 +421,88 @@ export default function EnvironmentPage() {
                   </div>
                 )}
               </>
-            ) : groups.length === 0 ? (
+            ) : groups.length === 0 && envAssets.length === 0 ? (
               <div className="flex-1 flex items-center justify-center border border-dashed border-border rounded-lg text-sm text-muted-foreground">
                 暂无分组，点击「新建分组」添加
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {groups.map(g => (
-                  <div key={g.id} className="group p-4 rounded-lg border bg-card border-border hover:border-primary/30 transition-all">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-foreground truncate">{g.name}</div>
-                        {g.description && (
-                          <div className="text-xs mt-1 text-muted-foreground line-clamp-2">{g.description}</div>
-                        )}
-                      </div>
-                      {!isReadOnly ? (
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                          <Button variant="ghost" size="icon"
-                            onClick={() => {
-                              setEditingGroup(g)
-                              setShowGroupForm(true)
-                            }}>
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                          <ConfirmDialog
-                            title="删除分组"
-                            description={`确定要删除分组「${g.name}」吗？`}
-                            confirmText="删除" danger onConfirm={() => handleDeleteGroup(g.id)}
-                          >
-                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </ConfirmDialog>
+              <div className="space-y-4">
+                {groups.map(g => {
+                  const groupAssets = envAssets.filter(a => a.group_id === g.id)
+                  return (
+                    <div key={g.id} className="rounded-lg border bg-card border-border">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-foreground">{g.name}</div>
+                          {g.description && (
+                            <div className="text-xs mt-0.5 text-muted-foreground">{g.description}</div>
+                          )}
                         </div>
-                      ) : null}
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{groupAssets.length} 个资产</span>
+                          {!isReadOnly ? (
+                            <div className="flex gap-0.5">
+                              <Button variant="ghost" size="icon"
+                                onClick={() => {
+                                  setEditingGroup(g)
+                                  setShowGroupForm(true)
+                                }}>
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <ConfirmDialog
+                                title="删除分组"
+                                description={`确定要删除分组「${g.name}」吗？${groupAssets.length > 0 ? `该分组下有 ${groupAssets.length} 个资产，删除后这些资产将变为未分组。` : ''}`}
+                                confirmText="删除" danger onConfirm={() => handleDeleteGroup(g.id)}
+                              >
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </ConfirmDialog>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {groupAssets.length > 0 ? (
+                        <div className="divide-y divide-border">
+                          {groupAssets.map(asset => (
+                            <div key={asset.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                              <Server className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="font-medium text-foreground flex-1 min-w-0 truncate">{asset.name}</span>
+                              <span className="text-xs text-muted-foreground">{CATEGORY_LABELS[asset.category] ?? asset.category}</span>
+                              <span className="font-mono text-xs text-muted-foreground">{getAssetAddress(asset)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="px-4 py-6 text-center text-xs text-muted-foreground">该分组下暂无资产</div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
+
+                {/* 未分组资产 */}
+                {(() => {
+                  const ungrouped = envAssets.filter(a => !a.group_id)
+                  if (ungrouped.length === 0) return null
+                  return (
+                    <div className="rounded-lg border border-dashed bg-card border-border">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                        <div className="text-sm font-medium text-muted-foreground">未分组</div>
+                        <span className="text-xs text-muted-foreground">{ungrouped.length} 个资产</span>
+                      </div>
+                      <div className="divide-y divide-border">
+                        {ungrouped.map(asset => (
+                          <div key={asset.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                            <Server className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                            <span className="font-medium text-foreground flex-1 min-w-0 truncate">{asset.name}</span>
+                            <span className="text-xs text-muted-foreground">{CATEGORY_LABELS[asset.category] ?? asset.category}</span>
+                            <span className="font-mono text-xs text-muted-foreground">{getAssetAddress(asset)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
             )}
           </>

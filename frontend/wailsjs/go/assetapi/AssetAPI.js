@@ -46,6 +46,10 @@ export function GetPluginSchema(arg1) {
   return window['go']['assetapi']['AssetAPI']['GetPluginSchema'](arg1);
 }
 
+export function ListAllGroups() {
+  return window['go']['assetapi']['AssetAPI']['ListAllGroups']();
+}
+
 export function ListAssets(arg1) {
   return window['go']['assetapi']['AssetAPI']['ListAssets'](arg1);
 }

@@ -27,6 +27,7 @@ type AssetFilter struct {
 	PluginType    string
 	Status        model.AssetStatus
 	Keyword       string // 模糊匹配 name
+	Tag           string // 模糊匹配 tags JSON
 }
 
 func (r *AssetRepo) Create(a *model.Asset) error {
@@ -96,6 +97,9 @@ func (r *AssetRepo) List(f AssetFilter) ([]model.Asset, error) {
 	}
 	if f.Keyword != "" {
 		tx = tx.Where("name LIKE ?", "%"+f.Keyword+"%")
+	}
+	if f.Tag != "" {
+		tx = tx.Where("tags LIKE ?", "%"+f.Tag+"%")
 	}
 
 	var list []model.Asset

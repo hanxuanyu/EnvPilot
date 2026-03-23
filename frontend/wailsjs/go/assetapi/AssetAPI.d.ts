@@ -24,6 +24,8 @@ export function GetCredentialBindings(arg1:number):Promise<assetapi.Result___str
 
 export function GetPluginSchema(arg1:string):Promise<assetapi.Result_EnvPilot_internal_plugin_PluginDef_>;
 
+export function ListAllGroups():Promise<assetapi.Result___EnvPilot_internal_asset_model_Group_>;
+
 export function ListAssets(arg1:assetapi.ListAssetsReq):Promise<assetapi.Result___EnvPilot_internal_asset_model_Asset_>;
 
 export function ListCredentials():Promise<assetapi.Result___EnvPilot_internal_asset_model_Credential_>;

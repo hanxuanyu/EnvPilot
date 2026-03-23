@@ -66,6 +66,7 @@ func NewRouter(c *app.Container, staticFiles fs.FS) http.Handler {
 
 	// ── 分组 ──────────────────────────────────────────────────────
 	mux.HandleFunc("GET /api/groups", assetH.ListGroups)
+	mux.HandleFunc("GET /api/groups/all", assetH.ListAllGroups)
 	mux.HandleFunc("POST /api/groups", authz.RequireAdmin(assetH.CreateGroup))
 	mux.HandleFunc("PUT /api/groups/{id}", authz.RequireAdmin(assetH.UpdateGroup))
 	mux.HandleFunc("DELETE /api/groups/{id}", authz.RequireAdmin(assetH.DeleteGroup))

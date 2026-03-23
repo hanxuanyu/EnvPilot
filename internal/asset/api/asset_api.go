@@ -172,6 +172,14 @@ func (a *AssetAPI) ListGroupsByEnvironment(envID uint) Result[[]model.Group] {
 	return OK(list)
 }
 
+func (a *AssetAPI) ListAllGroups() Result[[]model.Group] {
+	list, err := a.grpSvc.ListAll()
+	if err != nil {
+		return Fail[[]model.Group](err.Error())
+	}
+	return OK(list)
+}
+
 // ── 资产管理 ──
 
 type CreateAssetReq struct {
@@ -264,6 +272,7 @@ type ListAssetsReq struct {
 	Category      plugin.AssetCategory `json:"category"`
 	PluginType    string               `json:"plugin_type"`
 	Keyword       string               `json:"keyword"`
+	Tag           string               `json:"tag"`
 }
 
 func (a *AssetAPI) ListAssets(req ListAssetsReq) Result[[]model.Asset] {
@@ -273,6 +282,7 @@ func (a *AssetAPI) ListAssets(req ListAssetsReq) Result[[]model.Asset] {
 		Category:      req.Category,
 		PluginType:    req.PluginType,
 		Keyword:       req.Keyword,
+		Tag:           req.Tag,
 	})
 	if err != nil {
 		return Fail[[]model.Asset](err.Error())

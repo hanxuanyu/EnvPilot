@@ -16,6 +16,7 @@ interface ListAssetsReq {
   category?: AssetCategory | ''
   plugin_type?: string
   keyword?: string
+  tag?: string
 }
 
 interface AssetStore {
@@ -97,6 +98,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
         category: req.category,
         plugin_type: req.plugin_type,
         keyword: req.keyword,
+        tag: req.tag,
       }) as Asset[]
       set({ assets: list })
     } catch (e: any) {
