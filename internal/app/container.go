@@ -20,6 +20,8 @@ import (
 	auditSvc "EnvPilot/internal/audit/service"
 	authAPI "EnvPilot/internal/auth/api"
 	authService "EnvPilot/internal/auth/service"
+	backupAPI "EnvPilot/internal/backup/api"
+	backupSvc "EnvPilot/internal/backup/service"
 	configAPI "EnvPilot/internal/config/api"
 	configModel "EnvPilot/internal/config/model"
 	configRepo "EnvPilot/internal/config/repository"
@@ -64,11 +66,13 @@ type Container struct {
 	Config    *configService.ConfigService
 	AuditSvc  *auditSvc.AuditService
 	Auth      *authService.Service
+	BackupSvc *backupSvc.BackupService
 
 	// ── Wails 绑定层（桌面模式 App 使用）──
 	AuthAPI      *authAPI.AuthAPI
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
+	BackupAPI    *backupAPI.BackupAPI
 	ConfigAPI    *configAPI.ConfigAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
@@ -211,6 +215,8 @@ func Bootstrap() (*Container, error) {
 	authAPIInst := authAPI.NewAuthAPI(authSvc)
 	assetAPIInst := assetAPI.NewAssetAPI(envSvc, grpSvc, astSvc, sharedCredSvc, authSvc)
 	auditAPIInst := auditAPI.NewAuditAPI(auditSvcInst, authSvc)
+	backupSvcInst := backupSvc.NewBackupService(db, cfgSvc, auditSvcInst)
+	backupAPIInst := backupAPI.NewBackupAPI(backupSvcInst, authSvc)
 	configAPIInst := configAPI.NewConfigAPI(cfgSvc, authSvc)
 	connectorAPIInst := connectorAPI.NewConnectorAPI(connSvc, authSvc)
 	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst, authSvc)
@@ -241,9 +247,11 @@ func Bootstrap() (*Container, error) {
 		Config:       cfgSvc,
 		AuditSvc:     auditSvcInst,
 		Auth:         authSvc,
+		BackupSvc:    backupSvcInst,
 		AuthAPI:      authAPIInst,
 		AssetAPI:     assetAPIInst,
 		AuditAPI:     auditAPIInst,
+		BackupAPI:    backupAPIInst,
 		ConfigAPI:    configAPIInst,
 		ConnectorAPI: connectorAPIInst,
 		DNSAPI:       dnsAPIInst,

@@ -41,6 +41,7 @@ func main() {
 			app.AuthAPI,
 			app.AssetAPI,
 			app.AuditAPI,
+			app.BackupAPI,
 			app.ConfigAPI,
 			app.ConnectorAPI,
 			app.DNSAPI,

@@ -269,6 +269,10 @@ func parseConfigBytes(data []byte) (*configModel.AppConfig, error) {
 	return &cfg, nil
 }
 
+func ParseConfigBytes(data []byte) (*configModel.AppConfig, error) {
+	return parseConfigBytes(data)
+}
+
 func marshalConfigYAML(cfg *configModel.AppConfig) (string, error) {
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -340,6 +344,10 @@ func (s *ConfigService) writeRawConfigFile(data []byte) error {
 		return fmt.Errorf("替换配置文件失败: %w", err)
 	}
 	return nil
+}
+
+func (s *ConfigService) WriteRawConfigFile(data []byte) error {
+	return s.writeRawConfigFile(data)
 }
 
 func (s *ConfigService) recordAudit(input auditSvc.RecordInput) {

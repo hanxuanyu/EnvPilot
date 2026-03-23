@@ -18,6 +18,7 @@ import (
 	assetAPI "EnvPilot/internal/asset/api"
 	auditAPI "EnvPilot/internal/audit/api"
 	authAPI "EnvPilot/internal/auth/api"
+	backupAPI "EnvPilot/internal/backup/api"
 	configAPI "EnvPilot/internal/config/api"
 	connectorAPI "EnvPilot/internal/connector/api"
 	dnsAPI "EnvPilot/internal/dns/api"
@@ -40,6 +41,7 @@ type App struct {
 	AuthAPI      *authAPI.AuthAPI
 	AssetAPI     *assetAPI.AssetAPI
 	AuditAPI     *auditAPI.AuditAPI
+	BackupAPI    *backupAPI.BackupAPI
 	ConfigAPI    *configAPI.ConfigAPI
 	ConnectorAPI *connectorAPI.ConnectorAPI
 	DNSAPI       *dnsAPI.DNSAPI
@@ -65,6 +67,7 @@ func NewApp() (*App, error) {
 		AuthAPI:      c.AuthAPI,
 		AssetAPI:     c.AssetAPI,
 		AuditAPI:     c.AuditAPI,
+		BackupAPI:    c.BackupAPI,
 		ConfigAPI:    c.ConfigAPI,
 		ConnectorAPI: c.ConnectorAPI,
 		DNSAPI:       c.DNSAPI,

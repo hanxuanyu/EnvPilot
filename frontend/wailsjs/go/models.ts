@@ -787,6 +787,175 @@ export namespace authapi {
 
 }
 
+export namespace backupapi {
+	
+	export class AnalyzeImportReq {
+	    data_base64: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalyzeImportReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data_base64 = source["data_base64"];
+	    }
+	}
+	export class ExportBackupResult {
+	    filename: string;
+	    data_base64: string;
+	    manifest: service.BackupManifest;
+	
+	    static createFrom(source: any = {}) {
+	        return new ExportBackupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	        this.data_base64 = source["data_base64"];
+	        this.manifest = this.convertValues(source["manifest"], service.BackupManifest);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ImportBackupReq {
+	    data_base64: string;
+	    operator: string;
+	    force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportBackupReq(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data_base64 = source["data_base64"];
+	        this.operator = source["operator"];
+	        this.force = source["force"];
+	    }
+	}
+	export class Result__EnvPilot_internal_backup_api_ExportBackupResult_ {
+	    success: boolean;
+	    data?: ExportBackupResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_backup_api_ExportBackupResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], ExportBackupResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_backup_service_AnalyzeImportResult_ {
+	    success: boolean;
+	    data?: service.AnalyzeImportResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_backup_service_AnalyzeImportResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.AnalyzeImportResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result__EnvPilot_internal_backup_service_ImportBackupResult_ {
+	    success: boolean;
+	    data?: service.ImportBackupResult;
+	    message?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__EnvPilot_internal_backup_service_ImportBackupResult_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.data = this.convertValues(source["data"], service.ImportBackupResult);
+	        this.message = source["message"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace configapi {
 	
 	export class ListSnapshotsReq {
@@ -3712,6 +3881,123 @@ export namespace plugin {
 
 export namespace service {
 	
+	export class BackupSummary {
+	    system_settings: number;
+	    environments: number;
+	    groups: number;
+	    credentials: number;
+	    assets: number;
+	    dns_records: number;
+	    dns_query_stats: number;
+	    health_snapshots: number;
+	    executions: number;
+	    audit_logs: number;
+	    config_snapshots: number;
+	    security_files: string[];
+	    has_master_password: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.system_settings = source["system_settings"];
+	        this.environments = source["environments"];
+	        this.groups = source["groups"];
+	        this.credentials = source["credentials"];
+	        this.assets = source["assets"];
+	        this.dns_records = source["dns_records"];
+	        this.dns_query_stats = source["dns_query_stats"];
+	        this.health_snapshots = source["health_snapshots"];
+	        this.executions = source["executions"];
+	        this.audit_logs = source["audit_logs"];
+	        this.config_snapshots = source["config_snapshots"];
+	        this.security_files = source["security_files"];
+	        this.has_master_password = source["has_master_password"];
+	    }
+	}
+	export class BackupManifest {
+	    format: string;
+	    // Go type: time
+	    exported_at: any;
+	    app_name: string;
+	    app_version: string;
+	    config_path: string;
+	    bundle_file_name: string;
+	    description: string;
+	    included_files: string[];
+	    summary: BackupSummary;
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupManifest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.format = source["format"];
+	        this.exported_at = this.convertValues(source["exported_at"], null);
+	        this.app_name = source["app_name"];
+	        this.app_version = source["app_version"];
+	        this.config_path = source["config_path"];
+	        this.bundle_file_name = source["bundle_file_name"];
+	        this.description = source["description"];
+	        this.included_files = source["included_files"];
+	        this.summary = this.convertValues(source["summary"], BackupSummary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AnalyzeImportResult {
+	    manifest: BackupManifest;
+	    current: BackupSummary;
+	    requires_force: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AnalyzeImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.manifest = this.convertValues(source["manifest"], BackupManifest);
+	        this.current = this.convertValues(source["current"], BackupSummary);
+	        this.requires_force = source["requires_force"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class AssetDNSConfig {
 	    enabled: boolean;
 	    domain: string;
@@ -3728,6 +4014,8 @@ export namespace service {
 	        this.ttl = source["ttl"];
 	    }
 	}
+	
+	
 	export class CacheKeyDeleteRequest {
 	    asset_id: number;
 	    database: number;
@@ -3968,6 +4256,42 @@ export namespace service {
 	    }
 	}
 	
+	export class ImportBackupResult {
+	    manifest: BackupManifest;
+	    current: BackupSummary;
+	    restart_required: boolean;
+	    warnings: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportBackupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.manifest = this.convertValues(source["manifest"], BackupManifest);
+	        this.current = this.convertValues(source["current"], BackupSummary);
+	        this.restart_required = source["restart_required"];
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ListQuerySummariesResult {
 	    items: model.DNSQuerySummary[];
 	    total: number;

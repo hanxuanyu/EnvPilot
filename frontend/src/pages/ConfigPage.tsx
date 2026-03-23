@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
-import { AlertTriangle, Clock3, GitCommitHorizontal, History, RefreshCw, RotateCcw, Save } from 'lucide-react'
+﻿import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
+import { AlertTriangle, Clock3, Download, GitCommitHorizontal, History, RefreshCw, RotateCcw, Save, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,8 +22,11 @@ import {
 } from '@/components/ui/select'
 import { useAuth } from '@/components/common/AuthProvider'
 import { authService } from '@/services/authService'
-import { getVersion, type VersionInfo } from '@/services/backendService'
+import { getVersion, saveDesktopExportFile, type VersionInfo } from '@/services/backendService'
+import { backupService, base64ToBytes } from '@/services/backupService'
 import { configService } from '@/services/configService'
+import { IS_SERVER_MODE } from '@/lib/apiClient'
+import type { AnalyzeImportResult, BackupSummary } from '@/types/backup'
 import type { AppConfig, ConfigSnapshot, CurrentConfigResult } from '@/types/config'
 
 const SNAPSHOT_PAGE_SIZE = 30
@@ -120,6 +123,32 @@ function hotReloadSummaryTone(hotReload: ReturnType<typeof getHotReloadState>) {
   }
 }
 
+function summarizeBackupSummary(summary: BackupSummary) {
+  const parts = [
+    summary.assets > 0 ? `${summary.assets} 资产` : '',
+    summary.credentials > 0 ? `${summary.credentials} 凭据` : '',
+    summary.environments > 0 ? `${summary.environments} 环境` : '',
+    summary.dns_records > 0 ? `${summary.dns_records} DNS` : '',
+    summary.executions > 0 ? `${summary.executions} 执行记录` : '',
+    summary.audit_logs > 0 ? `${summary.audit_logs} 审计日志` : '',
+    summary.config_snapshots > 0 ? `${summary.config_snapshots} 配置快照` : '',
+    summary.security_files.length > 0 ? `${summary.security_files.length} 安全文件` : '',
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : '无额外业务数据'
+}
+
+function triggerBrowserDownload(filename: string, data: Uint8Array) {
+  const blob = new Blob([data.slice().buffer as ArrayBuffer], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 function FieldBlock({
   label,
   hint,
@@ -164,8 +193,15 @@ function SwitchRow({
   )
 }
 
+interface PendingBackupImport {
+  fileName: string
+  data: Uint8Array
+  analysis: AnalyzeImportResult
+}
+
 export default function ConfigPage() {
   const { status, refreshStatus, openUnlock } = useAuth()
+  const importFileRef = useRef<HTMLInputElement | null>(null)
   const [current, setCurrent] = useState<CurrentConfigResult | null>(null)
   const [draft, setDraft] = useState<AppConfig | null>(null)
   const [snapshots, setSnapshots] = useState<ConfigSnapshot[]>([])
@@ -185,6 +221,11 @@ export default function ConfigPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+  const [exportingBackup, setExportingBackup] = useState(false)
+  const [analyzingImport, setAnalyzingImport] = useState(false)
+  const [importingBackup, setImportingBackup] = useState(false)
+  const [pendingImport, setPendingImport] = useState<PendingBackupImport | null>(null)
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false)
 
   const hotReload = getHotReloadState(current?.hot_reload)
   const hotReloadTone = useMemo(() => hotReloadSummaryTone(hotReload), [hotReload])
@@ -301,6 +342,81 @@ export default function ConfigPage() {
     }
   }
 
+  const handleExportBackup = async () => {
+    setExportingBackup(true)
+    try {
+      const result = await backupService.exportBackup()
+      const data = base64ToBytes(result.data_base64)
+      if (IS_SERVER_MODE) {
+        triggerBrowserDownload(result.filename, data)
+      } else {
+        const savedPath = await saveDesktopExportFile({
+          filename: result.filename,
+          data,
+          title: '导出 EnvPilot 全量备份',
+          filterDisplayName: 'EnvPilot 备份包',
+          filterPattern: '*.zip',
+        })
+        if (!savedPath) {
+          return
+        }
+      }
+      toast.success('全量备份已导出', {
+        description: summarizeBackupSummary(result.manifest.summary),
+      })
+    } catch (error: any) {
+      toast.error('导出备份失败', { description: error.message })
+    } finally {
+      setExportingBackup(false)
+    }
+  }
+
+  const handlePickImportFile = () => {
+    if (analyzingImport || importingBackup) return
+    importFileRef.current?.click()
+  }
+
+  const handleImportFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setAnalyzingImport(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const data = new Uint8Array(buffer)
+      const analysis = await backupService.analyzeImport(data)
+      setPendingImport({ fileName: file.name, data, analysis })
+      setImportConfirmOpen(true)
+    } catch (error: any) {
+      toast.error('解析备份包失败', { description: error.message })
+      setPendingImport(null)
+    } finally {
+      setAnalyzingImport(false)
+    }
+  }
+
+  const handleImportBackup = async () => {
+    if (!pendingImport) return
+    setImportingBackup(true)
+    try {
+      const result = await backupService.importBackup(pendingImport.data, {
+        force: pendingImport.analysis.requires_force,
+        operator: 'admin',
+      })
+      setImportConfirmOpen(false)
+      setPendingImport(null)
+      await Promise.all([loadData(false), refreshStatus()])
+      toast.success('备份已导入并覆盖当前数据', {
+        description: result.warnings[0] || '建议立即重启应用，确保运行时状态与导入内容完全一致。',
+      })
+    } catch (error: any) {
+      toast.error('导入备份失败', { description: error.message })
+    } finally {
+      setImportingBackup(false)
+    }
+  }
+
   const passwordSubmitDisabled = !currentPassword || !newPassword || newPassword !== confirmPassword
 
   const handlePasswordDialogKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -327,6 +443,14 @@ export default function ConfigPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportBackup} loading={exportingBackup}>
+            <Download className="h-4 w-4" />
+            导出备份
+          </Button>
+          <Button variant="outline" onClick={handlePickImportFile} loading={analyzingImport || importingBackup}>
+            <Upload className="h-4 w-4" />
+            导入备份
+          </Button>
           <Button variant="outline" onClick={() => loadData()} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             刷新
@@ -382,6 +506,21 @@ export default function ConfigPage() {
               </div>
             </div>
           </div>
+
+          <section className="rounded-xl border border-border bg-card p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">全量备份</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  导出结构化 zip 备份包，内含配置 YAML、安全文件与各模块 JSON 数据；导入时会清空当前存量数据后整体恢复。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">导出结构可读</Badge>
+                <Badge variant="outline">导入即全量覆盖</Badge>
+              </div>
+            </div>
+          </section>
 
           <section className="rounded-xl border border-border bg-card p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -596,6 +735,14 @@ export default function ConfigPage() {
           </div>
       </div>
 
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".zip"
+        className="hidden"
+        onChange={handleImportFileChange}
+      />
+
       <Modal
         open={passwordDialogOpen}
         onClose={() => setPasswordDialogOpen(false)}
@@ -614,6 +761,53 @@ export default function ConfigPage() {
           {confirmPassword && newPassword !== confirmPassword ? <div className="text-xs text-destructive">两次输入的主密码不一致</div> : null}
         </div>
       </Modal>
+
+      <AlertDialog
+        open={importConfirmOpen}
+        onOpenChange={(open) => {
+          setImportConfirmOpen(open)
+          if (!open && !importingBackup) {
+            setPendingImport(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认导入全量备份？</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingImport?.analysis.requires_force
+                ? '当前应用已存在数据，确认后会先清空现有资产、凭据、DNS、审计、配置快照等存量数据，再整体恢复备份内容。'
+                : '导入后会按备份包内容整体恢复当前应用数据，并覆盖现有配置与安全文件。'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingImport ? (
+            <div className="space-y-3 text-xs text-muted-foreground">
+              <div className="rounded-lg border border-border bg-background/50 p-3">
+                <div className="font-medium text-foreground">{pendingImport.fileName}</div>
+                <div className="mt-1">导出时间：{new Date(pendingImport.analysis.manifest.exported_at).toLocaleString('zh-CN')}</div>
+                <div>备份摘要：{summarizeBackupSummary(pendingImport.analysis.manifest.summary)}</div>
+              </div>
+              <div className="rounded-lg border border-border bg-background/50 p-3">
+                <div className="font-medium text-foreground">当前实例</div>
+                <div className="mt-1">现有摘要：{summarizeBackupSummary(pendingImport.analysis.current)}</div>
+                {pendingImport.analysis.requires_force ? (
+                  <div className="mt-1 text-amber-700 dark:text-amber-300">
+                    本次导入会执行全量覆盖，当前已有数据不会保留。
+                  </div>
+                ) : (
+                  <div className="mt-1">当前未检测到明显存量业务数据，可直接恢复。</div>
+                )}
+              </div>
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={importingBackup}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImportBackup} disabled={!pendingImport || importingBackup}>
+              {importingBackup ? '导入中...' : '确认导入'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Modal
         open={compareOpen && !!selectedSnapshot}
