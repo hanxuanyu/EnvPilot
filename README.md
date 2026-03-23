@@ -106,9 +106,42 @@ make build-all
 >
 > 构建元信息说明：`make build-*`、GitHub Release 工作流以及直接执行 `wails build` 都会先运行 `go run ./cmd/buildmeta -mode sync`，统一生成应用内版本号、短 commitid 以及桌面端包资源版本。未命中 Git tag 时版本号默认为 `dev`，桌面包资源版本回落为 `0.0.0`。
 
+## 配置示例
+
+`config/config.yaml` 中的数据库配置已按驱动拆分，避免 SQLite 和 MySQL 字段混用。当前推荐默认使用 SQLite，本地即可启动：
+
+```yaml
+app:
+  name: EnvPilot
+  data_dir: ./data
+  log_dir: ./logs
+
+database:
+  driver: sqlite
+  sqlite:
+    filename: envpilot.db
+  mysql:
+    host: 127.0.0.1
+    port: 3306
+    username: root
+    password: ""
+    dbname: envpilot
+    params: charset=utf8mb4&parseTime=True&loc=UTC
+  pool:
+    max_idle_conns: 5
+    max_open_conns: 20
+```
+
+说明：
+
+- `database.driver=sqlite` 时只使用 `database.sqlite.*`
+- `database.driver=mysql` 时只使用 `database.mysql.*`
+- `database.pool.*` 为通用连接池参数
+- 旧版平铺结构 `database.host / database.filename / ...` 仍可读取，但保存后会统一写回新结构
+
 ## CI / Release
 
-- `main` / `master` 分支提交或合并请求会触发 GitHub Actions 构建校验；测试阶段默认执行 `make test-core`，只覆盖 `internal/`、`database/`、`pkg/` 下的业务与基础包，入口层打包配置由后续 `make build-server`、`make build-server-linux` 和 macOS 下的 `make build-desktop` 验证
+- `main` / `master` 分支提交或合并请求会触发 GitHub Actions 构建校验；测试阶段默认执行 `make test-core`，只覆盖 `internal/`、`database/`、`pkg/` 下的业务与基础包。桌面链路在分支校验中只执行前端资源构建和 `go build .` 入口编译，不执行应用启动测试，避免因本地数据库配置指向外部 MySQL 导致校验失败
 - 推送 `v` 开头的 tag（例如 `v0.0.1`）会触发 Release 工作流；同样会先执行 `make test-core`，然后再构建 Linux 服务端包（amd64、arm64，基于纯 Go SQLite 驱动使用 `CGO_ENABLED=0` 构建，避免额外的 GLIBC/Zig 依赖）、macOS 通用桌面包（Intel + Apple Silicon）和 Windows 桌面包（amd64、arm64）并发布到 GitHub Releases
 - 本地可使用 `./scripts/release.sh v0.0.1` 自动切换到发布分支、同步远端、创建 annotated tag 并推送到远端；脚本会优先使用 `master`，不存在时回落到远端默认分支
 
