@@ -591,15 +591,148 @@ export default function ConfigPage() {
 
             <section className="rounded-xl border border-border bg-card p-4 space-y-4">
               <h2 className="text-sm font-semibold text-foreground">数据库</h2>
-              <FieldBlock label="数据库文件名" hint="修改后需要重启重新打开 SQLite 文件">
-                <Input value={draft.database.filename} onChange={(e) => setDraft({ ...draft, database: { ...draft.database, filename: e.target.value } })} placeholder="数据库文件名" />
+              <FieldBlock label="数据库驱动" hint="不同驱动的配置已拆分，避免相互混用">
+                <Select value={draft.database.driver} onValueChange={(value) => setDraft({ ...draft, database: { ...draft.database, driver: value } })}>
+                  <SelectTrigger><SelectValue placeholder="数据库驱动" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sqlite">SQLite</SelectItem>
+                    <SelectItem value="mysql">MySQL</SelectItem>
+                  </SelectContent>
+                </Select>
               </FieldBlock>
+
+              {draft.database.driver === 'sqlite' ? (
+                <FieldBlock label="SQLite 文件名" hint="修改后需要重启重新打开 SQLite 文件">
+                  <Input
+                    value={draft.database.sqlite.filename}
+                    onChange={(e) => setDraft({
+                      ...draft,
+                      database: {
+                        ...draft.database,
+                        sqlite: { ...draft.database.sqlite, filename: e.target.value },
+                      },
+                    })}
+                    placeholder="envpilot.db"
+                  />
+                </FieldBlock>
+              ) : null}
+
+              {draft.database.driver === 'mysql' ? (
+                <div className="space-y-3 rounded-lg border border-border bg-background/50 p-3">
+                  <div className="text-xs font-medium text-muted-foreground">MySQL 连接</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <FieldBlock label="主机">
+                      <Input
+                        value={draft.database.mysql.host}
+                        onChange={(e) => setDraft({
+                          ...draft,
+                          database: {
+                            ...draft.database,
+                            mysql: { ...draft.database.mysql, host: e.target.value },
+                          },
+                        })}
+                        placeholder="127.0.0.1"
+                      />
+                    </FieldBlock>
+                    <FieldBlock label="端口">
+                      <Input
+                        type="number"
+                        value={draft.database.mysql.port}
+                        onChange={(e) => setDraft({
+                          ...draft,
+                          database: {
+                            ...draft.database,
+                            mysql: { ...draft.database.mysql, port: Number(e.target.value) },
+                          },
+                        })}
+                        placeholder="3306"
+                      />
+                    </FieldBlock>
+                    <FieldBlock label="用户名">
+                      <Input
+                        value={draft.database.mysql.username}
+                        onChange={(e) => setDraft({
+                          ...draft,
+                          database: {
+                            ...draft.database,
+                            mysql: { ...draft.database.mysql, username: e.target.value },
+                          },
+                        })}
+                        placeholder="root"
+                      />
+                    </FieldBlock>
+                    <FieldBlock label="数据库名">
+                      <Input
+                        value={draft.database.mysql.dbname}
+                        onChange={(e) => setDraft({
+                          ...draft,
+                          database: {
+                            ...draft.database,
+                            mysql: { ...draft.database.mysql, dbname: e.target.value },
+                          },
+                        })}
+                        placeholder="envpilot"
+                      />
+                    </FieldBlock>
+                  </div>
+                  <FieldBlock label="密码">
+                    <Input
+                      type="password"
+                      value={draft.database.mysql.password}
+                      onChange={(e) => setDraft({
+                        ...draft,
+                        database: {
+                          ...draft.database,
+                          mysql: { ...draft.database.mysql, password: e.target.value },
+                        },
+                      })}
+                      placeholder="MySQL 密码"
+                    />
+                  </FieldBlock>
+                  <FieldBlock label="DSN 参数">
+                    <Input
+                      value={draft.database.mysql.params}
+                      onChange={(e) => setDraft({
+                        ...draft,
+                        database: {
+                          ...draft.database,
+                          mysql: { ...draft.database.mysql, params: e.target.value },
+                        },
+                      })}
+                      placeholder="charset=utf8mb4&parseTime=True&loc=UTC"
+                    />
+                  </FieldBlock>
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-2 gap-3">
                 <FieldBlock label="Max Idle">
-                  <Input type="number" value={draft.database.max_idle_conns} onChange={(e) => setDraft({ ...draft, database: { ...draft.database, max_idle_conns: Number(e.target.value) } })} placeholder="Max Idle" />
+                  <Input
+                    type="number"
+                    value={draft.database.pool.max_idle_conns}
+                    onChange={(e) => setDraft({
+                      ...draft,
+                      database: {
+                        ...draft.database,
+                        pool: { ...draft.database.pool, max_idle_conns: Number(e.target.value) },
+                      },
+                    })}
+                    placeholder="Max Idle"
+                  />
                 </FieldBlock>
                 <FieldBlock label="Max Open">
-                  <Input type="number" value={draft.database.max_open_conns} onChange={(e) => setDraft({ ...draft, database: { ...draft.database, max_open_conns: Number(e.target.value) } })} placeholder="Max Open" />
+                  <Input
+                    type="number"
+                    value={draft.database.pool.max_open_conns}
+                    onChange={(e) => setDraft({
+                      ...draft,
+                      database: {
+                        ...draft.database,
+                        pool: { ...draft.database.pool, max_open_conns: Number(e.target.value) },
+                      },
+                    })}
+                    placeholder="Max Open"
+                  />
                 </FieldBlock>
               </div>
             </section>

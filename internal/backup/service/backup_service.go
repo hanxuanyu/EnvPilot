@@ -896,15 +896,15 @@ func effectiveDataDir(configPath string, configured string) string {
 func buildDBConfig(cfg *configModel.AppConfig, dataDir string) database.Config {
 	return database.Config{
 		Driver:       cfg.Database.Driver,
-		FilePath:     filepath.Join(dataDir, cfg.Database.Filename),
-		Host:         cfg.Database.Host,
-		Port:         cfg.Database.Port,
-		Username:     cfg.Database.Username,
-		Password:     cfg.Database.Password,
-		DBName:       cfg.Database.DBName,
-		Params:       cfg.Database.Params,
-		MaxIdleConns: cfg.Database.MaxIdleConns,
-		MaxOpenConns: cfg.Database.MaxOpenConns,
+		FilePath:     filepath.Join(dataDir, cfg.Database.SQLite.Filename),
+		Host:         cfg.Database.MySQL.Host,
+		Port:         cfg.Database.MySQL.Port,
+		Username:     cfg.Database.MySQL.Username,
+		Password:     cfg.Database.MySQL.Password,
+		DBName:       cfg.Database.MySQL.DBName,
+		Params:       cfg.Database.MySQL.Params,
+		MaxIdleConns: cfg.Database.Pool.MaxIdleConns,
+		MaxOpenConns: cfg.Database.Pool.MaxOpenConns,
 	}
 }
 

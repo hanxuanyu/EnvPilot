@@ -150,15 +150,15 @@ func Bootstrap() (*Container, error) {
 	// ── 3. 数据库 ─────────────────────────────────────────────────
 	dbCfg := database.Config{
 		Driver:       cfg.Database.Driver,
-		FilePath:     filepath.Join(cfg.App.DataDir, cfg.Database.Filename),
-		Host:         cfg.Database.Host,
-		Port:         cfg.Database.Port,
-		Username:     cfg.Database.Username,
-		Password:     cfg.Database.Password,
-		DBName:       cfg.Database.DBName,
-		Params:       cfg.Database.Params,
-		MaxIdleConns: cfg.Database.MaxIdleConns,
-		MaxOpenConns: cfg.Database.MaxOpenConns,
+		FilePath:     filepath.Join(cfg.App.DataDir, cfg.Database.SQLite.Filename),
+		Host:         cfg.Database.MySQL.Host,
+		Port:         cfg.Database.MySQL.Port,
+		Username:     cfg.Database.MySQL.Username,
+		Password:     cfg.Database.MySQL.Password,
+		DBName:       cfg.Database.MySQL.DBName,
+		Params:       cfg.Database.MySQL.Params,
+		MaxIdleConns: cfg.Database.Pool.MaxIdleConns,
+		MaxOpenConns: cfg.Database.Pool.MaxOpenConns,
 		LogLevel:     "warn",
 	}
 	db, err := database.NewDB(dbCfg)

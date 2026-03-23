@@ -167,18 +167,18 @@ func validate(cfg *model.AppConfig) error {
 	// 数据库驱动校验
 	switch cfg.Database.Driver {
 	case "mysql":
-		if cfg.Database.Host == "" {
-			return errors.New("database.host 使用 mysql 驱动时不能为空")
+		if cfg.Database.MySQL.Host == "" {
+			return errors.New("database.mysql.host 使用 mysql 驱动时不能为空")
 		}
-		if cfg.Database.Port <= 0 {
-			return errors.New("database.port 使用 mysql 驱动时必须大于 0")
+		if cfg.Database.MySQL.Port <= 0 {
+			return errors.New("database.mysql.port 使用 mysql 驱动时必须大于 0")
 		}
-		if cfg.Database.DBName == "" {
-			return errors.New("database.dbname 使用 mysql 驱动时不能为空")
+		if cfg.Database.MySQL.DBName == "" {
+			return errors.New("database.mysql.dbname 使用 mysql 驱动时不能为空")
 		}
 	case "sqlite":
-		if cfg.Database.Filename == "" {
-			return errors.New("database.filename 使用 sqlite 驱动时不能为空")
+		if cfg.Database.SQLite.Filename == "" {
+			return errors.New("database.sqlite.filename 使用 sqlite 驱动时不能为空")
 		}
 	default:
 		return fmt.Errorf("database.driver 无效值: %s（有效值：mysql / sqlite）", cfg.Database.Driver)
@@ -235,33 +235,35 @@ func applyDefaults(cfg *model.AppConfig) {
 	}
 
 	// Database
+	cfg.Database.NormalizeLegacy()
 	if cfg.Database.Driver == "" {
 		cfg.Database.Driver = d.Database.Driver
 	}
-	if cfg.Database.Host == "" {
-		cfg.Database.Host = d.Database.Host
+	if cfg.Database.SQLite.Filename == "" {
+		cfg.Database.SQLite.Filename = d.Database.SQLite.Filename
 	}
-	if cfg.Database.Port <= 0 {
-		cfg.Database.Port = d.Database.Port
+	if cfg.Database.MySQL.Host == "" {
+		cfg.Database.MySQL.Host = d.Database.MySQL.Host
 	}
-	if cfg.Database.Username == "" {
-		cfg.Database.Username = d.Database.Username
+	if cfg.Database.MySQL.Port <= 0 {
+		cfg.Database.MySQL.Port = d.Database.MySQL.Port
 	}
-	if cfg.Database.DBName == "" {
-		cfg.Database.DBName = d.Database.DBName
+	if cfg.Database.MySQL.Username == "" {
+		cfg.Database.MySQL.Username = d.Database.MySQL.Username
 	}
-	if cfg.Database.Params == "" {
-		cfg.Database.Params = d.Database.Params
+	if cfg.Database.MySQL.DBName == "" {
+		cfg.Database.MySQL.DBName = d.Database.MySQL.DBName
 	}
-	if cfg.Database.Filename == "" {
-		cfg.Database.Filename = d.Database.Filename
+	if cfg.Database.MySQL.Params == "" {
+		cfg.Database.MySQL.Params = d.Database.MySQL.Params
 	}
-	if cfg.Database.MaxIdleConns <= 0 {
-		cfg.Database.MaxIdleConns = d.Database.MaxIdleConns
+	if cfg.Database.Pool.MaxIdleConns <= 0 {
+		cfg.Database.Pool.MaxIdleConns = d.Database.Pool.MaxIdleConns
 	}
-	if cfg.Database.MaxOpenConns <= 0 {
-		cfg.Database.MaxOpenConns = d.Database.MaxOpenConns
+	if cfg.Database.Pool.MaxOpenConns <= 0 {
+		cfg.Database.Pool.MaxOpenConns = d.Database.Pool.MaxOpenConns
 	}
+	cfg.Database.ClearLegacy()
 
 	// DNS
 	if cfg.DNS.ListenAddr == "" {

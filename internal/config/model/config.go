@@ -32,16 +32,87 @@ type LogSection struct {
 
 // DatabaseSection 数据库配置
 type DatabaseSection struct {
-	Driver       string `yaml:"driver" json:"driver"`     // "mysql" 或 "sqlite"
-	Host         string `yaml:"host" json:"host"`         // MySQL 主机地址
-	Port         int    `yaml:"port" json:"port"`         // MySQL 端口
-	Username     string `yaml:"username" json:"username"` // MySQL 用户名
-	Password     string `yaml:"password" json:"password"` // MySQL 密码
-	DBName       string `yaml:"dbname" json:"dbname"`     // MySQL 数据库名
-	Params       string `yaml:"params" json:"params"`     // MySQL DSN 额外参数
-	Filename     string `yaml:"filename" json:"filename"` // SQLite 文件路径（driver=sqlite 时使用）
-	MaxIdleConns int    `yaml:"max_idle_conns" json:"max_idle_conns"`
-	MaxOpenConns int    `yaml:"max_open_conns" json:"max_open_conns"`
+	Driver string                `yaml:"driver" json:"driver"` // "mysql" 或 "sqlite"
+	SQLite SQLiteDatabaseSection `yaml:"sqlite" json:"sqlite"`
+	MySQL  MySQLDatabaseSection  `yaml:"mysql" json:"mysql"`
+	Pool   DatabasePoolSection   `yaml:"pool" json:"pool"`
+
+	// 兼容旧版平铺配置，读取后会自动迁移到 sqlite/mysql/pool 结构。
+	LegacyHost         string `yaml:"host,omitempty" json:"-"`
+	LegacyPort         int    `yaml:"port,omitempty" json:"-"`
+	LegacyUsername     string `yaml:"username,omitempty" json:"-"`
+	LegacyPassword     string `yaml:"password,omitempty" json:"-"`
+	LegacyDBName       string `yaml:"dbname,omitempty" json:"-"`
+	LegacyParams       string `yaml:"params,omitempty" json:"-"`
+	LegacyFilename     string `yaml:"filename,omitempty" json:"-"`
+	LegacyMaxIdleConns int    `yaml:"max_idle_conns,omitempty" json:"-"`
+	LegacyMaxOpenConns int    `yaml:"max_open_conns,omitempty" json:"-"`
+}
+
+type SQLiteDatabaseSection struct {
+	Filename string `yaml:"filename" json:"filename"`
+}
+
+type MySQLDatabaseSection struct {
+	Host     string `yaml:"host" json:"host"`
+	Port     int    `yaml:"port" json:"port"`
+	Username string `yaml:"username" json:"username"`
+	Password string `yaml:"password" json:"password"`
+	DBName   string `yaml:"dbname" json:"dbname"`
+	Params   string `yaml:"params" json:"params"`
+}
+
+type DatabasePoolSection struct {
+	MaxIdleConns int `yaml:"max_idle_conns" json:"max_idle_conns"`
+	MaxOpenConns int `yaml:"max_open_conns" json:"max_open_conns"`
+}
+
+func (d *DatabaseSection) NormalizeLegacy() {
+	if d == nil {
+		return
+	}
+	if d.LegacyFilename != "" {
+		d.SQLite.Filename = d.LegacyFilename
+	}
+	if d.LegacyHost != "" {
+		d.MySQL.Host = d.LegacyHost
+	}
+	if d.LegacyPort > 0 {
+		d.MySQL.Port = d.LegacyPort
+	}
+	if d.LegacyUsername != "" {
+		d.MySQL.Username = d.LegacyUsername
+	}
+	if d.LegacyPassword != "" {
+		d.MySQL.Password = d.LegacyPassword
+	}
+	if d.LegacyDBName != "" {
+		d.MySQL.DBName = d.LegacyDBName
+	}
+	if d.LegacyParams != "" {
+		d.MySQL.Params = d.LegacyParams
+	}
+	if d.LegacyMaxIdleConns > 0 {
+		d.Pool.MaxIdleConns = d.LegacyMaxIdleConns
+	}
+	if d.LegacyMaxOpenConns > 0 {
+		d.Pool.MaxOpenConns = d.LegacyMaxOpenConns
+	}
+}
+
+func (d *DatabaseSection) ClearLegacy() {
+	if d == nil {
+		return
+	}
+	d.LegacyHost = ""
+	d.LegacyPort = 0
+	d.LegacyUsername = ""
+	d.LegacyPassword = ""
+	d.LegacyDBName = ""
+	d.LegacyParams = ""
+	d.LegacyFilename = ""
+	d.LegacyMaxIdleConns = 0
+	d.LegacyMaxOpenConns = 0
 }
 
 // SecuritySection 安全配置
@@ -97,16 +168,22 @@ func Default() *AppConfig {
 			Compress:   true,
 		},
 		Database: DatabaseSection{
-			Driver:       "mysql",
-			Host:         "127.0.0.1",
-			Port:         3306,
-			Username:     "root",
-			Password:     "",
-			DBName:       "envpilot",
-			Params:       "charset=utf8mb4&parseTime=True&loc=UTC",
-			Filename:     "envpilot.db",
-			MaxIdleConns: 5,
-			MaxOpenConns: 20,
+			Driver: "sqlite",
+			SQLite: SQLiteDatabaseSection{
+				Filename: "envpilot.db",
+			},
+			MySQL: MySQLDatabaseSection{
+				Host:     "127.0.0.1",
+				Port:     3306,
+				Username: "root",
+				Password: "",
+				DBName:   "envpilot",
+				Params:   "charset=utf8mb4&parseTime=True&loc=UTC",
+			},
+			Pool: DatabasePoolSection{
+				MaxIdleConns: 5,
+				MaxOpenConns: 20,
+			},
 		},
 		Security: SecuritySection{
 			MasterPasswordEnabled: false,

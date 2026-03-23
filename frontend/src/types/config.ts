@@ -13,10 +13,29 @@ export interface LogSection {
   compress: boolean
 }
 
-export interface DatabaseSection {
+export interface SQLiteDatabaseSection {
   filename: string
+}
+
+export interface MySQLDatabaseSection {
+  host: string
+  port: number
+  username: string
+  password: string
+  dbname: string
+  params: string
+}
+
+export interface DatabasePoolSection {
   max_idle_conns: number
   max_open_conns: number
+}
+
+export interface DatabaseSection {
+  driver: string
+  sqlite: SQLiteDatabaseSection
+  mysql: MySQLDatabaseSection
+  pool: DatabasePoolSection
 }
 
 export interface SecuritySection {
