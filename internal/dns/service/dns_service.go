@@ -33,14 +33,15 @@ type CreateDNSRecordRequest struct {
 }
 
 type UpdateDNSRecordRequest struct {
-	ID         uint             `json:"id"`
-	AssetID    *uint            `json:"asset_id"`
-	Domain     string           `json:"domain"`
-	RecordType model.RecordType `json:"record_type"`
-	MatchMode  model.MatchMode  `json:"match_mode"`
-	Value      string           `json:"value"`
-	TTL        int              `json:"ttl"`
-	Enabled    bool             `json:"enabled"`
+	ID            uint             `json:"id"`
+	EnvironmentID uint             `json:"environment_id"`
+	AssetID       *uint            `json:"asset_id"`
+	Domain        string           `json:"domain"`
+	RecordType    model.RecordType `json:"record_type"`
+	MatchMode     model.MatchMode  `json:"match_mode"`
+	Value         string           `json:"value"`
+	TTL           int              `json:"ttl"`
+	Enabled       bool             `json:"enabled"`
 }
 
 type ListDNSRecordRequest struct {
@@ -158,6 +159,12 @@ func (s *DNSService) Update(req UpdateDNSRecordRequest) (*model.DNSRecord, error
 	record, err := s.repo.FindByID(req.ID)
 	if err != nil {
 		return nil, fmt.Errorf("DNS 记录不存在 [id=%d]", req.ID)
+	}
+	if req.EnvironmentID > 0 && req.EnvironmentID != record.EnvironmentID {
+		if _, err := s.envRepo.FindByID(req.EnvironmentID); err != nil {
+			return nil, fmt.Errorf("环境不存在 [id=%d]", req.EnvironmentID)
+		}
+		record.EnvironmentID = req.EnvironmentID
 	}
 
 	record.AssetID = req.AssetID

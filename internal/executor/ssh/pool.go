@@ -87,6 +87,10 @@ func (p *Pool) Remove(assetID uint) {
 	}
 }
 
+func (p *Pool) InvalidateAssetConnections(assetID uint) {
+	p.Remove(assetID)
+}
+
 // CloseAll 关闭所有缓存连接（应用退出时调用）
 func (p *Pool) CloseAll() {
 	p.mu.Lock()

@@ -218,14 +218,15 @@ func (a *AssetAPI) CreateAsset(req CreateAssetReq) Result[*model.Asset] {
 }
 
 type UpdateAssetReq struct {
-	ID           uint                    `json:"id"`
-	GroupID      *uint                   `json:"group_id"`
-	Name         string                  `json:"name"`
-	Description  string                  `json:"description"`
-	Tags         model.Tags              `json:"tags"`
-	CredentialID *uint                   `json:"credential_id"`
-	ExtConfig    model.ExtConfig         `json:"ext_config"`
-	DNSConfig    *service.AssetDNSConfig `json:"dns_config,omitempty"`
+	ID            uint                    `json:"id"`
+	EnvironmentID uint                    `json:"environment_id"`
+	GroupID       *uint                   `json:"group_id"`
+	Name          string                  `json:"name"`
+	Description   string                  `json:"description"`
+	Tags          model.Tags              `json:"tags"`
+	CredentialID  *uint                   `json:"credential_id"`
+	ExtConfig     model.ExtConfig         `json:"ext_config"`
+	DNSConfig     *service.AssetDNSConfig `json:"dns_config,omitempty"`
 }
 
 func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
@@ -233,14 +234,15 @@ func (a *AssetAPI) UpdateAsset(req UpdateAssetReq) Result[*model.Asset] {
 		return Fail[*model.Asset](err.Error())
 	}
 	asset, err := a.astSvc.Update(service.UpdateAssetRequest{
-		ID:           req.ID,
-		GroupID:      req.GroupID,
-		Name:         req.Name,
-		Description:  req.Description,
-		Tags:         req.Tags,
-		CredentialID: req.CredentialID,
-		ExtConfig:    req.ExtConfig,
-		DNSConfig:    req.DNSConfig,
+		ID:            req.ID,
+		EnvironmentID: req.EnvironmentID,
+		GroupID:       req.GroupID,
+		Name:          req.Name,
+		Description:   req.Description,
+		Tags:          req.Tags,
+		CredentialID:  req.CredentialID,
+		ExtConfig:     req.ExtConfig,
+		DNSConfig:     req.DNSConfig,
 	})
 	if err != nil {
 		return Fail[*model.Asset](err.Error())

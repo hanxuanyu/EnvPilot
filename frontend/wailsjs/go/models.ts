@@ -510,6 +510,7 @@ export namespace assetapi {
 	}
 	export class UpdateAssetReq {
 	    id: number;
+	    environment_id: number;
 	    group_id?: number;
 	    name: string;
 	    description: string;
@@ -525,6 +526,7 @@ export namespace assetapi {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.environment_id = source["environment_id"];
 	        this.group_id = source["group_id"];
 	        this.name = source["name"];
 	        this.description = source["description"];
@@ -2154,6 +2156,7 @@ export namespace dnsapi {
 	}
 	export class UpdateDNSRecordReq {
 	    id: number;
+	    environment_id: number;
 	    asset_id?: number;
 	    domain: string;
 	    record_type: string;
@@ -2169,6 +2172,7 @@ export namespace dnsapi {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.environment_id = source["environment_id"];
 	        this.asset_id = source["asset_id"];
 	        this.domain = source["domain"];
 	        this.record_type = source["record_type"];
@@ -3125,17 +3129,59 @@ export namespace model {
 	        this.dangerous_commands = source["dangerous_commands"];
 	    }
 	}
-	export class DatabaseSection {
-	    driver: string;
+	export class DatabasePoolSection {
+	    max_idle_conns: number;
+	    max_open_conns: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DatabasePoolSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.max_idle_conns = source["max_idle_conns"];
+	        this.max_open_conns = source["max_open_conns"];
+	    }
+	}
+	export class MySQLDatabaseSection {
 	    host: string;
 	    port: number;
 	    username: string;
 	    password: string;
 	    dbname: string;
 	    params: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MySQLDatabaseSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.username = source["username"];
+	        this.password = source["password"];
+	        this.dbname = source["dbname"];
+	        this.params = source["params"];
+	    }
+	}
+	export class SQLiteDatabaseSection {
 	    filename: string;
-	    max_idle_conns: number;
-	    max_open_conns: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SQLiteDatabaseSection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	    }
+	}
+	export class DatabaseSection {
+	    driver: string;
+	    sqlite: SQLiteDatabaseSection;
+	    mysql: MySQLDatabaseSection;
+	    pool: DatabasePoolSection;
 	
 	    static createFrom(source: any = {}) {
 	        return new DatabaseSection(source);
@@ -3144,16 +3190,28 @@ export namespace model {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.driver = source["driver"];
-	        this.host = source["host"];
-	        this.port = source["port"];
-	        this.username = source["username"];
-	        this.password = source["password"];
-	        this.dbname = source["dbname"];
-	        this.params = source["params"];
-	        this.filename = source["filename"];
-	        this.max_idle_conns = source["max_idle_conns"];
-	        this.max_open_conns = source["max_open_conns"];
+	        this.sqlite = this.convertValues(source["sqlite"], SQLiteDatabaseSection);
+	        this.mysql = this.convertValues(source["mysql"], MySQLDatabaseSection);
+	        this.pool = this.convertValues(source["pool"], DatabasePoolSection);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class LogSection {
 	    level: string;
@@ -3655,6 +3713,7 @@ export namespace model {
 	
 	
 	
+	
 	export class Execution {
 	    id: number;
 	    asset_id: number;
@@ -3764,6 +3823,8 @@ export namespace model {
 		    return a;
 		}
 	}
+	
+	
 	
 
 }

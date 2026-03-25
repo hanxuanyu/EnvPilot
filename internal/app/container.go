@@ -222,6 +222,8 @@ func Bootstrap() (*Container, error) {
 	dnsAPIInst := dnsAPI.NewDNSAPI(dnsSvcInst, authSvc)
 
 	pool := sshPool.NewPool(sharedAssetRepo, sharedCredSvc)
+	astSvc.SetConnectionInvalidator(pool)
+	sharedCredSvc.SetConnectionInvalidator(pool)
 	healthSvcInst := healthSvc.NewHealthService(healthRepoInst, sharedAssetRepo, sharedCredSvc, auditSvcInst, pool, cfg.Health)
 	healthSvcInst.StartScheduler()
 	cfgSvc.AttachRuntimeApplier(newConfigRuntimeApplier(dataBase, db, dnsRuntime, healthSvcInst, auditSvcInst))

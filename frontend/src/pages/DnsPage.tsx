@@ -336,6 +336,7 @@ export default function DnsPage() {
       if (editingRecord) {
         const payload: UpdateDNSRecordReq = {
           id: editingRecord.id,
+          environment_id: form.environment_id,
           asset_id: targetMode === 'asset' ? form.asset_id : undefined,
           domain: form.domain,
           record_type: form.record_type,

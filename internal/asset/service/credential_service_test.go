@@ -113,3 +113,66 @@ func TestCredentialServiceDeleteSucceedsWhenCredentialUnbound(t *testing.T) {
 		t.Fatal("expected credential to be deleted")
 	}
 }
+
+func TestCredentialServiceUpdateRotatesSecretAndInvalidatesBoundAssetConnections(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open("file:credential_update_invalidate?mode=memory&cache=shared"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+
+	if err := db.AutoMigrate(&model.Environment{}, &model.Group{}, &model.Credential{}, &model.Asset{}); err != nil {
+		t.Fatalf("auto migrate: %v", err)
+	}
+
+	assetRepo := repository.NewAssetRepo(db)
+	credRepo := repository.NewCredentialRepo(db)
+	cipher, err := crypto.NewAESCipher([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatalf("new cipher: %v", err)
+	}
+	svc := NewCredentialService(credRepo, assetRepo, cipher, nil)
+	invalidator := &recordingInvalidator{}
+	svc.SetConnectionInvalidator(invalidator)
+
+	env := &model.Environment{Name: "生产", Color: "#000000"}
+	if err := db.Create(env).Error; err != nil {
+		t.Fatalf("create environment: %v", err)
+	}
+
+	created, err := svc.Create("root-login", model.CredentialTypePassword, "root", "old-secret")
+	if err != nil {
+		t.Fatalf("create credential: %v", err)
+	}
+
+	asset := &model.Asset{
+		EnvironmentID: env.ID,
+		Category:      plugin.CategoryServer,
+		PluginType:    "linux_server",
+		Name:          "jump-host",
+		CredentialID:  &created.ID,
+		ExtConfig:     model.ExtConfig{"host": "127.0.0.1", "port": 22},
+	}
+	if err := db.Create(asset).Error; err != nil {
+		t.Fatalf("create asset: %v", err)
+	}
+
+	updated, err := svc.Update(created.ID, "root-login-new", model.CredentialTypePassword, "admin", "new-secret")
+	if err != nil {
+		t.Fatalf("update credential: %v", err)
+	}
+	if updated.Name != "root-login-new" || updated.Username != "admin" {
+		t.Fatalf("unexpected updated credential: %#v", updated)
+	}
+
+	plain, err := svc.RevealSecret(created.ID)
+	if err != nil {
+		t.Fatalf("reveal secret: %v", err)
+	}
+	if plain != "new-secret" {
+		t.Fatalf("expected new secret to be persisted, got %q", plain)
+	}
+
+	if len(invalidator.assetIDs) != 1 || invalidator.assetIDs[0] != asset.ID {
+		t.Fatalf("expected invalidation for asset %d, got %#v", asset.ID, invalidator.assetIDs)
+	}
+}

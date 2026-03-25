@@ -86,14 +86,15 @@ func (a *DNSAPI) CreateRecord(req CreateDNSRecordReq) Result[*model.DNSRecord] {
 }
 
 type UpdateDNSRecordReq struct {
-	ID         uint             `json:"id"`
-	AssetID    *uint            `json:"asset_id"`
-	Domain     string           `json:"domain"`
-	RecordType model.RecordType `json:"record_type"`
-	MatchMode  model.MatchMode  `json:"match_mode"`
-	Value      string           `json:"value"`
-	TTL        int              `json:"ttl"`
-	Enabled    bool             `json:"enabled"`
+	ID            uint             `json:"id"`
+	EnvironmentID uint             `json:"environment_id"`
+	AssetID       *uint            `json:"asset_id"`
+	Domain        string           `json:"domain"`
+	RecordType    model.RecordType `json:"record_type"`
+	MatchMode     model.MatchMode  `json:"match_mode"`
+	Value         string           `json:"value"`
+	TTL           int              `json:"ttl"`
+	Enabled       bool             `json:"enabled"`
 }
 
 func (a *DNSAPI) UpdateRecord(req UpdateDNSRecordReq) Result[*model.DNSRecord] {
@@ -101,14 +102,15 @@ func (a *DNSAPI) UpdateRecord(req UpdateDNSRecordReq) Result[*model.DNSRecord] {
 		return Fail[*model.DNSRecord](err.Error())
 	}
 	record, err := a.svc.Update(service.UpdateDNSRecordRequest{
-		ID:         req.ID,
-		AssetID:    req.AssetID,
-		Domain:     req.Domain,
-		RecordType: req.RecordType,
-		MatchMode:  req.MatchMode,
-		Value:      req.Value,
-		TTL:        req.TTL,
-		Enabled:    req.Enabled,
+		ID:            req.ID,
+		EnvironmentID: req.EnvironmentID,
+		AssetID:       req.AssetID,
+		Domain:        req.Domain,
+		RecordType:    req.RecordType,
+		MatchMode:     req.MatchMode,
+		Value:         req.Value,
+		TTL:           req.TTL,
+		Enabled:       req.Enabled,
 	})
 	if err != nil {
 		return Fail[*model.DNSRecord](err.Error())

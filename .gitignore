@@ -34,6 +34,7 @@ vendor/
 data/
 # 日志文件
 logs/
+config/
 
 # ── 配置覆盖（本地开发专用）────────────────────────────────
 # 如需本地覆盖配置，使用 config.local.yaml，不要修改 config.yaml

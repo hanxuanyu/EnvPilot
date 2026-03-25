@@ -38,6 +38,7 @@ export interface CreateDNSRecordReq {
 
 export interface UpdateDNSRecordReq {
 	id: number
+	environment_id: number
 	asset_id?: number
 	domain: string
 	record_type: DNSRecordType

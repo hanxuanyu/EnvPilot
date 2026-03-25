@@ -25,7 +25,18 @@ func (r *DNSRepo) Create(record *model.DNSRecord) error {
 }
 
 func (r *DNSRepo) Update(record *model.DNSRecord) error {
-	return r.db.Save(record).Error
+	return r.db.Model(&model.DNSRecord{}).
+		Where("id = ?", record.ID).
+		Updates(map[string]any{
+			"environment_id": record.EnvironmentID,
+			"asset_id":       record.AssetID,
+			"domain":         record.Domain,
+			"record_type":    record.RecordType,
+			"match_mode":     record.MatchMode,
+			"value":          record.Value,
+			"ttl":            record.TTL,
+			"enabled":        record.Enabled,
+		}).Error
 }
 
 func (r *DNSRepo) Delete(id uint) error {

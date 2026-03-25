@@ -38,23 +38,29 @@ type CreateAssetRequest struct {
 }
 
 type UpdateAssetRequest struct {
-	ID           uint            `json:"id"`
-	GroupID      *uint           `json:"group_id"`
-	Name         string          `json:"name"`
-	Description  string          `json:"description"`
-	Tags         model.Tags      `json:"tags"`
-	CredentialID *uint           `json:"credential_id"`
-	ExtConfig    model.ExtConfig `json:"ext_config"`
-	DNSConfig    *AssetDNSConfig `json:"dns_config,omitempty"`
+	ID            uint            `json:"id"`
+	EnvironmentID uint            `json:"environment_id"`
+	GroupID       *uint           `json:"group_id"`
+	Name          string          `json:"name"`
+	Description   string          `json:"description"`
+	Tags          model.Tags      `json:"tags"`
+	CredentialID  *uint           `json:"credential_id"`
+	ExtConfig     model.ExtConfig `json:"ext_config"`
+	DNSConfig     *AssetDNSConfig `json:"dns_config,omitempty"`
+}
+
+type AssetConnectionInvalidator interface {
+	InvalidateAssetConnections(assetID uint)
 }
 
 type AssetService struct {
-	repo     *repository.AssetRepo
-	envRepo  *repository.EnvironmentRepo
-	credRepo *repository.CredentialRepo
-	dnsSvc   *dnsSvc.DNSService
-	audit    *auditSvc.AuditService
-	log      *zap.Logger
+	repo            *repository.AssetRepo
+	envRepo         *repository.EnvironmentRepo
+	credRepo        *repository.CredentialRepo
+	dnsSvc          *dnsSvc.DNSService
+	connInvalidator AssetConnectionInvalidator
+	audit           *auditSvc.AuditService
+	log             *zap.Logger
 }
 
 func NewAssetService(repo *repository.AssetRepo, envRepo *repository.EnvironmentRepo, credRepo *repository.CredentialRepo, dnsSvc *dnsSvc.DNSService, audit *auditSvc.AuditService) *AssetService {
@@ -66,6 +72,10 @@ func NewAssetService(repo *repository.AssetRepo, envRepo *repository.Environment
 		audit:    audit,
 		log:      logger.Named("asset"),
 	}
+}
+
+func (s *AssetService) SetConnectionInvalidator(invalidator AssetConnectionInvalidator) {
+	s.connInvalidator = invalidator
 }
 
 func (s *AssetService) Create(req CreateAssetRequest) (*model.Asset, error) {
@@ -143,9 +153,13 @@ func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("资产不存在 [id=%d]", req.ID)
 	}
-	env, err := s.envRepo.FindByID(a.EnvironmentID)
+	targetEnvID := a.EnvironmentID
+	if req.EnvironmentID > 0 {
+		targetEnvID = req.EnvironmentID
+	}
+	env, err := s.envRepo.FindByID(targetEnvID)
 	if err != nil {
-		return nil, fmt.Errorf("环境不存在 [id=%d]", a.EnvironmentID)
+		return nil, fmt.Errorf("环境不存在 [id=%d]", targetEnvID)
 	}
 
 	pluginDef, err := plugin.Get(a.PluginType)
@@ -163,6 +177,7 @@ func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 		return nil, err
 	}
 
+	a.EnvironmentID = targetEnvID
 	a.GroupID = req.GroupID
 	a.Name = req.Name
 	a.Description = req.Description
@@ -173,6 +188,7 @@ func (s *AssetService) Update(req UpdateAssetRequest) (*model.Asset, error) {
 	if err := s.repo.Update(a); err != nil {
 		return nil, fmt.Errorf("更新资产失败: %w", err)
 	}
+	s.invalidateConnections(a.ID)
 	if err := s.syncLinkedDNSRecord(a, env.Name, req.DNSConfig); err != nil {
 		return nil, err
 	}
@@ -278,6 +294,13 @@ func (s *AssetService) recordAudit(input auditSvc.RecordInput) {
 	s.audit.RecordBestEffort(input)
 }
 
+func (s *AssetService) invalidateConnections(assetID uint) {
+	if s.connInvalidator == nil {
+		return
+	}
+	s.connInvalidator.InvalidateAssetConnections(assetID)
+}
+
 func (s *AssetService) validateAutoDNSConfig(def *plugin.PluginDef, extConfig model.ExtConfig, dnsConfig *AssetDNSConfig) error {
 	if dnsConfig == nil || !dnsConfig.Enabled {
 		return nil
@@ -348,12 +371,13 @@ func (s *AssetService) syncLinkedDNSRecord(asset *model.Asset, envName string, d
 		})
 	}
 	_, err = s.dnsSvc.Update(dnsSvc.UpdateDNSRecordRequest{
-		ID:         record.ID,
-		AssetID:    &asset.ID,
-		Domain:     domain,
-		RecordType: dnsModel.RecordTypeA,
-		TTL:        ttl,
-		Enabled:    true,
+		ID:            record.ID,
+		EnvironmentID: asset.EnvironmentID,
+		AssetID:       &asset.ID,
+		Domain:        domain,
+		RecordType:    dnsModel.RecordTypeA,
+		TTL:           ttl,
+		Enabled:       true,
 	})
 	if err != nil {
 		return fmt.Errorf("更新资产关联 DNS 记录失败: %w", err)

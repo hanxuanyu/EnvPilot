@@ -162,6 +162,7 @@ export interface CreateAssetReq {
 
 export interface UpdateAssetReq {
   id: number
+  environment_id: number
   group_id?: number
   name: string
   description: string

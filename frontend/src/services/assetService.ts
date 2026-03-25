@@ -117,6 +117,7 @@ export const assetService = {
   },
   update: async (req: {
     id: number
+    environment_id: number
     group_id?: number
     name: string
     description: string

@@ -20,11 +20,12 @@ import (
 //   - 所有凭据写入前加密，读出后脱敏
 //   - 只有明确调用 RevealSecret 才解密原文（用于实际连接）
 type CredentialService struct {
-	repo   *repository.CredentialRepo
-	assets *repository.AssetRepo
-	cipher *crypto.AESCipher
-	audit  *auditSvc.AuditService
-	log    *zap.Logger
+	repo            *repository.CredentialRepo
+	assets          *repository.AssetRepo
+	connInvalidator AssetConnectionInvalidator
+	cipher          *crypto.AESCipher
+	audit           *auditSvc.AuditService
+	log             *zap.Logger
 }
 
 type CredentialBoundError struct {
@@ -50,6 +51,10 @@ func NewCredentialService(repo *repository.CredentialRepo, assetRepo *repository
 		audit:  audit,
 		log:    logger.Named("credential"),
 	}
+}
+
+func (s *CredentialService) SetConnectionInvalidator(invalidator AssetConnectionInvalidator) {
+	s.connInvalidator = invalidator
 }
 
 // Create 创建凭据，Secret 加密后入库
@@ -119,6 +124,7 @@ func (s *CredentialService) Update(id uint, name string, credType model.Credenti
 	if err := s.repo.Update(c); err != nil {
 		return nil, fmt.Errorf("更新凭据失败: %w", err)
 	}
+	s.invalidateBoundAssetConnections(id)
 
 	s.log.Info("更新凭据", zap.Uint("id", id))
 	s.recordAudit(auditSvc.RecordInput{
@@ -260,6 +266,20 @@ func (s *CredentialService) recordAudit(input auditSvc.RecordInput) {
 		return
 	}
 	s.audit.RecordBestEffort(input)
+}
+
+func (s *CredentialService) invalidateBoundAssetConnections(credentialID uint) {
+	if s.connInvalidator == nil || s.assets == nil {
+		return
+	}
+	assets, err := s.assets.ListByCredentialID(credentialID)
+	if err != nil {
+		s.log.Warn("查询凭据绑定资产失败，跳过连接池失效", zap.Uint("credential_id", credentialID), zap.Error(err))
+		return
+	}
+	for _, asset := range assets {
+		s.connInvalidator.InvalidateAssetConnections(asset.ID)
+	}
 }
 
 func IsCredentialBoundError(err error) bool {

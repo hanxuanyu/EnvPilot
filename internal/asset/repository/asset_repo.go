@@ -38,6 +38,7 @@ func (r *AssetRepo) Update(a *model.Asset) error {
 	return r.db.Model(&model.Asset{}).
 		Where("id = ?", a.ID).
 		Updates(map[string]any{
+			"environment_id":  a.EnvironmentID,
 			"group_id":        a.GroupID,
 			"name":            a.Name,
 			"description":     a.Description,

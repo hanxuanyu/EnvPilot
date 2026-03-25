@@ -1075,7 +1075,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
   const [tagInput, setTagInput] = useState('')
   const [credId, setCredId] = useState<string>('')
   const [extConfig, setExtConfig] = useState<Record<string, unknown>>({})
-  const [dnsEnabled, setDnsEnabled] = useState(true)
+  const [dnsEnabled, setDnsEnabled] = useState(false)
   const [dnsDomain, setDnsDomain] = useState('')
   const [dnsTTL, setDnsTTL] = useState(300)
   const [dnsDomainTouched, setDnsDomainTouched] = useState(false)
@@ -1155,7 +1155,7 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       setTagInput('')
       setCredId('')
       setExtConfig(buildDefaultConfig(plugins, 'linux_server'))
-      setDnsEnabled(true)
+      setDnsEnabled(false)
       setDnsTTL(300)
       setDnsDomainTouched(false)
       setDnsDomain(recommendAssetDNSDomain('', 'linux_server', environments[0]?.name))
@@ -1183,12 +1183,12 @@ function AssetFormModal({ open, asset, environments, credentials, plugins, onClo
       if (cancelled) return
       setLinkedDNSRecord(record)
       if (record) {
-        setDnsEnabled(record.enabled)
+        setDnsEnabled(true)
         setDnsDomain(record.domain)
         setDnsTTL(record.ttl)
         setDnsDomainTouched(false)
       } else {
-        setDnsEnabled(dnsSupported)
+        setDnsEnabled(false)
         setDnsDomain(recommendAssetDNSDomain(asset.name, asset.plugin_type, selectedEnvironment?.name))
         setDnsTTL(300)
         setDnsDomainTouched(false)
